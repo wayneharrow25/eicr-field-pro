@@ -1068,7 +1068,14 @@ input,select,textarea { font-size:16px !important; }
       'zs_measured', 'rcd_time_x1', 'rcd_time_x5', 'remarks'
     ];
     var count = 0;
+    var skipped = 0;
     state.circuits.forEach(function(c) {
+      /* Skip spares and blank circuits — no testing needed */
+      var desc = (c.description || '').toLowerCase().trim();
+      if (!desc || desc === 'spare' || desc === 'spare way' || desc === 'blank') {
+        skipped++;
+        return;
+      }
       testFields.forEach(function(f) {
         if (!c[f] || c[f] === '') {
           c[f] = fillValue;
@@ -1080,7 +1087,9 @@ input,select,textarea { font-size:16px !important; }
       toast('No empty fields to fill', 'info');
       return;
     }
-    toast('Filled ' + count + ' empty fields with ' + fillValue, 'success');
+    var msg = 'Filled ' + count + ' empty fields with ' + fillValue;
+    if (skipped > 0) msg += ' (' + skipped + ' spares skipped)';
+    toast(msg, 'success');
     navigate('board-detail');
     autoSave('circuits');
   }
