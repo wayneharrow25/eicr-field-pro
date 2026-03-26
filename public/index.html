@@ -791,13 +791,19 @@ input,select,textarea { font-size:16px !important; }
     /* AI Tools */
     html += '<div class="card p-4">' +
       '<h3 class="font-semibold text-slate-800 mb-3">AI Tools</h3>' +
-      '<div class="flex gap-2">' +
-        '<button class="btn btn-primary flex-1" data-action="ai-photo-scan">' +
-          '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>' +
+      '<div class="grid grid-cols-2 gap-2">' +
+        '<button class="btn btn-primary" data-action="ai-photo-scan">' +
+          '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>' +
           'Photo Scan</button>' +
-        '<button class="btn btn-primary flex-1" data-action="ai-voice-input">' +
-          '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>' +
-          'Voice Input</button>' +
+        '<button class="btn btn-primary" data-action="ai-voice-input">' +
+          '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>' +
+          'AI Assistant</button>' +
+        '<button class="btn btn-ghost" data-action="open-paste-data">' +
+          '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>' +
+          'Paste Data</button>' +
+        '<button class="btn btn-ghost" data-action="open-bulk-scan">' +
+          '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20"/></svg>' +
+          'Bulk Photos</button>' +
       '</div>' +
     '</div>';
 
@@ -1112,6 +1118,25 @@ input,select,textarea { font-size:16px !important; }
 
   /* Scan state for multi-turn conversation with AI about the photo */
   var _scanState = { base64: null, keyId: null, history: [], updates: null, systemPrompt: '' };
+  var _scanAbort = null; /* AbortController for cancellable scans */
+  var _bulkAbort = false; /* flag for cancelling bulk scan */
+
+  function cancelPhotoScan() {
+    if (_scanAbort) { _scanAbort.abort(); _scanAbort = null; }
+    var resultEl = document.getElementById('ai-scan-result');
+    if (resultEl) resultEl.innerHTML = '<p class="text-amber-600">Scan cancelled.</p>';
+    toast('Photo scan cancelled', 'info');
+  }
+
+  function cancelBulkScan() {
+    _bulkAbort = true;
+    toast('Bulk scan cancelling after current photo...', 'info');
+  }
+
+  function updateScanStatus(msg) {
+    var el = document.getElementById('scan-status-text');
+    if (el) el.textContent = msg;
+  }
 
   function runPhotoScan() {
     var keyEl = document.getElementById('ai-scan-key');
@@ -1125,11 +1150,18 @@ input,select,textarea { font-size:16px !important; }
       return;
     }
 
+    /* Create AbortController for this scan */
+    _scanAbort = new AbortController();
+
     var startTime = Date.now();
-    resultEl.innerHTML = '<div class="flex items-center gap-2 py-4"><div class="loading-spinner"></div><span id="scan-timer">Analysing board photo... 0s</span></div>';
+    resultEl.innerHTML = '<div class="py-4">' +
+      '<div class="flex items-center gap-2 mb-2"><div class="loading-spinner"></div><span id="scan-timer">0s</span></div>' +
+      '<p id="scan-status-text" class="text-sm text-slate-600 mb-2">Compressing image...</p>' +
+      '<button class="btn btn-danger btn-sm w-full" data-action="cancel-photo-scan">Cancel Scan</button>' +
+    '</div>';
     var timer = setInterval(function() {
       var el = document.getElementById('scan-timer');
-      if (el) el.textContent = 'Analysing board photo... ' + Math.round((Date.now() - startTime) / 1000) + 's';
+      if (el) el.textContent = Math.round((Date.now() - startTime) / 1000) + 's';
       else clearInterval(timer);
     }, 1000);
 
@@ -1158,8 +1190,11 @@ input,select,textarea { font-size:16px !important; }
       '{"main_switch": {"description":"Main Switch","ocpd_bsen":"60947-3","ocpd_type":"Isolator","ocpd_rating":"100","poles":"TP&N"}, ' +
       '"updates": [{"number":"1","description":"Lighting","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","wiring_type":"A","rcd_bsen":"","rcd_type":"","rcd_idn":""}]}';
 
+    updateScanStatus('Compressing image...');
     compressImage(fileEl.files[0]).then(function(base64) {
+      if (_scanAbort && _scanAbort.signal.aborted) throw new Error('Cancelled');
       _scanState = { base64: base64, keyId: keyEl.value, history: [], updates: null, systemPrompt: systemPrompt };
+      updateScanStatus('Sending to AI — waiting for response...');
 
       return api('POST', '/ai/process', {
         key_id: keyEl.value,
@@ -1169,6 +1204,7 @@ input,select,textarea { font-size:16px !important; }
       });
     }).then(function(data) {
       clearInterval(timer);
+      _scanAbort = null;
       var result = data.result || '';
       /* Store conversation history for follow-ups */
       _scanState.history = [
@@ -1198,6 +1234,8 @@ input,select,textarea { font-size:16px !important; }
 
     }).catch(function(err) {
       clearInterval(timer);
+      _scanAbort = null;
+      if (err.message === 'Cancelled') return;
       resultEl.innerHTML = '<p class="text-red-500">AI error: ' + esc(err.message) + '</p>' +
         '<p class="text-sm text-slate-500 mt-1">Try a different model or a smaller/clearer photo.</p>' + renderScanRefineBox();
     });
@@ -1402,6 +1440,207 @@ input,select,textarea { font-size:16px !important; }
       var sel = document.getElementById('ai-voice-key');
       if (sel) sel.value = preferred;
     }
+  }
+
+  /* ===== PASTE DATA — dump Gemini/AI output from desktop ===== */
+  function openPasteData() {
+    openSheet(
+      '<h3 class="text-lg font-bold text-slate-800 mb-4">Paste Circuit Data</h3>' +
+      '<p class="text-sm text-slate-500 mb-3">Paste data from Gemini, ChatGPT, or any source. Can be JSON, a table, or plain text — AI will parse it.</p>' +
+      '<div class="space-y-3">' +
+        '<textarea id="paste-data-text" class="input-field" rows="10" placeholder="Paste circuit data here. Examples:\n\n' +
+          'JSON format:\n{&quot;updates&quot;: [{&quot;number&quot;:&quot;1&quot;, &quot;description&quot;:&quot;Lighting&quot;, &quot;ocpd_bsen&quot;:&quot;60898&quot;, &quot;ocpd_type&quot;:&quot;B&quot;, &quot;ocpd_rating&quot;:&quot;6&quot;}]}\n\n' +
+          'Or plain text:\nCircuit 1 - Lighting - B6 MCB\nCircuit 2 - Sockets Ring - B32 RCBO 30mA\nCircuit 3 - Spare\n\n' +
+          'Or a table pasted from Gemini/ChatGPT"></textarea>' +
+        '<button class="btn btn-primary w-full" data-action="parse-pasted-data">' +
+          '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>' +
+          'Parse &amp; Import</button>' +
+        '<div id="paste-data-result" class="text-sm text-slate-600"></div>' +
+      '</div>'
+    );
+  }
+
+  function parsePastedData() {
+    var textEl = document.getElementById('paste-data-text');
+    var resultEl = document.getElementById('paste-data-result');
+    if (!textEl || !textEl.value.trim()) { toast('Paste some data first', 'error'); return; }
+
+    var raw = textEl.value.trim();
+    resultEl.innerHTML = '<div class="flex items-center gap-2 py-2"><div class="loading-spinner"></div><span>Parsing...</span></div>';
+
+    /* Try direct JSON parse first — skip AI if it's already valid JSON */
+    try {
+      var directParse = JSON.parse(raw.replace(/```json|```/g, '').trim());
+      if (directParse.updates && directParse.updates.length) {
+        applyParsedCircuits(directParse.updates, directParse.main_switch, resultEl);
+        return;
+      }
+    } catch(ex) { /* Not valid JSON — send to AI */ }
+
+    /* Use AI to parse freeform text */
+    var provider = getSelectedProvider();
+    if (!provider) { toast('Add an AI key in Settings first', 'error'); return; }
+
+    var existingInfo = state.circuits.length > 0 ?
+      '\nExisting circuits: ' + state.circuits.map(function(c) { return '#' + c.number + ' ' + (c.description || ''); }).join(', ') : '';
+
+    api('POST', '/ai/process', {
+      key_id: provider.id,
+      system_prompt: 'Parse this pasted circuit data into structured JSON for a BS 7671 EICR. ' +
+        'The data might be from Gemini, ChatGPT, a spreadsheet, or plain text. Extract all circuit details. ' +
+        'Do NOT include main switches/isolators as circuits. ' +
+        'Return JSON: {"main_switch": {...} or null, "updates": [{"number":"1","description":"...","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6",...}]}',
+      prompt: 'Parse this data into circuits:\n\n' + raw + existingInfo
+    }).then(function(data) {
+      var result = data.result || '';
+      var jsonMatch = result.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) { resultEl.innerHTML = '<p class="text-red-500">Could not parse. Try pasting as JSON.</p>'; return; }
+      var parsed = JSON.parse(jsonMatch[0]);
+      if (parsed.updates && parsed.updates.length) {
+        applyParsedCircuits(parsed.updates, parsed.main_switch, resultEl);
+      } else {
+        resultEl.innerHTML = '<p class="text-amber-600">No circuits found in pasted data.</p>';
+      }
+    }).catch(function(err) {
+      resultEl.innerHTML = '<p class="text-red-500">Parse error: ' + esc(err.message) + '</p>';
+    });
+  }
+
+  function applyParsedCircuits(updates, mainSwitch, resultEl) {
+    updates.sort(function(a, b) {
+      var na = parseInt((a.number || '').replace(/\D.*/, '')) || 999;
+      var nb = parseInt((b.number || '').replace(/\D.*/, '')) || 999;
+      return na - nb;
+    });
+    updates.forEach(function(u) {
+      var existing = state.circuits.findIndex(function(c) { return String(c.number) === String(u.number); });
+      if (existing !== -1) { Object.assign(state.circuits[existing], u); }
+      else { state.circuits.push(u); }
+    });
+    if (mainSwitch && state.currentBoard) {
+      if (mainSwitch.ocpd_bsen) state.currentBoard.ocpd_bsen = mainSwitch.ocpd_bsen;
+      if (mainSwitch.ocpd_type) state.currentBoard.ocpd_type = mainSwitch.ocpd_type;
+      if (mainSwitch.ocpd_rating) state.currentBoard.ocpd_rating = mainSwitch.ocpd_rating;
+      api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
+    }
+    closeSheet();
+    navigate('board-detail');
+    toast(updates.length + ' circuits imported — save to persist', 'success');
+  }
+
+  /* ===== BULK PHOTO SCAN — multiple DB photos at once ===== */
+  function openBulkScan() {
+    if (state.aiKeys.length === 0) { toast('Add an AI key in Settings first', 'error'); return; }
+    var keyOpts = state.aiKeys.map(function(k) {
+      return '<option value="' + k.id + '">' + esc(k.label) + '</option>';
+    }).join('');
+
+    openSheet(
+      '<h3 class="text-lg font-bold text-slate-800 mb-4">Bulk Photo Scan</h3>' +
+      '<p class="text-sm text-slate-500 mb-3">Select multiple DB photos. Each will be scanned and circuits added to this board.</p>' +
+      '<div class="space-y-3">' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">AI Model</label>' +
+          '<select id="bulk-scan-key" class="select-field">' + keyOpts + '</select></div>' +
+        '<input type="file" id="bulk-scan-files" accept="image/*" multiple class="input-field" style="padding:.5rem">' +
+        '<button class="btn btn-primary w-full" data-action="run-bulk-scan">Scan All Photos</button>' +
+        '<div id="bulk-scan-progress" class="text-sm text-slate-600"></div>' +
+      '</div>'
+    );
+    var preferred = localStorage.getItem('eicr_preferred_model') || '';
+    if (preferred) { var sel = document.getElementById('bulk-scan-key'); if (sel) sel.value = preferred; }
+  }
+
+  function runBulkScan() {
+    var keyEl = document.getElementById('bulk-scan-key');
+    var filesEl = document.getElementById('bulk-scan-files');
+    var progressEl = document.getElementById('bulk-scan-progress');
+    if (!filesEl || !filesEl.files || !filesEl.files.length) { toast('Select photos first', 'error'); return; }
+
+    _bulkAbort = false;
+    var files = Array.from(filesEl.files);
+    var total = files.length;
+    var completed = 0;
+    var allUpdates = [];
+
+    progressEl.innerHTML = '<div class="space-y-1"><p class="font-medium">Scanning ' + total + ' photos...</p>' +
+      '<div id="bulk-log"></div>' +
+      '<button class="btn btn-danger btn-sm w-full mt-2" data-action="cancel-bulk-scan">Cancel Bulk Scan</button></div>';
+
+    function scanNext() {
+      if (_bulkAbort) {
+        var log = document.getElementById('bulk-log');
+        if (log) log.innerHTML += '<p class="text-amber-600 font-medium mt-1">Cancelled. ' + allUpdates.length + ' circuits from ' + completed + '/' + total + ' photos.</p>';
+        if (allUpdates.length) {
+          allUpdates.forEach(function(u) {
+            var existing = state.circuits.findIndex(function(c) { return String(c.number) === String(u.number); });
+            if (existing !== -1) { Object.assign(state.circuits[existing], u); }
+            else { state.circuits.push(u); }
+          });
+          toast(allUpdates.length + ' circuits applied from partial scan', 'info');
+          navigate('board-detail');
+        }
+        return;
+      }
+
+      if (completed >= total) {
+        /* All done — apply all results */
+        if (allUpdates.length) {
+          allUpdates.forEach(function(u) {
+            var existing = state.circuits.findIndex(function(c) { return String(c.number) === String(u.number); });
+            if (existing !== -1) { Object.assign(state.circuits[existing], u); }
+            else { state.circuits.push(u); }
+          });
+          closeSheet();
+          navigate('board-detail');
+          toast(allUpdates.length + ' circuits from ' + total + ' photos — save to persist', 'success');
+        } else {
+          progressEl.innerHTML += '<p class="text-amber-600 mt-2">No circuits extracted from any photo.</p>';
+        }
+        return;
+      }
+
+      var file = files[completed];
+      var log = document.getElementById('bulk-log');
+      if (log) log.innerHTML += '<p>&#128247; ' + (completed + 1) + '/' + total + ': <strong>' + esc(file.name) + '</strong> — compressing...</p>';
+
+      compressImage(file).then(function(base64) {
+        if (_bulkAbort) throw new Error('Cancelled');
+        if (log) {
+          var lastP = log.lastElementChild;
+          if (lastP) lastP.innerHTML = lastP.innerHTML.replace('compressing...', 'sending to AI...');
+        }
+        return api('POST', '/ai/process', {
+          key_id: keyEl.value,
+          prompt: 'Extract outgoing circuits from this distribution board photo. Do NOT include main switch. Number sequentially. Return JSON: {"updates": [...]}',
+          image_base64: base64,
+          system_prompt: 'Extract circuits from a UK distribution board for EICR Form 4. Exclude main switches. Include spare ways.'
+        });
+      }).then(function(data) {
+        var result = data.result || '';
+        var jsonMatch = result.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          var parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.updates) {
+            /* Renumber based on existing circuits */
+            var offset = state.circuits.length + allUpdates.length;
+            parsed.updates.forEach(function(u, i) { u.number = String(offset + i + 1); });
+            allUpdates = allUpdates.concat(parsed.updates);
+            if (log) log.innerHTML += '<p class="text-green-600">&#10003; ' + parsed.updates.length + ' circuits found</p>';
+          }
+        } else {
+          if (log) log.innerHTML += '<p class="text-amber-500">&#9888; No circuits found</p>';
+        }
+        completed++;
+        scanNext();
+      }).catch(function(err) {
+        if (err.message === 'Cancelled') return;
+        if (log) log.innerHTML += '<p class="text-red-500">&#10007; Error: ' + esc(err.message) + '</p>';
+        completed++;
+        scanNext();
+      });
+    }
+
+    scanNext();
   }
 
   function startDictation() {
@@ -2977,6 +3216,24 @@ input,select,textarea { font-size:16px !important; }
         break;
       case 'run-photo-scan':
         runPhotoScan();
+        break;
+      case 'cancel-photo-scan':
+        cancelPhotoScan();
+        break;
+      case 'open-paste-data':
+        ensureAiKeys().then(function() { openPasteData(); });
+        break;
+      case 'parse-pasted-data':
+        parsePastedData();
+        break;
+      case 'open-bulk-scan':
+        ensureAiKeys().then(function() { openBulkScan(); });
+        break;
+      case 'run-bulk-scan':
+        runBulkScan();
+        break;
+      case 'cancel-bulk-scan':
+        cancelBulkScan();
         break;
       case 'apply-scan-results':
         applyScanResults();

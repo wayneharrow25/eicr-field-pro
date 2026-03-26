@@ -264,6 +264,30 @@ async function initDB() {
       );
     `);
 
+    // Add missing columns to sites table (safe — IF NOT EXISTS)
+    const siteColumns = [
+      'client_phone TEXT', 'client_email TEXT', 'occupier TEXT', 'desc_premises TEXT',
+      'estimated_age TEXT', 'evidence_alteration TEXT', 'date_last_inspection TEXT',
+      'date_inspection TEXT', 'next_inspection TEXT', 'next_interval TEXT', 'sampling TEXT',
+      'limitations TEXT', 'supply_system TEXT', 'supply_protective TEXT', 'supply_protective_rating TEXT',
+      'nominal_voltage_ll TEXT', 'nominal_voltage_ln TEXT', 'nominal_freq TEXT',
+      'pscc TEXT', 'pfc_confirmed TEXT', 'ze TEXT',
+      'main_switch_type TEXT', 'main_switch_rating TEXT', 'main_switch_voltage TEXT',
+      'bonding_structural TEXT', 'bonding_condition TEXT'
+    ];
+    for (const col of siteColumns) {
+      const colName = col.split(' ')[0];
+      await client.query(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS ${col}`).catch(() => {});
+    }
+
+    // Add missing columns to boards table
+    const boardColumns = [
+      'ocpd_bsen TEXT', 'ocpd_type TEXT', 'ocpd_rating TEXT', 'poles TEXT'
+    ];
+    for (const col of boardColumns) {
+      await client.query(`ALTER TABLE boards ADD COLUMN IF NOT EXISTS ${col}`).catch(() => {});
+    }
+
     // Seed default users if none exist
     const { rows } = await client.query('SELECT COUNT(*) FROM users');
     if (parseInt(rows[0].count) === 0) {
@@ -1190,7 +1214,7 @@ app.get('/api/sites/:id/report', (req, res, next) => {
         <div class="assess-${hasC1C2FI ? 'unsat' : 'sat'}">${hasC1C2FI ? 'UNSATISFACTORY' : 'SATISFACTORY'}</div>
       </td>
       <td class="fl" style="width:20%">Date of next inspection<br>(recommended):</td>
-      <td class="fv" style="font-size:11px;font-weight:bold">${e(site.next_inspection_date)}</td>
+      <td class="fv" style="font-size:11px;font-weight:bold">${e(site.next_inspection || site.next_inspection_date)}</td>
     </tr>
   </table>`;
 
