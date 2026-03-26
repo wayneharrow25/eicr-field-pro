@@ -534,6 +534,7 @@ app.get('/api/ai/providers', authMiddleware, async (req, res) => {
     providers.push({ id: 'env_gemini_flash', label: 'Gemini 2.5 Flash (fast)', provider: 'gemini', model: 'gemini-2.5-flash' });
     providers.push({ id: 'env_gemini_pro', label: 'Gemini 2.5 Pro (smart)', provider: 'gemini', model: 'gemini-2.5-pro' });
     providers.push({ id: 'env_gemini_31_pro', label: 'Gemini 3.1 Pro (latest)', provider: 'gemini', model: 'gemini-3.1-pro' });
+    providers.push({ id: 'env_gemini_3_pro', label: 'Gemini 3.0 Pro', provider: 'gemini', model: 'gemini-3.0-pro' });
     providers.push({ id: 'env_gemini_flash_2', label: 'Gemini 2.0 Flash', provider: 'gemini', model: 'gemini-2.0-flash' });
     providers.push({ id: 'env_gemini_pro_15', label: 'Gemini 1.5 Pro', provider: 'gemini', model: 'gemini-1.5-pro' });
   }
@@ -578,6 +579,8 @@ app.post('/api/ai/process', authMiddleware, async (req, res) => {
     keyRow = { provider: 'gemini', model: 'gemini-2.5-pro', api_key: ENV_KEYS.gemini };
   } else if (key_id === 'env_gemini_31_pro' && ENV_KEYS.gemini) {
     keyRow = { provider: 'gemini', model: 'gemini-3.1-pro', api_key: ENV_KEYS.gemini };
+  } else if (key_id === 'env_gemini_3_pro' && ENV_KEYS.gemini) {
+    keyRow = { provider: 'gemini', model: 'gemini-3.0-pro', api_key: ENV_KEYS.gemini };
   } else if (key_id === 'env_gemini_flash_2' && ENV_KEYS.gemini) {
     keyRow = { provider: 'gemini', model: 'gemini-2.0-flash', api_key: ENV_KEYS.gemini };
   } else if (key_id === 'env_gemini_pro_15' && ENV_KEYS.gemini) {
