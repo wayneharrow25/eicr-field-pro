@@ -544,8 +544,31 @@ app.get('/api/ai/providers', authMiddleware, async (req, res) => {
   res.json(providers);
 });
 
+// Base EICR context injected into ALL AI requests automatically
+const EICR_BASE_CONTEXT = `You are an AI assistant for Expert Energy Group, helping qualified electricians complete BS 7671:2018+A2:2022 Electrical Installation Condition Reports (EICRs) for commercial properties (schools, offices, industrial).
+
+KEY KNOWLEDGE:
+- Protective devices: MCBs (BS EN 60898), RCBOs (BS EN 61009), RCDs (BS EN 61008), MCCBs (BS EN 60947-2), HRC fuses (BS EN 88-2)
+- Curve types: B (general/domestic), C (motors/fluorescent), D (high inrush transformers)
+- RCD types: AC (standard), A (pulsating DC), B (smooth DC), S (selective/time-delayed)
+- Common IΔn ratings: 30mA (personal protection), 100mA, 300mA (fire protection)
+- Earthing systems: TN-S (separate earth), TN-C-S (PME/combined), TT (earth electrode), IT
+- Supply types: Single phase (230V), Three phase (400V)
+- Classification codes: C1 (danger present), C2 (potentially dangerous), C3 (improvement recommended), FI (further investigation required)
+- Test readings: Ze (external earth fault loop impedance), Zs (earth fault loop impedance), R1+R2 (continuity), Insulation resistance (IR in MΩ), RCD trip times (ms)
+- Max Zs values use 80% rule for on-site measurements
+- Wiring types: Flat T+E (twin & earth), SWA (steel wire armoured), MICC (mineral insulated), Singles in conduit/trunking
+- Common CSA sizes: 1.0, 1.5, 2.5, 4.0, 6.0, 10.0, 16.0, 25.0mm²
+
+Always use correct UK electrical terminology and BS 7671 conventions.`;
+
 app.post('/api/ai/process', authMiddleware, async (req, res) => {
   const { key_id, prompt, image_base64, system_prompt } = req.body;
+
+  // Combine base EICR context with any specific system prompt
+  const fullSystemPrompt = system_prompt
+    ? EICR_BASE_CONTEXT + '\n\n' + system_prompt
+    : EICR_BASE_CONTEXT;
 
   // Resolve the API key — either from env vars or user's saved keys
   var keyRow;
@@ -577,13 +600,7 @@ app.post('/api/ai/process', authMiddleware, async (req, res) => {
         parts.push({ inlineData: { mimeType: 'image/jpeg', data: image_base64 } });
       }
       const payload = { contents: [{ parts }] };
-      // Only use JSON response mode for text-only requests (some models hang on image+JSON mode)
-      if (!image_base64) {
-        payload.generationConfig = { responseMimeType: 'application/json' };
-      }
-      if (system_prompt) {
-        payload.systemInstruction = { parts: [{ text: system_prompt }] };
-      }
+      payload.systemInstruction = { parts: [{ text: fullSystemPrompt }] };
       // Support multi-turn conversation
       if (req.body.history && req.body.history.length > 0) {
         payload.contents = req.body.history.concat(payload.contents);
@@ -605,7 +622,7 @@ app.post('/api/ai/process', authMiddleware, async (req, res) => {
       messages[0].content.push({ type: 'text', text: prompt });
 
       const payload = { model: keyRow.model, max_tokens: 4096, messages };
-      if (system_prompt) payload.system = system_prompt;
+      payload.system = fullSystemPrompt;
 
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',

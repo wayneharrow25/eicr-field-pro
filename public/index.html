@@ -2254,6 +2254,56 @@ input,select,textarea { font-size:16px !important; }
   var _voiceActive = false;
 
   /* Raw speech-to-text into any input field */
+  /* Build context hint for AI based on field ID and placeholder */
+  function getFieldContext(fieldId) {
+    var field = document.getElementById(fieldId);
+    var placeholder = field ? (field.placeholder || '') : '';
+    var label = '';
+    var labelEl = document.querySelector('label[for="' + fieldId + '"]');
+    if (labelEl) label = labelEl.textContent || '';
+    if (!label && placeholder) label = placeholder;
+
+    /* Determine context from field ID patterns */
+    var ctx = 'You are helping fill in a BS 7671 EICR (Electrical Installation Condition Report). ';
+
+    if (fieldId.indexOf('r1r2') >= 0 || fieldId.indexOf('zs') >= 0 || fieldId.indexOf('ze') >= 0 ||
+        fieldId.indexOf('ipf') >= 0 || fieldId.indexOf('ir_') >= 0 || fieldId.indexOf('rcd_') >= 0 ||
+        fieldId.match(/_(r1|r2|rn)$/)) {
+      ctx += 'This field is a TEST READING (numerical). Convert spoken numbers: "point one three" → "0.13", "nought point three five" → "0.35", "infinity" → ">200", "one point two meg" → ">200". Return ONLY the number/value, nothing else.';
+    } else if (fieldId.indexOf('ocpd_bsen') >= 0 || fieldId.indexOf('bh-ocpd-bsen') >= 0) {
+      ctx += 'This field is the BS(EN) standard number for a protective device. Common values: 60898 (MCBs), 61009 (RCBOs), 60947-2 (MCCBs), 88-2 (HRC fuses), 61008 (RCDs). Return ONLY the standard number.';
+    } else if (fieldId.indexOf('ocpd_type') >= 0 || fieldId.indexOf('bh-ocpd-type') >= 0) {
+      ctx += 'This field is the OCPD type/curve letter. Values: B (general), C (motors), D (high inrush). Return ONLY the letter.';
+    } else if (fieldId.indexOf('ocpd_rating') >= 0 || fieldId.indexOf('bh-ocpd-rating') >= 0) {
+      ctx += 'This field is the OCPD rating in Amps. Common: 6, 10, 16, 20, 25, 32, 40, 50, 63, 80, 100. Return ONLY the number.';
+    } else if (fieldId.indexOf('rcd_idn') >= 0) {
+      ctx += 'This field is the RCD rated residual operating current (IΔn) in mA. Common: 30, 100, 300. Return ONLY the number.';
+    } else if (fieldId.indexOf('rcd_type') >= 0) {
+      ctx += 'This field is the RCD type. Values: AC, A, B, S (selective/time-delayed). Return ONLY the type letter(s).';
+    } else if (fieldId.indexOf('wiring') >= 0 || fieldId.indexOf('conductor') >= 0 || fieldId.indexOf('csa') >= 0 || fieldId.indexOf('cpc') >= 0) {
+      ctx += 'This field is about wiring/conductor details. Reference designations: flat T+E, SWA, MICC, singles in conduit/trunking. CSA sizes: 1.0, 1.5, 2.5, 4, 6, 10, 16, 25mm². Return the appropriate value.';
+    } else if (fieldId.indexOf('description') >= 0 || fieldId.indexOf('desc') >= 0) {
+      ctx += 'This field is a circuit or observation description. Common: Lighting, Sockets, Ring Main, Radial, FCU, Cooker, Immersion, Boiler, Alarm, Emergency Lighting, Smoke Detection, Fire Alarm, Mechanical Extract, Hand Dryer, Data, Security. Capitalise properly.';
+    } else if (fieldId.indexOf('instrument') >= 0) {
+      ctx += 'This field is for test instrument details (make, model, serial number). Format as: "Make Model Serial" e.g. "Megger MFT1741 12345678".';
+    } else if (fieldId.indexOf('address') >= 0 || fieldId.indexOf('si_') >= 0) {
+      ctx += 'This field is site/address information for a commercial building (schools, offices etc). Format properly with capitalisation.';
+    } else if (fieldId.indexOf('obs-') >= 0) {
+      ctx += 'This is an EICR observation/defect field. Use proper electrical terminology. Classification codes: C1 (danger present), C2 (potentially dangerous), C3 (improvement recommended), FI (further investigation).';
+    } else if (fieldId.indexOf('tester-') >= 0) {
+      ctx += 'This field is for tester/inspector personal or qualification details.';
+    } else if (fieldId.indexOf('location') >= 0 || fieldId.indexOf('loc') >= 0) {
+      ctx += 'This field is a physical location within a building. e.g. "Plant Room", "Ground Floor Corridor", "Kitchen", "Main Intake". Capitalise properly.';
+    } else {
+      ctx += 'Field: ' + (label || fieldId) + '. Return the appropriate value for this EICR field.';
+    }
+
+    ctx += '\n\nThe field currently shows: "' + (placeholder || fieldId) + '"';
+    if (field && field.value) ctx += '\nCurrent value: "' + field.value + '"';
+    ctx += '\n\nIMPORTANT: Return ONLY the value to put in the field. No explanation, no quotes, no extra text. Just the clean value.';
+    return ctx;
+  }
+
   function voiceToField(fieldId) {
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return toast('Speech not supported in this browser', 'error');
@@ -2278,7 +2328,47 @@ input,select,textarea { font-size:16px !important; }
     _voiceRec.onresult = function(e) {
       var transcript = '';
       for (var i = 0; i < e.results.length; i++) transcript += e.results[i][0].transcript;
+
+      /* Show raw transcript immediately as fallback */
       field.value = startVal ? startVal + ' ' + transcript : transcript;
+
+      /* Now pipe through AI for context-aware interpretation */
+      var provider = getSelectedProvider();
+      if (!provider) return; /* No AI — keep raw transcript */
+
+      if (btn) { btn.style.background = '#3b82f6'; btn.textContent = '⏳'; }
+
+      var context = getFieldContext(fieldId);
+      ensureAiKeys().then(function() {
+        return api('POST', '/ai/process', {
+          key_id: provider.id,
+          system_prompt: context,
+          prompt: 'The user spoke: "' + transcript + '"\n\nReturn the clean value for this field.'
+        });
+      }).then(function(data) {
+        var cleaned = (data.result || '').replace(/^["']|["']$/g, '').trim();
+        if (cleaned && cleaned.length < 500) {
+          /* If user had existing text and is appending, handle smartly */
+          if (startVal) {
+            /* AI might return just the new part or the whole thing — check */
+            if (cleaned.toLowerCase().indexOf(startVal.toLowerCase()) === 0) {
+              field.value = cleaned;
+            } else {
+              field.value = startVal + ' ' + cleaned;
+            }
+          } else {
+            field.value = cleaned;
+          }
+        }
+        /* else keep raw transcript */
+        if (btn) { btn.style.background = ''; btn.textContent = '🎤'; }
+        /* Trigger autosave */
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+        field.dispatchEvent(new Event('change', { bubbles: true }));
+      }).catch(function() {
+        /* AI failed — keep raw transcript, that's fine */
+        if (btn) { btn.style.background = ''; btn.textContent = '🎤'; }
+      });
     };
     _voiceRec.onerror = function(ev) {
       _voiceActive = false;
@@ -2288,7 +2378,7 @@ input,select,textarea { font-size:16px !important; }
     };
     _voiceRec.onend = function() {
       _voiceActive = false;
-      if (btn) { btn.style.background = ''; btn.textContent = '🎤'; }
+      /* Don't reset button here — AI might still be processing (blue spinner) */
     };
 
     try {
