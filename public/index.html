@@ -928,16 +928,16 @@ input,select,textarea { font-size:16px !important; }
     }
     closeSheet();
     navigate('board-detail');
-    toast('Circuit ' + (idx === -1 ? 'added' : 'updated') + ' (save all to persist)', 'info');
+    /* Auto-save to server */
+    autoSave('circuits');
   }
 
   function deleteCircuit(idx) {
     if (idx < 0 || idx >= state.circuits.length) return;
-    var c = state.circuits[idx];
     state.circuits.splice(idx, 1);
     closeSheet();
     navigate('board-detail');
-    toast('Circuit removed (save all to persist)', 'info');
+    autoSave('circuits');
   }
 
   function saveAllCircuits() {
@@ -992,8 +992,14 @@ input,select,textarea { font-size:16px !important; }
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">AI Provider</label>' +
           '<select id="ai-scan-key" class="select-field">' + keyOpts + '</select></div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Board Photo</label>' +
-          '<input type="file" id="ai-scan-file" accept="image/*" capture="environment" class="input-field" style="padding:.5rem">' +
-          '<div id="ai-scan-preview" class="mt-2"></div></div>' +
+          '<div class="flex gap-2 mb-2">' +
+            '<button class="btn btn-primary btn-sm flex-1" data-action="scan-take-photo">&#128247; Take Photo</button>' +
+            '<button class="btn btn-ghost btn-sm flex-1" data-action="scan-choose-gallery">&#128193; Gallery</button>' +
+          '</div>' +
+          '<input type="file" id="ai-scan-file" accept="image/*" class="input-field" style="padding:.5rem;display:none">' +
+          '<input type="file" id="ai-scan-file-cam" accept="image/*" style="display:none">' +
+          '<div id="ai-scan-preview" class="mt-2"></div>' +
+          '</div>' +
         '<button class="btn btn-primary w-full" data-action="run-photo-scan">' +
           '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>' +
           'Analyse Photo</button>' +
@@ -1005,9 +1011,12 @@ input,select,textarea { font-size:16px !important; }
   function runPhotoScan() {
     var keyEl = document.getElementById('ai-scan-key');
     var fileEl = document.getElementById('ai-scan-file');
+    var fileElCam = document.getElementById('ai-scan-file-cam');
     var resultEl = document.getElementById('ai-scan-result');
+    /* Check both gallery and camera inputs */
+    if (fileElCam && fileElCam.files && fileElCam.files[0]) fileEl = fileElCam;
     if (!keyEl || !fileEl || !fileEl.files || !fileEl.files[0]) {
-      toast('Select a photo first', 'error');
+      toast('Take a photo or select from gallery first', 'error');
       return;
     }
     resultEl.innerHTML = '<div class="flex items-center gap-2 py-4"><div class="loading-spinner"></div><span>Analysing board photo...</span></div>';
@@ -1425,7 +1434,7 @@ input,select,textarea { font-size:16px !important; }
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Location</label>' +
           inputWithMic('obs-location', 'e.g. Kitchen DB, Way 3', '') + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Photo (optional)</label>' +
-          '<input type="file" id="obs-photo" accept="image/*" capture="environment" class="input-field" style="padding:.5rem"></div>' +
+          '<input type="file" id="obs-photo" accept="image/*" class="input-field" style="padding:.5rem"></div>' +
         '<button class="btn btn-primary w-full mt-4" data-action="save-observation">Save Observation</button>' +
       '</div>'
     );
@@ -2408,6 +2417,14 @@ input,select,textarea { font-size:16px !important; }
       case 'voice-inspection':
         ensureAiKeys().then(function() { voiceInspection(); });
         break;
+      case 'scan-take-photo':
+        var camInput = document.getElementById('ai-scan-file-cam');
+        if (camInput) camInput.click();
+        break;
+      case 'scan-choose-gallery':
+        var galInput = document.getElementById('ai-scan-file');
+        if (galInput) galInput.click();
+        break;
       case 'run-photo-scan':
         runPhotoScan();
         break;
@@ -2487,7 +2504,44 @@ input,select,textarea { font-size:16px !important; }
     }
   });
 
-  /* Handle change events for inspection outcomes */
+  /* ===== AUTOSAVE ===== */
+  var _autoSaveTimer = null;
+  function autoSave(what) {
+    if (_autoSaveTimer) clearTimeout(_autoSaveTimer);
+    _autoSaveTimer = setTimeout(function() {
+      if (what === 'inspections') autoSaveInspections();
+      else if (what === 'site-info') autoSaveSiteInfo();
+      else if (what === 'circuits') autoSaveCircuits();
+    }, 1500); /* 1.5s debounce */
+  }
+
+  function autoSaveInspections() {
+    if (!state.currentSite) return;
+    var selects = document.querySelectorAll('[data-action="set-inspection-outcome"]');
+    var items = [];
+    selects.forEach(function(sel) {
+      var ref = sel.getAttribute('data-ref');
+      var val = sel.value;
+      if (ref && val) items.push({item_ref: ref, outcome: val});
+    });
+    if (items.length === 0) return;
+    api('PUT', '/sites/' + state.currentSite.id + '/inspections', items).then(function(data) {
+      state.inspections = data;
+      toast('Auto-saved', 'success');
+    }).catch(function() {});
+  }
+
+  function autoSaveSiteInfo() {
+    if (!state.currentSite) return;
+    saveSiteInfo(); /* Reuse existing function */
+  }
+
+  function autoSaveCircuits() {
+    if (!state.currentBoard) return;
+    saveAllCircuits(); /* Reuse existing function */
+  }
+
+  /* Handle change events for inspection outcomes — now auto-saves */
   document.addEventListener('change', function(e) {
     var target = e.target;
     if (target.getAttribute && target.getAttribute('data-action') === 'set-inspection-outcome') {
@@ -2497,8 +2551,36 @@ input,select,textarea { font-size:16px !important; }
       if (val) {
         target.classList.add('outcome-' + val.toLowerCase().replace('/', ''));
       }
+      /* Auto-save */
+      autoSave('inspections');
+    }
+    /* Auto-save site info on select change */
+    if (target.id && target.id.indexOf('si_') === 0 && state.view === 'site-detail' && state.currentSiteTab === 'info') {
+      autoSave('site-info');
+    }
+    /* Show preview when photo selected (camera or gallery) */
+    if (target.id === 'ai-scan-file' || target.id === 'ai-scan-file-cam') {
+      if (target.files && target.files[0]) {
+        var preview = document.getElementById('ai-scan-preview');
+        if (preview) {
+          var url = URL.createObjectURL(target.files[0]);
+          preview.innerHTML = '<img src="' + url + '" style="max-height:150px;border-radius:.5rem;margin-top:.5rem">';
+        }
+        /* Copy to the main file input if from camera */
+        if (target.id === 'ai-scan-file-cam') {
+          /* Can't copy FileList, so we just use whichever has the file in runPhotoScan */
+        }
+      }
     }
   });
+
+  /* Auto-save site info on input blur */
+  document.addEventListener('blur', function(e) {
+    var target = e.target;
+    if (target.id && target.id.indexOf('si_') === 0 && state.view === 'site-detail' && state.currentSiteTab === 'info') {
+      autoSave('site-info');
+    }
+  }, true);
 
   /* Handle enter key on login */
   document.addEventListener('keydown', function(e) {
