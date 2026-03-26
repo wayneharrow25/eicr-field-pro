@@ -504,10 +504,65 @@ input,select,textarea { font-size:16px !important; }
         {id:'si_inspector_name', label:'Inspector Name', val:s.inspector_name},
         {id:'si_inspector_position', label:'Inspector Position', val:s.inspector_position},
       ]) +
-      renderFieldGroup('Extent and Limitations', [
-        {id:'si_extent', label:'Extent of Installation Covered', val:s.extent, textarea:true},
-        {id:'si_limitations', label:'Agreed Limitations', val:s.limitations, textarea:true},
-        {id:'si_operational_limitations', label:'Operational Limitations', val:s.operational_limitations, textarea:true},
+      renderFieldGroup('Installation Details (cont.)', [
+        {id:'si_records_available', label:'Records Available', val:s.records_available, options:['Yes','No','Partial','Unknown']},
+        {id:'si_next_inspection', label:'Recommended Next Inspection (date)', val:s.next_inspection, type:'date'},
+        {id:'si_next_interval', label:'Recommended Interval (years)', val:s.next_interval, options:['1','2','3','5','10']},
+      ]) +
+      renderQuickPickSection('Extent and Limitations', [
+        {id:'si_extent', label:'Extent of Installation Covered', val:s.extent, picks:[
+          'The whole of the electrical installation',
+          'The whole of the electrical installation excluding areas listed under limitations',
+          'Distribution boards and associated circuits only',
+          'Lighting circuits only',
+          'Socket outlet circuits only',
+          'Landlord supply and common areas only',
+          'Incoming supply and main distribution only',
+        ]},
+        {id:'si_sampling', label:'Sampling (per Guidance Note 3)', val:s.sampling, picks:[
+          'Sampling in accordance with IET Guidance Note 3',
+          '100% of protective devices inspected and tested',
+          '100% of circuits tested for continuity, insulation resistance and polarity',
+          '10% of lighting points tested',
+          '10% of socket outlets tested',
+          '100% of RCDs tested',
+          '100% of earthing and bonding verified',
+          '100% sampling applied due to condition / age of installation',
+          'Increased sampling applied due to initial findings',
+        ]},
+        {id:'si_limitations', label:'Agreed Limitations', val:s.limitations, picks:[
+          'No access to roof/loft space',
+          'No access to underfloor areas',
+          'No access to ceiling voids',
+          'Furniture and stored items not moved',
+          'Floor coverings not lifted',
+          'Parts of the installation covered by fixed building elements not inspected',
+          'No excavation of underground cables',
+          'Consumer unit(s) not isolated during inspection',
+          'Tenant areas excluded — landlord areas only',
+          'Fire alarm system excluded — specialist contractor',
+          'Emergency lighting excluded — specialist contractor',
+          'Lightning protection excluded — specialist contractor',
+          'Intruder/security alarm excluded — specialist contractor',
+          'Photovoltaic (PV) installation excluded',
+          'CCTV system excluded — specialist contractor',
+          'Access equipment (scaffolding/MEWP) not available for high-level inspection',
+          'Excessively long circuits — loop impedance verified by calculation only',
+          'Locked rooms — no access provided',
+        ]},
+        {id:'si_operational_limitations', label:'Operational Limitations', val:s.operational_limitations, picks:[
+          'Circuits could not be isolated — IR testing limited to on-load values',
+          'Parts of the installation could not be de-energised',
+          'IT/server equipment in use — circuits not disconnected',
+          'Operating machinery — circuits could not be isolated',
+          'Occupied premises — limited access to some areas',
+          'RCD testing not possible on specific circuits due to connected equipment',
+          'Building in use — testing carried out around operational hours',
+          'Lack of documentation / installation records',
+          'Presence of asbestos — areas not disturbed',
+          'Kitchen equipment in operation — could not isolate',
+          'Medical/healthcare equipment — could not disconnect',
+        ]},
       ]) +
       renderFieldGroup('Supply Characteristics', [
         {id:'si_supply_system', label:'System Type (TN-S, TN-C-S, TT, IT)', val:s.supply_system, options:['TN-S','TN-C-S','TT','IT','TN-C','Unknown']},
@@ -575,12 +630,35 @@ input,select,textarea { font-size:16px !important; }
     return html;
   }
 
+  /* Render a section with quick-pick chip buttons under textareas */
+  function renderQuickPickSection(title, fields) {
+    var html = '<div class="card p-4">' +
+      '<h3 class="font-semibold text-slate-800 mb-3 text-sm uppercase tracking-wide">' + title + '</h3>' +
+      '<div class="space-y-4">';
+    fields.forEach(function(f) {
+      html += '<div><label class="block text-sm font-medium text-slate-600 mb-1" for="' + f.id + '">' + f.label + '</label>';
+      html += textareaWithMic(f.id, f.label, f.val, 3);
+      if (f.picks && f.picks.length) {
+        html += '<div class="flex flex-wrap gap-1 mt-1">';
+        f.picks.forEach(function(p) {
+          html += '<button type="button" class="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600 active:bg-blue-100 active:text-blue-700 border border-slate-200" ' +
+            'data-action="quick-pick" data-target="' + f.id + '" data-text="' + esc(p) + '">' + esc(p) + '</button>';
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+    });
+    html += '</div></div>';
+    return html;
+  }
+
   function saveSiteInfo() {
     var s = state.currentSite;
     var fields = [
       'client_name','address','client_address','client_phone','client_email','occupier','purpose',
       'desc_premises','estimated_age','evidence_alteration','date_last_inspection','date_inspection',
-      'inspector_name','inspector_position','extent','limitations','operational_limitations',
+      'inspector_name','inspector_position','records_available','next_inspection','next_interval',
+      'extent','sampling','limitations','operational_limitations',
       'supply_system','supply_type','supply_protective','supply_protective_rating','nominal_voltage_ll',
       'nominal_voltage_ln','nominal_freq','pscc','pfc_confirmed',
       'earthing_type','earth_electrode_type','earth_electrode_location','earth_electrode_resistance','ze',
@@ -2870,6 +2948,18 @@ input,select,textarea { font-size:16px !important; }
         break;
       case 'voice-field':
         voiceToField(target.getAttribute('data-voice-for'));
+        break;
+      case 'quick-pick':
+        var qpTarget = document.getElementById(target.getAttribute('data-target'));
+        var qpText = target.getAttribute('data-text');
+        if (qpTarget && qpText) {
+          var cur = qpTarget.value.trim();
+          qpTarget.value = cur ? cur + '\n' + qpText : qpText;
+          /* Visual feedback */
+          target.style.background = '#dbeafe';
+          target.style.borderColor = '#3b82f6';
+          autoSave('site-info');
+        }
         break;
       case 'voice-observation':
         ensureAiKeys().then(function() { voiceObservation(); });
