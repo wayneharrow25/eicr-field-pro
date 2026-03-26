@@ -1068,17 +1068,15 @@ input,select,textarea { font-size:16px !important; }
       'zs_measured', 'rcd_time_x1', 'rcd_time_x5', 'remarks'
     ];
     var count = 0;
-    var skipped = 0;
+    var spareCount = 0;
     state.circuits.forEach(function(c) {
-      /* Skip spares and blank circuits — no testing needed */
       var desc = (c.description || '').toLowerCase().trim();
-      if (!desc || desc === 'spare' || desc === 'spare way' || desc === 'blank') {
-        skipped++;
-        return;
-      }
+      var isSpare = (!desc || desc === 'spare' || desc === 'spare way' || desc === 'blank');
+      var val = isSpare ? '-' : fillValue;
+      if (isSpare) spareCount++;
       testFields.forEach(function(f) {
         if (!c[f] || c[f] === '') {
-          c[f] = fillValue;
+          c[f] = val;
           count++;
         }
       });
@@ -1087,8 +1085,8 @@ input,select,textarea { font-size:16px !important; }
       toast('No empty fields to fill', 'info');
       return;
     }
-    var msg = 'Filled ' + count + ' empty fields with ' + fillValue;
-    if (skipped > 0) msg += ' (' + skipped + ' spares skipped)';
+    var msg = 'Filled ' + count + ' fields with ' + fillValue;
+    if (spareCount > 0) msg += ' (' + spareCount + ' spares filled with -)';
     toast(msg, 'success');
     navigate('board-detail');
     autoSave('circuits');
@@ -1750,42 +1748,84 @@ input,select,textarea { font-size:16px !important; }
     }
     resultEl.innerHTML = '<div class="flex items-center gap-2 py-4"><div class="loading-spinner"></div><span>AI processing...</span></div>';
 
-    /* Build full context of existing circuits so AI has complete picture */
+    /* Build full context — circuits, board header, inspections, observations, site info */
     var existingInfo = '';
+
+    /* Board header */
+    if (state.currentBoard) {
+      var b = state.currentBoard;
+      existingInfo += '\n\nCURRENT BOARD: ' + (b.ref || '') + ' at ' + (b.location || '');
+      existingInfo += '\nSupplied from: ' + (b.supplied_from || 'N/A') + ' | Phases: ' + (b.num_phases || '1');
+      existingInfo += '\nZe: ' + (b.ze || '-') + ' | Ipf: ' + (b.ipf || '-');
+      existingInfo += '\nDist type: ' + (b.dist_type || '-') + ' | OCPD: ' + (b.ocpd_type || '-') + ' ' + (b.ocpd_rating || '-') + 'A';
+      existingInfo += '\nInstruments — Multi: ' + (b.instruments_multi || '-') + ' | IR: ' + (b.instruments_ir || '-') +
+        ' | Cont: ' + (b.instruments_cont || '-') + ' | Loop: ' + (b.instruments_loop || '-') +
+        ' | RCD: ' + (b.instruments_rcd || '-') + ' | Earth: ' + (b.instruments_earth || '-');
+    }
+
+    /* Circuits */
     if (state.circuits.length > 0) {
-      existingInfo = '\n\nCURRENT CIRCUITS ON THIS BOARD:\n' + state.circuits.map(function(c) {
+      existingInfo += '\n\nCURRENT CIRCUITS (' + state.circuits.length + '):\n' + state.circuits.map(function(c) {
         var parts = ['#' + (c.number || '?') + ' ' + (c.description || 'Unknown')];
         if (c.ocpd_type || c.ocpd_rating) parts.push((c.ocpd_type || '') + (c.ocpd_rating || '') + 'A');
         if (c.ocpd_bsen) parts.push('BS(EN) ' + c.ocpd_bsen);
         if (c.zs_measured) parts.push('Zs=' + c.zs_measured);
+        if (c.ir_ll || c.ir_le) parts.push('IR=' + (c.ir_ll || '-') + '/' + (c.ir_le || '-'));
         return parts.join(' | ');
       }).join('\n');
     }
 
-    if (state.currentBoard) {
-      existingInfo += '\n\nBOARD: ' + (state.currentBoard.ref || '') + ' at ' + (state.currentBoard.location || '');
+    /* Observations */
+    if (state.observations && state.observations.length > 0) {
+      existingInfo += '\n\nOBSERVATIONS:\n' + state.observations.map(function(o) {
+        return o.code + ': ' + (o.description || '') + (o.location ? ' [' + o.location + ']' : '');
+      }).join('\n');
     }
 
-    var systemPrompt = 'You are a general AI assistant for a BS 7671 EICR app. The user can ask you to do ANYTHING with the circuit data. ' +
+    /* Inspection outcomes already set */
+    if (state.inspections && state.inspections.length > 0) {
+      existingInfo += '\n\nINSPECTION OUTCOMES SET:\n' + state.inspections.map(function(i) {
+        return i.item_ref + '=' + i.outcome;
+      }).join(', ');
+    }
+
+    /* Site info */
+    if (state.currentSite) {
+      var s = state.currentSite;
+      existingInfo += '\n\nSITE: ' + (s.name || '') + ' | ' + (s.address || '');
+    }
+
+    var systemPrompt = 'You are an expert AI assistant for a BS 7671:2018+A2:2022 EICR (Electrical Installation Condition Report) app. ' +
+      'You have FULL control of the app. You can modify circuits, board header, inspection schedule, and add observations. ' +
       'You must understand natural speech and return structured JSON actions.\n\n' +
-      'SUPPORTED ACTIONS:\n' +
-      '1. "updates" — Add or amend circuit data (readings, descriptions, OCPD details, etc.)\n' +
-      '2. "delete" — Remove circuits by number\n' +
-      '3. "renumber" — Renumber circuits (e.g. after deleting)\n' +
-      '4. "message" — A text response when the user asks a question rather than giving an instruction\n\n' +
+      'SUPPORTED ACTIONS (include only keys that apply):\n' +
+      '1. "updates" — Add or amend circuit data [{number, ...fields}]\n' +
+      '2. "delete" — Remove circuits by number ["15","16"]\n' +
+      '3. "renumber" — true to renumber circuits after deletion\n' +
+      '4. "board_updates" — Update board header {ze, ipf, dist_type, dist_bsen, dist_rating, ocpd_bsen, ocpd_type, ocpd_rating, ' +
+        'instruments_multi, instruments_ir, instruments_cont, instruments_earth, instruments_loop, instruments_rcd, supplied_from, location}\n' +
+      '5. "inspection_updates" — Set inspection schedule outcomes [{item_ref:"7.1", outcome:"C2"}]\n' +
+      '   Outcomes: "Sat" (satisfactory), "C1" (danger), "C2" (potentially dangerous), "C3" (improvement), "FI" (further investigation), "N/A", "LIM"\n' +
+      '6. "observations" — Add observations [{code:"C2", description:"...", location:"..."}]\n' +
+      '7. "message" — Text response to questions\n\n' +
       'CIRCUIT FIELDS: number, description, ocpd_bsen (60898=MCB, 61009=RCBO, 61008=RCD, 60947-2=MCCB, 88-2=HRC fuse), ' +
-      'ocpd_type (B/C/D), ocpd_rating, live_mm, cpc_mm, wiring_type, ' +
+      'ocpd_type (B/C/D), ocpd_rating, live_mm, cpc_mm, wiring_type (A=T+E, B=conduit metal, C=conduit plastic, F=SWA, H=MICC), ref_method, ' +
       'r1, rn, r2, r1r2, r2_measured, r2_ring, ir_test_v (250/500/1000), ir_ll, ir_le, ' +
       'polarity (boolean), zs_measured, max_zs, rcd_bsen, rcd_type, rcd_idn, ' +
       'rcd_time_x1, rcd_time_x5, rcd_test_btn (boolean), remarks.\n\n' +
-      '"greater than 200" or "infinity" for insulation = ">200". Only include fields the user actually mentioned.\n\n' +
+      'INSPECTION SCHEDULE ITEMS (for reference):\n' +
+      INSPECTION_ITEMS.filter(function(i) { return i.ref; }).map(function(i) { return i.ref + ': ' + i.desc; }).join('\n') + '\n\n' +
+      'RULES:\n' +
+      '- "greater than 200" or "infinity" for insulation = ">200"\n' +
+      '- Only include fields the user actually mentioned\n' +
+      '- "Ze" or "ze" refers to the board_updates.ze field (earth fault loop impedance at origin)\n' +
+      '- "Ipf" refers to board_updates.ipf (prospective fault current)\n' +
+      '- If user says "set Ze to 0.35" → {"board_updates": {"ze": "0.35"}}\n' +
+      '- If user says "5.6 pass" → {"inspection_updates": [{"item_ref":"5.6","outcome":"Sat"}]}\n' +
+      '- If user says "cable loose in kitchen" → both observation AND inspection update\n\n' +
       'RETURN FORMAT (always valid JSON):\n' +
-      '{"updates": [...], "delete": ["15","16"], "renumber": true, "message": "optional text"}\n' +
-      'Include only the keys that apply. For example:\n' +
-      '- "remove circuits 15 and 16" → {"delete": ["15","16"], "renumber": true}\n' +
-      '- "circuit 3 Zs 0.45" → {"updates": [{"number":"3","zs_measured":"0.45"}]}\n' +
-      '- "all circuits insulation greater than 200" → {"updates": [one entry per existing circuit with ir_ll:">200", ir_le:">200"]}\n' +
-      '- "what is the max Zs for a B32?" → {"message": "For a B32 MCB on a TN system, max Zs is 1.37Ω (80% = 1.10Ω)"}';
+      '{"updates":[...], "delete":[...], "renumber":true, "board_updates":{...}, "inspection_updates":[...], "observations":[...], "message":"..."}\n' +
+      'Include only the keys that apply.';
 
     var prompt = 'User instruction: "' + textEl.value + '"' + existingInfo + '\n\nReturn ONLY valid JSON.';
 
@@ -1821,7 +1861,7 @@ input,select,textarea { font-size:16px !important; }
           actionsTaken.push('Renumbered to 1-' + state.circuits.length);
         }
 
-        /* Handle updates/additions */
+        /* Handle circuit updates/additions */
         if (parsed.updates && parsed.updates.length > 0) {
           parsed.updates.forEach(function(u) {
             var existing = state.circuits.findIndex(function(c) { return String(c.number) === String(u.number); });
@@ -1834,6 +1874,38 @@ input,select,textarea { font-size:16px !important; }
           actionsTaken.push('Updated ' + parsed.updates.length + ' circuit(s)');
         }
 
+        /* Handle board header updates */
+        if (parsed.board_updates && state.currentBoard) {
+          api('PUT', '/boards/' + state.currentBoard.id, parsed.board_updates).then(function(updated) {
+            Object.assign(state.currentBoard, updated);
+          }).catch(function() {});
+          var boardFields = Object.keys(parsed.board_updates);
+          actionsTaken.push('Board: set ' + boardFields.join(', '));
+        }
+
+        /* Handle inspection schedule updates */
+        if (parsed.inspection_updates && parsed.inspection_updates.length > 0 && state.currentSite) {
+          api('PUT', '/sites/' + state.currentSite.id + '/inspections', parsed.inspection_updates).then(function(data) {
+            state.inspections = data;
+          }).catch(function() {});
+          var inspRefs = parsed.inspection_updates.map(function(i) { return i.item_ref + '→' + i.outcome; });
+          actionsTaken.push('Inspection: ' + inspRefs.join(', '));
+        }
+
+        /* Handle new observations */
+        if (parsed.observations && parsed.observations.length > 0 && state.currentSite) {
+          parsed.observations.forEach(function(o) {
+            api('POST', '/sites/' + state.currentSite.id + '/observations', {
+              code: o.code || 'C2',
+              description: o.description || '',
+              location: o.location || ''
+            }).then(function(saved) {
+              state.observations.push(saved);
+            }).catch(function() {});
+          });
+          actionsTaken.push('Added ' + parsed.observations.length + ' observation(s)');
+        }
+
         /* Show AI message if present */
         if (parsed.message) {
           resultEl.innerHTML = '<div class="p-3 bg-blue-50 rounded-lg text-sm text-blue-800 mb-2">' +
@@ -1843,7 +1915,7 @@ input,select,textarea { font-size:16px !important; }
         if (actionsTaken.length > 0) {
           closeSheet();
           navigate('board-detail');
-          toast(actionsTaken.join(', ') + ' — save to persist', 'success');
+          toast(actionsTaken.join(', '), 'success');
         } else if (!parsed.message) {
           resultEl.innerHTML = '<p class="text-amber-600">AI didn\'t make any changes. Try rephrasing your instruction.</p>';
         }
@@ -2153,6 +2225,8 @@ input,select,textarea { font-size:16px !important; }
           closeSheet();
           toast('Observation updated', 'success');
           navigate('site-detail', {currentSiteTab: 'observations'});
+          /* AI: map to inspection schedule */
+          mapObservationToInspection(body.description, body.code);
         }).catch(function(err) { toast(err.message, 'error'); });
       } else {
         /* Create new */
@@ -2161,6 +2235,8 @@ input,select,textarea { font-size:16px !important; }
           closeSheet();
           toast('Observation recorded', 'success');
           navigate('site-detail', {currentSiteTab: 'observations'});
+          /* AI: map to inspection schedule */
+          mapObservationToInspection(body.description, body.code);
         }).catch(function(err) { toast(err.message, 'error'); });
       }
     };
@@ -2172,6 +2248,54 @@ input,select,textarea { font-size:16px !important; }
     } else {
       doSave(null);
     }
+  }
+
+  /* After saving an observation, use AI to match it to inspection schedule items */
+  function mapObservationToInspection(obsDescription, obsCode) {
+    var provider = getSelectedProvider();
+    if (!provider) return; /* No AI key — skip silently */
+
+    /* Build compact inspection item list for the AI */
+    var itemList = INSPECTION_ITEMS.filter(function(i) { return i.ref; }).map(function(i) {
+      return i.ref + ': ' + i.desc;
+    }).join('\n');
+
+    var sysPrompt = 'You are a BS 7671:2018+A2:2022 EICR expert. Given an observation/defect from an electrical inspection, ' +
+      'identify which Schedule of Inspection item(s) it relates to. Return ONLY valid JSON.\n\n' +
+      'SCHEDULE OF INSPECTION ITEMS:\n' + itemList + '\n\n' +
+      'RULES:\n' +
+      '- Return the item ref(s) that the observation directly relates to\n' +
+      '- Usually 1-3 items, rarely more\n' +
+      '- The observation code (C1/C2/C3/FI) should be applied to those items\n' +
+      '- If unsure, pick the most relevant item\n' +
+      '- Section 7 = final circuits, Section 6 = distribution circuits, Section 5 = switchgear\n\n' +
+      'RETURN FORMAT:\n{"refs": ["7.1", "7.3"], "reason": "brief explanation"}';
+
+    var prompt = 'Observation (' + obsCode + '): "' + obsDescription + '"\n\nWhich inspection schedule items does this relate to? Return JSON only.';
+
+    api('POST', '/ai/process', {
+      key_id: provider.id,
+      system_prompt: sysPrompt,
+      prompt: prompt
+    }).then(function(res) {
+      var jsonMatch = (res.result || '').match(/\{[\s\S]*\}/);
+      if (!jsonMatch) return;
+      var parsed = JSON.parse(jsonMatch[0]);
+      if (!parsed.refs || !parsed.refs.length) return;
+
+      /* Update inspection items with the observation code */
+      var items = parsed.refs.map(function(ref) {
+        return { item_ref: ref, outcome: obsCode };
+      });
+
+      api('PUT', '/sites/' + state.currentSite.id + '/inspections', items).then(function(data) {
+        state.inspections = data;
+        var refStr = parsed.refs.join(', ');
+        toast('Inspection ' + refStr + ' set to ' + obsCode, 'info');
+      }).catch(function() {});
+    }).catch(function(err) {
+      console.error('Observation→inspection mapping failed:', err);
+    });
   }
 
   function deleteObservation(id) {
