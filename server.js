@@ -490,10 +490,29 @@ app.put('/api/circuits/:id', authMiddleware, async (req, res) => {
   res.json(rows[0]);
 });
 
+// Map frontend field names to actual DB column names
+const CIRCUIT_FIELD_MAP = {
+  points: 'num_points',
+  breaking_cap: 'ocpd_breaking_cap',
+  rcd_rating: 'rcd_rating_a',
+  r2_measured: 'r1r2_or_r2',
+  ir_test_v: 'test_voltage',
+  rcd_test_btn: 'rcd_test_button'
+};
+function mapCircuitFields(obj) {
+  const mapped = {};
+  for (const [k, v] of Object.entries(obj)) {
+    const dbCol = CIRCUIT_FIELD_MAP[k] || k;
+    mapped[dbCol] = v;
+  }
+  return mapped;
+}
+
 app.put('/api/boards/:id/circuits/bulk', authMiddleware, async (req, res) => {
   const updates = req.body; // [{id or number, ...fields}]
   const boardId = req.params.id;
-  for (const u of updates) {
+  for (const raw of updates) {
+    const u = mapCircuitFields(raw);
     if (u.id) {
       const fields = Object.keys(u).filter(k => k !== 'id' && k !== 'board_id');
       const sets = fields.map((f, i) => `${f} = $${i + 2}`);

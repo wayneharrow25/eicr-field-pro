@@ -918,9 +918,27 @@ input,select,textarea { font-size:16px !important; }
     return html;
   }
 
+  /* Map DB column names back to frontend field names */
+  var DB_TO_UI = {
+    num_points: 'points',
+    ocpd_breaking_cap: 'breaking_cap',
+    rcd_rating_a: 'rcd_rating',
+    r1r2_or_r2: 'r2_measured',
+    test_voltage: 'ir_test_v',
+    rcd_test_button: 'rcd_test_btn'
+  };
+  function mapCircuitFromDB(row) {
+    var c = {};
+    Object.keys(row).forEach(function(k) {
+      var uiKey = DB_TO_UI[k] || k;
+      c[uiKey] = row[k];
+    });
+    return c;
+  }
+
   function loadCircuits(boardId) {
     api('GET', '/boards/' + boardId + '/circuits').then(function(data) {
-      state.circuits = data;
+      state.circuits = data.map(mapCircuitFromDB);
       navigate('board-detail');
     }).catch(function(err) { toast(err.message, 'error'); });
   }
@@ -1077,7 +1095,7 @@ input,select,textarea { font-size:16px !important; }
       return obj;
     });
     api('PUT', '/boards/' + state.currentBoard.id + '/circuits/bulk', updates).then(function(data) {
-      state.circuits = data;
+      state.circuits = data.map(mapCircuitFromDB);
       toast('All circuits saved', 'success');
       navigate('board-detail');
     }).catch(function(err) { toast(err.message, 'error'); });
