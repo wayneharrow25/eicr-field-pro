@@ -480,8 +480,12 @@ app.delete('/api/observations/:id', authMiddleware, async (req, res) => {
 // Endpoint to list available AI providers (including env var ones)
 app.get('/api/ai/providers', authMiddleware, async (req, res) => {
   const providers = [];
-  if (ENV_KEYS.gemini) providers.push({ id: 'env_gemini', label: 'Gemini (Server)', provider: 'gemini', model: DEFAULT_MODELS.gemini });
-  if (ENV_KEYS.anthropic) providers.push({ id: 'env_anthropic', label: 'Claude (Server)', provider: 'anthropic', model: DEFAULT_MODELS.anthropic });
+  // Gemini key works for ALL models — offer both Flash and Pro
+  if (ENV_KEYS.gemini) {
+    providers.push({ id: 'env_gemini_flash', label: 'Gemini 2.5 Flash (fast)', provider: 'gemini', model: 'gemini-2.5-flash' });
+    providers.push({ id: 'env_gemini_pro', label: 'Gemini 2.5 Pro (smart)', provider: 'gemini', model: 'gemini-2.5-pro' });
+  }
+  if (ENV_KEYS.anthropic) providers.push({ id: 'env_anthropic', label: 'Claude Sonnet', provider: 'anthropic', model: DEFAULT_MODELS.anthropic });
   // Also include user's own keys
   const { rows } = await pool.query('SELECT id, label, provider, model FROM ai_keys WHERE user_id = $1', [req.user.id]);
   rows.forEach(r => providers.push({ id: String(r.id), label: r.label, provider: r.provider, model: r.model }));
@@ -493,7 +497,11 @@ app.post('/api/ai/process', authMiddleware, async (req, res) => {
 
   // Resolve the API key — either from env vars or user's saved keys
   var keyRow;
-  if (key_id === 'env_gemini' && ENV_KEYS.gemini) {
+  if (key_id === 'env_gemini_flash' && ENV_KEYS.gemini) {
+    keyRow = { provider: 'gemini', model: 'gemini-2.5-flash', api_key: ENV_KEYS.gemini };
+  } else if (key_id === 'env_gemini_pro' && ENV_KEYS.gemini) {
+    keyRow = { provider: 'gemini', model: 'gemini-2.5-pro', api_key: ENV_KEYS.gemini };
+  } else if (key_id === 'env_gemini' && ENV_KEYS.gemini) {
     keyRow = { provider: 'gemini', model: DEFAULT_MODELS.gemini, api_key: ENV_KEYS.gemini };
   } else if (key_id === 'env_anthropic' && ENV_KEYS.anthropic) {
     keyRow = { provider: 'anthropic', model: DEFAULT_MODELS.anthropic, api_key: ENV_KEYS.anthropic };
