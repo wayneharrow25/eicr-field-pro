@@ -3190,12 +3190,36 @@ input,select,textarea { font-size:16px !important; }
         return;
       }
 
+      var itemList = INSPECTION_ITEMS.filter(function(i) { return i.ref; }).map(function(i) {
+        return i.ref + ': ' + i.desc;
+      }).join('\n');
+
+      var voiceSysPrompt = 'You are a BS 7671:2018+A2:2022 EICR expert. Parse spoken observations from an electrical inspector.\n\n' +
+        'You must:\n' +
+        '1. Extract observation(s) with code (C1/C2/C3/FI), location, and description\n' +
+        '2. Rewrite each description in proper technical EICR language\n' +
+        '3. Identify which Schedule of Inspection item(s) each relates to\n' +
+        '4. Handle compound statements — e.g. "16mm water bonding, no other bonding required" means:\n' +
+        '   - Note the water bonding conductor size\n' +
+        '   - Set item 3.1.2 (water) to Sat\n' +
+        '   - Set items 3.1.3 (gas), 3.1.4 (oil), 3.1.5 (structural), 3.1.6 (lightning), 3.1.7 (other) to N/A\n' +
+        '5. If no code is spoken, infer: defects=C2, satisfactory statements=Sat, improvements=C3\n\n' +
+        'SCHEDULE OF INSPECTION ITEMS:\n' + itemList + '\n\n' +
+        'RETURN FORMAT (valid JSON):\n' +
+        '{"observations": [{"code":"C2","location":"Kitchen","description":"technical description"}],\n' +
+        ' "inspection_updates": [{"item_ref":"7.13","outcome":"C2"}],\n' +
+        ' "message": "brief summary of what was done"}';
+
       api('POST', '/ai/process', {
         key_id: provider.id,
-        system_prompt: 'Parse this spoken electrical observation into structured data. Extract: code (C1/C2/C3/FI), location, description. The user is doing a BS 7671 EICR inspection. Return JSON: {"observations": [{"code": "C2", "location": "Kitchen", "description": "No RCD protection on socket outlet"}]}. If multiple observations are spoken, return them all. Always return valid JSON.',
-        prompt: 'Parse this observation: ' + transcript
+        system_prompt: voiceSysPrompt,
+        prompt: 'Inspector said: "' + transcript + '"\n\nParse, reword technically, and identify inspection items. Return JSON only.'
       }).then(function(res) {
-        var data = JSON.parse(res.result.replace(/```json|```/g, '').trim());
+        var jsonMatch = (res.result || '').match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('No JSON');
+        var data = JSON.parse(jsonMatch[0]);
+
+        /* Save observations */
         var obs = data.observations || [data];
         var promises = obs.map(function(o) {
           return api('POST', '/sites/' + state.currentSite.id + '/observations', {
@@ -3204,12 +3228,55 @@ input,select,textarea { font-size:16px !important; }
             location: o.location || ''
           });
         });
-        return Promise.all(promises);
-      }).then(function(results) {
-        results.forEach(function(o) { state.observations.push(o); });
-        closeSheet();
-        toast(results.length + ' observation(s) added', 'success');
-        navigate('site-detail', {currentSiteTab: 'observations'});
+
+        /* Update inspection schedule items */
+        if (data.inspection_updates && data.inspection_updates.length > 0 && state.currentSite) {
+          promises.push(
+            api('PUT', '/sites/' + state.currentSite.id + '/inspections', data.inspection_updates).then(function(d) {
+              state.inspections = d;
+            })
+          );
+        }
+
+        return Promise.all(promises).then(function(results) {
+          /* Only push observation results (not inspection update result) */
+          results.forEach(function(o) { if (o && o.id) state.observations.push(o); });
+
+          closeSheet();
+          navigate('site-detail', {currentSiteTab: 'observations'});
+
+          /* Show what was done */
+          var msg = obs.length + ' observation(s) added';
+          if (data.inspection_updates && data.inspection_updates.length > 0) {
+            var refs = data.inspection_updates.map(function(i) { return i.item_ref + '→' + i.outcome; });
+            msg += ' | Inspection: ' + refs.join(', ');
+          }
+          if (data.message) msg += ' — ' + data.message;
+          toast(msg, 'success');
+
+          /* Show banner */
+          setTimeout(function() {
+            var obsContainer = document.getElementById('observations-container');
+            if (!obsContainer) return;
+            var bannerHtml = '<div class="p-3 bg-blue-50 border border-blue-200 rounded-xl mb-3" style="cursor:pointer" onclick="this.remove()">' +
+              '<h4 class="font-bold text-blue-800 text-xs mb-1">Voice AI Result</h4>' +
+              '<p class="text-xs text-slate-600"><strong>Heard:</strong> ' + esc(transcript) + '</p>';
+            obs.forEach(function(o) {
+              bannerHtml += '<p class="text-xs text-slate-800 mt-1"><strong>' + esc(o.code || 'C2') + ':</strong> ' + esc(o.description) + '</p>';
+            });
+            if (data.inspection_updates && data.inspection_updates.length > 0) {
+              bannerHtml += '<p class="text-xs text-blue-700 mt-1"><strong>Inspection:</strong> ' +
+                data.inspection_updates.map(function(i) {
+                  var item = INSPECTION_ITEMS.find(function(x) { return x.ref === i.item_ref; });
+                  return i.item_ref + ' ' + (item ? item.desc.substring(0, 40) : '') + ' → ' + i.outcome;
+                }).join('; ') + '</p>';
+            }
+            bannerHtml += '</div>';
+            var el = document.createElement('div');
+            el.innerHTML = bannerHtml;
+            obsContainer.insertBefore(el, obsContainer.firstChild);
+          }, 200);
+        });
       }).catch(function(err) {
         console.error('AI parse failed, using manual', err);
         manualParseObservation(transcript);
