@@ -428,7 +428,14 @@ app.put('/api/sites/:id/inspections', authMiddleware, async (req, res) => {
 
 // ---- BOARDS CRUD ----
 app.get('/api/sites/:id/boards', authMiddleware, async (req, res) => {
-  const { rows } = await pool.query('SELECT * FROM boards WHERE site_id = $1 ORDER BY sort_order, id', [req.params.id]);
+  const { rows } = await pool.query(
+    `SELECT b.*, COALESCE(c.cnt, 0)::int AS circuit_count
+     FROM boards b
+     LEFT JOIN (SELECT board_id, COUNT(*) AS cnt FROM circuits GROUP BY board_id) c
+       ON b.id = c.board_id
+     WHERE b.site_id = $1 ORDER BY b.sort_order, b.id`,
+    [req.params.id]
+  );
   res.json(rows);
 });
 
