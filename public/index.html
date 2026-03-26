@@ -2208,72 +2208,52 @@ input,select,textarea { font-size:16px !important; }
       toast('Code and description are required', 'error');
       return;
     }
-    var body = {
-      code: code.value,
-      description: desc.value.trim(),
-      location: (document.getElementById('obs-location') || {}).value || ''
-    };
+    var rawDesc = desc.value.trim();
+    var obsCode = code.value;
+    var location = (document.getElementById('obs-location') || {}).value || '';
 
-    /* Handle photo upload */
+    /* Get photo data first */
     var photoInput = document.getElementById('obs-photo');
-    var doSave = function(photoData) {
-      if (photoData) body.photo = photoData;
-
-      if (editId) {
-        /* Update existing */
-        api('PUT', '/observations/' + editId, body).then(function(updated) {
-          var idx = state.observations.findIndex(function(o) { return String(o.id) === String(editId); });
-          if (idx !== -1) Object.assign(state.observations[idx], body, updated);
-          closeSheet();
-          toast('Observation updated', 'success');
-          navigate('site-detail', {currentSiteTab: 'observations'});
-          /* AI: map to inspection schedule */
-          mapObservationToInspection(body.description, body.code);
-        }).catch(function(err) { toast(err.message, 'error'); });
-      } else {
-        /* Create new */
-        api('POST', '/sites/' + state.currentSite.id + '/observations', body).then(function(obs) {
-          state.observations.push(obs);
-          closeSheet();
-          toast('Observation recorded', 'success');
-          navigate('site-detail', {currentSiteTab: 'observations'});
-          /* AI: map to inspection schedule */
-          mapObservationToInspection(body.description, body.code);
-        }).catch(function(err) { toast(err.message, 'error'); });
-      }
+    var getPhoto = function(cb) {
+      if (photoInput && photoInput.files && photoInput.files[0]) {
+        var reader = new FileReader();
+        reader.onload = function(e) { cb(e.target.result); };
+        reader.readAsDataURL(photoInput.files[0]);
+      } else { cb(null); }
     };
 
-    if (photoInput && photoInput.files && photoInput.files[0]) {
-      var reader = new FileReader();
-      reader.onload = function(e) { doSave(e.target.result); };
-      reader.readAsDataURL(photoInput.files[0]);
-    } else {
-      doSave(null);
-    }
-  }
-
-  /* After saving an observation, use AI to match it to inspection schedule items */
-  function mapObservationToInspection(obsDescription, obsCode) {
+    /* Try AI: reword technically + map to inspection items */
     var provider = getSelectedProvider();
-    if (!provider) return; /* No AI key — skip silently */
+    if (!provider) {
+      /* No AI key — save raw and skip mapping */
+      getPhoto(function(photo) {
+        doSaveObservation(editId, { code: obsCode, description: rawDesc, location: location, photo: photo });
+      });
+      return;
+    }
 
-    /* Build compact inspection item list for the AI */
+    /* Show processing state */
+    var saveBtn = document.querySelector('[data-action="save-observation"]');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<div class="loading-spinner" style="width:1.25rem;height:1.25rem"></div> AI processing...'; }
+
     var itemList = INSPECTION_ITEMS.filter(function(i) { return i.ref; }).map(function(i) {
       return i.ref + ': ' + i.desc;
     }).join('\n');
 
-    var sysPrompt = 'You are a BS 7671:2018+A2:2022 EICR expert. Given an observation/defect from an electrical inspection, ' +
-      'identify which Schedule of Inspection item(s) it relates to. Return ONLY valid JSON.\n\n' +
+    var sysPrompt = 'You are a BS 7671:2018+A2:2022 EICR expert. Given a rough observation from an electrical inspector, you must:\n' +
+      '1. Rewrite the description in proper technical language suitable for an EICR report\n' +
+      '2. Identify which Schedule of Inspection item(s) it relates to\n\n' +
       'SCHEDULE OF INSPECTION ITEMS:\n' + itemList + '\n\n' +
       'RULES:\n' +
-      '- Return the item ref(s) that the observation directly relates to\n' +
-      '- Usually 1-3 items, rarely more\n' +
-      '- The observation code (C1/C2/C3/FI) should be applied to those items\n' +
-      '- If unsure, pick the most relevant item\n' +
+      '- Rewrite concisely but technically — proper terminology, reference to BS 7671 where relevant\n' +
+      '- Keep it factual and professional, suitable for a formal EICR report\n' +
+      '- Return 1-3 inspection item refs that directly relate\n' +
       '- Section 7 = final circuits, Section 6 = distribution circuits, Section 5 = switchgear\n\n' +
-      'RETURN FORMAT:\n{"refs": ["7.1", "7.3"], "reason": "brief explanation"}';
+      'RETURN FORMAT (valid JSON only):\n' +
+      '{"description": "reworded technical description", "refs": ["7.13"], "reason": "brief explanation of why these refs"}';
 
-    var prompt = 'Observation (' + obsCode + '): "' + obsDescription + '"\n\nWhich inspection schedule items does this relate to? Return JSON only.';
+    var prompt = 'Observation (' + obsCode + '): "' + rawDesc + '"' + (location ? ' Location: ' + location : '') +
+      '\n\nReword technically and identify inspection schedule items. Return JSON only.';
 
     api('POST', '/ai/process', {
       key_id: provider.id,
@@ -2281,24 +2261,99 @@ input,select,textarea { font-size:16px !important; }
       prompt: prompt
     }).then(function(res) {
       var jsonMatch = (res.result || '').match(/\{[\s\S]*\}/);
-      if (!jsonMatch) return;
+      if (!jsonMatch) throw new Error('No JSON returned');
       var parsed = JSON.parse(jsonMatch[0]);
-      if (!parsed.refs || !parsed.refs.length) return;
 
-      /* Update inspection items with the observation code */
-      var items = parsed.refs.map(function(ref) {
-        return { item_ref: ref, outcome: obsCode };
+      var finalDesc = parsed.description || rawDesc;
+      var refs = parsed.refs || [];
+      var reason = parsed.reason || '';
+
+      /* Show what AI did before completing */
+      closeSheet();
+
+      /* Build confirmation banner */
+      var refDetails = refs.map(function(ref) {
+        var item = INSPECTION_ITEMS.find(function(i) { return i.ref === ref; });
+        return ref + (item ? ' — ' + item.desc : '');
       });
 
-      api('PUT', '/sites/' + state.currentSite.id + '/inspections', items).then(function(data) {
-        state.inspections = data;
-        var refStr = parsed.refs.join(', ');
-        toast('Inspection ' + refStr + ' set to ' + obsCode, 'info');
-      }).catch(function() {});
+      var bannerHtml = '<div class="p-4 bg-blue-50 border border-blue-200 rounded-xl mb-3">' +
+        '<h4 class="font-bold text-blue-800 text-sm mb-2">AI Observation Processing</h4>' +
+        '<div class="text-sm space-y-2">' +
+          '<div><span class="font-medium text-slate-600">Original:</span> <span class="text-slate-500 italic">' + esc(rawDesc) + '</span></div>' +
+          '<div><span class="font-medium text-slate-600">Reworded:</span> <span class="text-slate-800">' + esc(finalDesc) + '</span></div>' +
+          '<div class="pt-2 border-t border-blue-100">' +
+            '<span class="font-medium text-slate-600">Inspection items (' + obsCode + '):</span>' +
+            '<ul class="mt-1 space-y-1">' + refDetails.map(function(r) {
+              return '<li class="text-blue-700 text-xs">• ' + esc(r) + '</li>';
+            }).join('') + '</ul>' +
+          '</div>' +
+          (reason ? '<div class="text-xs text-slate-500 italic mt-1">' + esc(reason) + '</div>' : '') +
+        '</div></div>';
+
+      toast(obsCode + ' → ' + refs.join(', ') + ': ' + finalDesc.substring(0, 60) + '...', 'success');
+
+      /* Save observation with reworded description */
+      getPhoto(function(photo) {
+        var body = { code: obsCode, description: finalDesc, location: location };
+        if (photo) body.photo = photo;
+
+        doSaveObservation(editId, body, function() {
+          /* Update inspection schedule items */
+          if (refs.length > 0 && state.currentSite) {
+            var items = refs.map(function(ref) { return { item_ref: ref, outcome: obsCode }; });
+            api('PUT', '/sites/' + state.currentSite.id + '/inspections', items).then(function(data) {
+              state.inspections = data;
+            }).catch(function() {});
+          }
+        });
+      });
+
+      /* Show banner at top of observations view */
+      navigate('site-detail', {currentSiteTab: 'observations'});
+      setTimeout(function() {
+        var obsContainer = document.getElementById('observations-container');
+        if (obsContainer) {
+          var bannerEl = document.createElement('div');
+          bannerEl.innerHTML = bannerHtml;
+          bannerEl.style.cursor = 'pointer';
+          bannerEl.onclick = function() { bannerEl.remove(); };
+          obsContainer.insertBefore(bannerEl, obsContainer.firstChild);
+        }
+      }, 200);
+
     }).catch(function(err) {
-      console.error('Observation→inspection mapping failed:', err);
+      console.error('AI observation processing failed, saving raw:', err);
+      /* Fallback: save raw description without AI */
+      getPhoto(function(photo) {
+        doSaveObservation(editId, { code: obsCode, description: rawDesc, location: location, photo: photo });
+      });
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Observation'; }
     });
   }
+
+  /* Actually persist the observation to the API */
+  function doSaveObservation(editId, body, afterSave) {
+    if (editId) {
+      api('PUT', '/observations/' + editId, body).then(function(updated) {
+        var idx = state.observations.findIndex(function(o) { return String(o.id) === String(editId); });
+        if (idx !== -1) Object.assign(state.observations[idx], body, updated);
+        closeSheet();
+        navigate('site-detail', {currentSiteTab: 'observations'});
+        if (afterSave) afterSave();
+      }).catch(function(err) { toast(err.message, 'error'); });
+    } else {
+      api('POST', '/sites/' + state.currentSite.id + '/observations', body).then(function(obs) {
+        state.observations.push(obs);
+        closeSheet();
+        navigate('site-detail', {currentSiteTab: 'observations'});
+        if (afterSave) afterSave();
+      }).catch(function(err) { toast(err.message, 'error'); });
+    }
+  }
+
+  /* Legacy stub — mapping is now handled inline in saveObservation() */
+  function mapObservationToInspection() { }
 
   function deleteObservation(id) {
     api('DELETE', '/observations/' + id).then(function() {
