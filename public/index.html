@@ -1006,6 +1006,12 @@ input,select,textarea { font-size:16px !important; }
         '<div id="ai-scan-result" class="text-sm text-slate-600"></div>' +
       '</div>'
     );
+    /* Auto-select preferred model */
+    var preferred = localStorage.getItem('eicr_preferred_model') || '';
+    if (preferred) {
+      var sel = document.getElementById('ai-scan-key');
+      if (sel) sel.value = preferred;
+    }
   }
 
   /* Compress image to max 1600px wide before sending to AI */
@@ -1049,23 +1055,30 @@ input,select,textarea { font-size:16px !important; }
       else clearInterval(timer);
     }, 1000);
 
-    var systemPrompt = 'You are a BS 7671 qualified electrical inspector filling out Form 4 — Schedule of Circuit Details and Test Results. ' +
-      'Extract every circuit breaker from the distribution board photo, numbered sequentially from top to bottom (way 1 = top device). ' +
+    var systemPrompt = 'You are a BS 7671 qualified electrical inspector filling out Form 4 — Schedule of Circuit Details and Test Results for an EICR. ' +
+      'Extract every OUTGOING circuit from the distribution board photo. ' +
+      'CRITICAL: Do NOT include the main switch/isolator/incomer as a circuit — it belongs in the board header, not the test schedule. ' +
+      'Only include outgoing ways: MCBs, RCBOs, fuses that feed final circuits. ' +
+      'Number circuits sequentially from 1, starting at the first outgoing way (top to bottom, skipping the main switch). ' +
       'Include spare/blank ways. Be precise on BS(EN) standards: MCBs=60898, RCBOs=61009, MCCBs=60947-2. ' +
       'If an RCD protects a group of circuits, add rcd_bsen/rcd_type/rcd_idn to each circuit in that group. ' +
-      'Do NOT skip ways. Do NOT reorder. Top-to-bottom, every single position.';
+      'Do NOT skip outgoing ways. Do NOT reorder. Top-to-bottom after the main switch. ' +
+      'If you can identify the main switch, return its details separately in the "main_switch" field.';
 
     var prompt = 'Analyse this UK distribution board photo for a BS 7671 EICR (Electrical Installation Condition Report).\n\n' +
       'CRITICAL RULES:\n' +
-      '1. Number circuits sequentially starting from 1 at the TOP of the board going DOWN. Way 1 is always the top device.\n' +
-      '2. Include EVERY way/position — if a way is blank/spare, include it as {"number":"X","description":"Spare","ocpd_bsen":"","ocpd_type":"","ocpd_rating":""}\n' +
-      '3. For three-phase boards, number as L1/1, L2/1, L3/1, L1/2, L2/2 etc (phase/row).\n' +
-      '4. MCBs = BS(EN) 60898. RCBOs = BS(EN) 61009. MCCBs = BS(EN) 60947-2. HRC Fuses = BS(EN) 88-2.\n' +
-      '5. If devices are grouped under an RCD (e.g. 4-way RCBO block or RCD header), note the RCD details: rcd_bsen, rcd_type, rcd_idn.\n' +
-      '6. Curve types: B (domestic/commercial), C (motors/fluorescent), D (high inrush). Read from the device label.\n' +
-      '7. If a label/schedule is visible, use the descriptions shown. Common: Lighting, Sockets, Ring Main, Radial, FCU, Cooker, Immersion, Boiler, Alarm, Emergency Lighting, Mechanical Extract, Hand Dryer.\n' +
-      '8. Include wiring_type if visible at entries: A=T+E flat, B=T+E in metal conduit, C=T+E in PVC conduit, F=SWA, H=MICC.\n\n' +
-      'Return ONLY valid JSON: {"updates": [{"number":"1","description":"Lighting","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","wiring_type":"A","rcd_bsen":"","rcd_type":"","rcd_idn":""}]}';
+      '1. DO NOT include the main switch/isolator/incomer as a numbered circuit. The main switch is recorded in the board header, NOT in the circuit schedule. It does not get tested on the Form 4 test schedule.\n' +
+      '2. Number OUTGOING circuits only, sequentially starting from 1, top of the board going down (after the main switch).\n' +
+      '3. Include EVERY outgoing way/position — if a way is blank/spare, include it as {"number":"X","description":"Spare","ocpd_bsen":"","ocpd_type":"","ocpd_rating":""}\n' +
+      '4. For three-phase boards, number as L1/1, L2/1, L3/1, L1/2, L2/2 etc (phase/row).\n' +
+      '5. MCBs = BS(EN) 60898. RCBOs = BS(EN) 61009. MCCBs = BS(EN) 60947-2. HRC Fuses = BS(EN) 88-2. RCDs = BS(EN) 61008.\n' +
+      '6. If devices are grouped under an RCD (e.g. 4-way RCBO block or RCD header), note the RCD details: rcd_bsen, rcd_type, rcd_idn on each circuit in that group.\n' +
+      '7. Curve types: B (domestic/commercial), C (motors/fluorescent), D (high inrush). Read from the device label.\n' +
+      '8. If a label/schedule is visible, use the descriptions shown. Common: Lighting, Sockets, Ring Main, Radial, FCU, Cooker, Immersion, Boiler, Alarm, Emergency Lighting, Mechanical Extract, Hand Dryer.\n' +
+      '9. Include wiring_type if visible at entries: A=T+E flat, B=T+E in metal conduit, C=T+E in PVC conduit, F=SWA, H=MICC.\n\n' +
+      'Return ONLY valid JSON:\n' +
+      '{"main_switch": {"description":"Main Switch","ocpd_bsen":"60947-3","ocpd_type":"Isolator","ocpd_rating":"100","poles":"TP&N"}, ' +
+      '"updates": [{"number":"1","description":"Lighting","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","wiring_type":"A","rcd_bsen":"","rcd_type":"","rcd_idn":""}]}';
 
     compressImage(fileEl.files[0]).then(function(base64) {
       _scanState = { base64: base64, keyId: keyEl.value, history: [], updates: null, systemPrompt: systemPrompt };
@@ -1102,7 +1115,8 @@ input,select,textarea { font-size:16px !important; }
         return na - nb;
       });
       _scanState.updates = parsed.updates;
-      showScanReview(resultEl, parsed.updates);
+      _scanState.mainSwitch = parsed.main_switch || null;
+      showScanReview(resultEl, parsed.updates, parsed.main_switch);
 
     }).catch(function(err) {
       clearInterval(timer);
@@ -1112,10 +1126,26 @@ input,select,textarea { font-size:16px !important; }
   }
 
   /* Show extracted circuits for review before applying */
-  function showScanReview(container, updates) {
-    var html = '<div class="mt-3">' +
-      '<div class="flex items-center justify-between mb-2">' +
-        '<h4 class="font-semibold text-slate-800">Found ' + updates.length + ' circuits — Review:</h4>' +
+  function showScanReview(container, updates, mainSwitch) {
+    var html = '<div class="mt-3">';
+
+    /* Main switch info (not a circuit — goes in board header) */
+    if (mainSwitch) {
+      var msDesc = mainSwitch.description || 'Main Switch';
+      var msRating = mainSwitch.ocpd_rating ? mainSwitch.ocpd_rating + 'A' : '';
+      var msBsen = mainSwitch.ocpd_bsen ? 'BS(EN) ' + mainSwitch.ocpd_bsen : '';
+      var msPoles = mainSwitch.poles || '';
+      html += '<div class="p-2 mb-2 bg-blue-50 border border-blue-200 rounded text-sm">' +
+        '<div class="flex items-center gap-2">' +
+          '<span class="font-bold text-blue-700">⚡ Main Switch</span>' +
+          '<span class="text-blue-600">' + esc(msDesc) + ' — ' + esc(msRating) + ' ' + esc(msPoles) + ' ' + esc(msBsen) + '</span>' +
+        '</div>' +
+        '<p class="text-xs text-blue-500 mt-1">Board header info — not included in circuit schedule</p>' +
+      '</div>';
+    }
+
+    html += '<div class="flex items-center justify-between mb-2">' +
+        '<h4 class="font-semibold text-slate-800">Found ' + updates.length + ' outgoing circuits — Review:</h4>' +
       '</div>' +
       '<div class="space-y-1" style="max-height:250px;overflow-y:auto">';
     updates.forEach(function(u, i) {
@@ -1166,9 +1196,23 @@ input,select,textarea { font-size:16px !important; }
         state.circuits.push(u);
       }
     });
+
+    /* Apply main switch data to current board header if available */
+    if (_scanState.mainSwitch && state.currentBoard) {
+      var ms = _scanState.mainSwitch;
+      if (ms.ocpd_bsen) state.currentBoard.ocpd_bsen = ms.ocpd_bsen;
+      if (ms.ocpd_type) state.currentBoard.ocpd_type = ms.ocpd_type;
+      if (ms.ocpd_rating) state.currentBoard.ocpd_rating = ms.ocpd_rating;
+      if (ms.poles) state.currentBoard.poles = ms.poles;
+      /* Save board header update */
+      api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
+    }
+
     closeSheet();
     navigate('board-detail');
-    toast(_scanState.updates.length + ' circuits applied — save to persist', 'success');
+    var msg = _scanState.updates.length + ' circuits applied';
+    if (_scanState.mainSwitch) msg += ' (main switch → board header)';
+    toast(msg + ' — save to persist', 'success');
   }
 
   /* Send follow-up correction to AI about the scanned photo */
@@ -1252,25 +1296,34 @@ input,select,textarea { font-size:16px !important; }
       return '<option value="' + k.id + '">' + esc(k.label) + ' (' + esc(k.provider) + ')</option>';
     }).join('');
 
+    /* Select preferred model */
+    var preferred = localStorage.getItem('eicr_preferred_model') || '';
+
     var supportsRecognition = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 
     openSheet(
-      '<h3 class="text-lg font-bold text-slate-800 mb-4">Voice Input — Dictate Test Readings</h3>' +
+      '<h3 class="text-lg font-bold text-slate-800 mb-4">&#129302; AI Assistant — Tell me what to do</h3>' +
       '<div class="space-y-3">' +
-        '<div><label class="block text-sm font-medium text-slate-700 mb-1">AI Provider</label>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">AI Model</label>' +
           '<select id="ai-voice-key" class="select-field">' + keyOpts + '</select></div>' +
-        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Dictation</label>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Speak or type your instruction</label>' +
           (supportsRecognition ?
             '<button class="btn btn-primary w-full mb-2" data-action="start-dictation">' +
               '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>' +
-              'Tap to Dictate</button>' : '') +
-          '<textarea id="ai-voice-text" class="input-field" rows="5" placeholder="Speak or type test readings. Example: Circuit 1, lighting, B6, r1 0.45, rn 0.42, r2 0.85, insulation 500 volt test, L-L greater than 200, L-E greater than 200, polarity correct, Zs 0.98, no RCD"></textarea></div>' +
+              'Tap to Speak</button>' : '') +
+          '<textarea id="ai-voice-text" class="input-field" rows="5" placeholder="Say anything — examples:\n• Circuit 1 Zs 0.45, circuit 2 Zs 0.52\n• Remove circuits 15 and 16 they are main switches\n• Change circuit 3 to sockets, B32\n• Add 3 spare ways after circuit 8\n• All circuits have insulation greater than 200\n• RCD trip times 18ms on all circuits"></textarea></div>' +
         '<button class="btn btn-primary w-full" data-action="run-voice-parse">' +
           '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>' +
-          'Parse Readings</button>' +
+          'Send to AI</button>' +
         '<div id="ai-voice-result" class="text-sm text-slate-600"></div>' +
       '</div>'
     );
+
+    /* Auto-select preferred model */
+    if (preferred) {
+      var sel = document.getElementById('ai-voice-key');
+      if (sel) sel.value = preferred;
+    }
   }
 
   function startDictation() {
@@ -1305,30 +1358,49 @@ input,select,textarea { font-size:16px !important; }
     var textEl = document.getElementById('ai-voice-text');
     var resultEl = document.getElementById('ai-voice-result');
     if (!keyEl || !textEl || !textEl.value.trim()) {
-      toast('Enter or dictate readings first', 'error');
+      toast('Speak or type an instruction first', 'error');
       return;
     }
-    resultEl.innerHTML = '<div class="flex items-center gap-2 py-4"><div class="loading-spinner"></div><span>Parsing readings...</span></div>';
+    resultEl.innerHTML = '<div class="flex items-center gap-2 py-4"><div class="loading-spinner"></div><span>AI processing...</span></div>';
 
-    /* Build context of existing circuits so AI can amend them */
-    var existingInfo = state.circuits.length > 0 ?
-      '\n\nExisting circuits on this board: ' + state.circuits.map(function(c) { return '#' + (c.number || '?') + ' ' + (c.description || ''); }).join(', ') :
-      '';
+    /* Build full context of existing circuits so AI has complete picture */
+    var existingInfo = '';
+    if (state.circuits.length > 0) {
+      existingInfo = '\n\nCURRENT CIRCUITS ON THIS BOARD:\n' + state.circuits.map(function(c) {
+        var parts = ['#' + (c.number || '?') + ' ' + (c.description || 'Unknown')];
+        if (c.ocpd_type || c.ocpd_rating) parts.push((c.ocpd_type || '') + (c.ocpd_rating || '') + 'A');
+        if (c.ocpd_bsen) parts.push('BS(EN) ' + c.ocpd_bsen);
+        if (c.zs_measured) parts.push('Zs=' + c.zs_measured);
+        return parts.join(' | ');
+      }).join('\n');
+    }
 
-    var prompt = 'Parse these spoken electrical test readings into structured data. Text: "' + textEl.value + '"' + existingInfo + '\n\n' +
-      'IMPORTANT: The user may be adding NEW readings, AMENDING existing ones, or giving instructions like "change circuit 3 description to sockets". ' +
-      'Match circuit numbers to existing circuits where possible. Only include fields the user mentioned — omit fields they did not speak about.\n\n' +
-      'Return ONLY valid JSON: {"updates": [{"number":"1","description":"Lighting",' +
-      '"ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","live_mm":"1.5","cpc_mm":"1.0",' +
-      '"r1":"0.45","rn":"0.42","r2":"0.85","r1r2":"1.30","ir_test_v":"500","ir_ll":">200",' +
-      '"ir_le":">200","polarity":true,"zs_measured":"0.98","rcd_time_x1":"18","rcd_time_x5":"12",' +
-      '"remarks":""}]}';
-    var systemPrompt = 'You are parsing spoken BS 7671 electrical test readings for an EICR. ' +
-      'The user speaks naturally, e.g. "circuit 3 Zs 0.45, circuit 4 Zs 0.52, polarity correct on both". ' +
-      'Map to fields: number, description, ocpd_bsen (60898=MCB, 61009=RCBO), ocpd_type (B/C/D), ocpd_rating, ' +
-      'live_mm, cpc_mm, r1, rn, r2, r1r2, r2_measured, r2_ring, ir_test_v (250/500/1000), ir_ll, ir_le, ' +
-      'polarity (boolean), zs_measured, rcd_time_x1, rcd_time_x5, rcd_test_btn (boolean), remarks. ' +
-      '"greater than 200" or "infinity" for insulation = ">200". Only return fields the user mentioned.';
+    if (state.currentBoard) {
+      existingInfo += '\n\nBOARD: ' + (state.currentBoard.ref || '') + ' at ' + (state.currentBoard.location || '');
+    }
+
+    var systemPrompt = 'You are a general AI assistant for a BS 7671 EICR app. The user can ask you to do ANYTHING with the circuit data. ' +
+      'You must understand natural speech and return structured JSON actions.\n\n' +
+      'SUPPORTED ACTIONS:\n' +
+      '1. "updates" — Add or amend circuit data (readings, descriptions, OCPD details, etc.)\n' +
+      '2. "delete" — Remove circuits by number\n' +
+      '3. "renumber" — Renumber circuits (e.g. after deleting)\n' +
+      '4. "message" — A text response when the user asks a question rather than giving an instruction\n\n' +
+      'CIRCUIT FIELDS: number, description, ocpd_bsen (60898=MCB, 61009=RCBO, 61008=RCD, 60947-2=MCCB, 88-2=HRC fuse), ' +
+      'ocpd_type (B/C/D), ocpd_rating, live_mm, cpc_mm, wiring_type, ' +
+      'r1, rn, r2, r1r2, r2_measured, r2_ring, ir_test_v (250/500/1000), ir_ll, ir_le, ' +
+      'polarity (boolean), zs_measured, max_zs, rcd_bsen, rcd_type, rcd_idn, ' +
+      'rcd_time_x1, rcd_time_x5, rcd_test_btn (boolean), remarks.\n\n' +
+      '"greater than 200" or "infinity" for insulation = ">200". Only include fields the user actually mentioned.\n\n' +
+      'RETURN FORMAT (always valid JSON):\n' +
+      '{"updates": [...], "delete": ["15","16"], "renumber": true, "message": "optional text"}\n' +
+      'Include only the keys that apply. For example:\n' +
+      '- "remove circuits 15 and 16" → {"delete": ["15","16"], "renumber": true}\n' +
+      '- "circuit 3 Zs 0.45" → {"updates": [{"number":"3","zs_measured":"0.45"}]}\n' +
+      '- "all circuits insulation greater than 200" → {"updates": [one entry per existing circuit with ir_ll:">200", ir_le:">200"]}\n' +
+      '- "what is the max Zs for a B32?" → {"message": "For a B32 MCB on a TN system, max Zs is 1.37Ω (80% = 1.10Ω)"}';
+
+    var prompt = 'User instruction: "' + textEl.value + '"' + existingInfo + '\n\nReturn ONLY valid JSON.';
 
     api('POST', '/ai/process', {
       key_id: keyEl.value,
@@ -1338,28 +1410,61 @@ input,select,textarea { font-size:16px !important; }
       var result = data.result || '';
       try {
         var jsonMatch = result.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          var parsed = JSON.parse(jsonMatch[0]);
-          if (parsed.updates && parsed.updates.length > 0) {
-            parsed.updates.forEach(function(u) {
-              var existing = state.circuits.findIndex(function(c) { return c.number === u.number; });
-              if (existing !== -1) {
-                Object.assign(state.circuits[existing], u);
-              } else {
-                state.circuits.push(u);
-              }
-            });
-            closeSheet();
-            navigate('board-detail');
-            toast(parsed.updates.length + ' circuits parsed — save to persist', 'success');
-          } else {
-            resultEl.innerHTML = '<p class="text-amber-600">No readings parsed. Try rephrasing.</p>';
-          }
-        } else {
-          resultEl.innerHTML = '<p class="text-red-500">Could not parse AI response.</p>';
+        if (!jsonMatch) {
+          /* Maybe AI returned plain text — show it */
+          resultEl.innerHTML = '<p class="text-slate-700">' + esc(result) + '</p>';
+          return;
+        }
+        var parsed = JSON.parse(jsonMatch[0]);
+        var actionsTaken = [];
+
+        /* Handle deletions first */
+        if (parsed.delete && parsed.delete.length > 0) {
+          var deleteNums = parsed.delete.map(String);
+          var before = state.circuits.length;
+          state.circuits = state.circuits.filter(function(c) {
+            return deleteNums.indexOf(String(c.number)) === -1;
+          });
+          actionsTaken.push('Removed ' + (before - state.circuits.length) + ' circuit(s)');
+        }
+
+        /* Handle renumbering */
+        if (parsed.renumber) {
+          state.circuits.forEach(function(c, i) { c.number = String(i + 1); });
+          actionsTaken.push('Renumbered to 1-' + state.circuits.length);
+        }
+
+        /* Handle updates/additions */
+        if (parsed.updates && parsed.updates.length > 0) {
+          parsed.updates.forEach(function(u) {
+            var existing = state.circuits.findIndex(function(c) { return String(c.number) === String(u.number); });
+            if (existing !== -1) {
+              Object.assign(state.circuits[existing], u);
+            } else {
+              state.circuits.push(u);
+            }
+          });
+          actionsTaken.push('Updated ' + parsed.updates.length + ' circuit(s)');
+        }
+
+        /* Show AI message if present */
+        if (parsed.message) {
+          resultEl.innerHTML = '<div class="p-3 bg-blue-50 rounded-lg text-sm text-blue-800 mb-2">' +
+            '<strong>AI:</strong> ' + esc(parsed.message) + '</div>';
+        }
+
+        if (actionsTaken.length > 0) {
+          closeSheet();
+          navigate('board-detail');
+          toast(actionsTaken.join(', ') + ' — save to persist', 'success');
+        } else if (!parsed.message) {
+          resultEl.innerHTML = '<p class="text-amber-600">AI didn\'t make any changes. Try rephrasing your instruction.</p>';
         }
       } catch(e) {
-        resultEl.innerHTML = '<p class="text-red-500">Parse error: ' + esc(e.message) + '</p>';
+        /* Show raw AI response if JSON parse fails */
+        resultEl.innerHTML = '<div class="p-3 bg-slate-50 rounded-lg text-sm">' +
+          '<p class="font-medium text-slate-700 mb-1">AI response:</p>' +
+          '<p class="text-slate-600">' + esc(result.substring(0, 500)) + '</p></div>';
       }
     }).catch(function(err) {
       resultEl.innerHTML = '<p class="text-red-500">AI error: ' + esc(err.message) + '</p>';
