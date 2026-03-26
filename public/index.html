@@ -1946,15 +1946,54 @@ input,select,textarea { font-size:16px !important; }
 
   function generateReport() {
     var siteId = state.currentSite.id;
-    var link = '/api/sites/' + siteId + '/report?token=' + encodeURIComponent(state.token);
     var container = document.getElementById('report-link');
     if (container) {
-      container.innerHTML = '<a href="' + link + '" target="_blank" class="btn btn-primary w-full">' +
-        '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>' +
-        'Open EICR Report</a>' +
-        '<p class="text-xs text-slate-500 mt-2 text-center">Opens as HTML — use Print / Save as PDF on your phone or browser</p>';
+      container.innerHTML = '<div class="flex items-center gap-2 py-4 justify-center"><div class="loading-spinner"></div><span>Generating report...</span></div>';
     }
-    toast('Report ready — tap to view & print to PDF', 'success');
+
+    /* Fetch report HTML with proper auth header — avoids token-in-URL issues */
+    fetch('/api/sites/' + siteId + '/report', {
+      headers: { 'Authorization': 'Bearer ' + state.token }
+    }).then(function(r) {
+      if (!r.ok) throw new Error('Report failed: ' + r.status);
+      return r.text();
+    }).then(function(html) {
+      /* Inject base tag so images/resources resolve correctly */
+      var baseUrl = window.location.origin + '/';
+      html = html.replace('<head>', '<head><base href="' + baseUrl + '">');
+
+      /* Open report in new window and write the HTML directly */
+      var w = window.open('', '_blank');
+      if (!w) {
+        /* Popup blocked — fall back to blob download */
+        var blob = new Blob([html], { type: 'text/html' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'EICR-Report-' + (state.currentSite.name || 'report').replace(/[^a-zA-Z0-9]/g, '-') + '.html';
+        a.click();
+        URL.revokeObjectURL(url);
+        toast('Report downloaded — open it and print to PDF', 'success');
+        if (container) container.innerHTML = '<p class="text-green-600 text-sm text-center">&#10003; Report downloaded</p>';
+        return;
+      }
+      w.document.write(html);
+      w.document.close();
+      toast('Report opened — use Print (Ctrl+P) to save as PDF', 'success');
+
+      if (container) {
+        container.innerHTML = '<button class="btn btn-primary w-full" data-action="generate-report">' +
+          '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>' +
+          'Generate Again</button>' +
+          '<p class="text-xs text-slate-500 mt-2 text-center">Report opens in new tab — use Print / Save as PDF</p>';
+      }
+    }).catch(function(err) {
+      toast(err.message, 'error');
+      if (container) {
+        container.innerHTML = '<p class="text-red-500 text-sm">' + esc(err.message) + '</p>' +
+          '<button class="btn btn-primary w-full mt-2" data-action="generate-report">Try Again</button>';
+      }
+    });
   }
 
   /* ===== SETTINGS VIEW ===== */
