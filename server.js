@@ -533,6 +533,7 @@ app.get('/api/ai/providers', authMiddleware, async (req, res) => {
   if (ENV_KEYS.gemini) {
     providers.push({ id: 'env_gemini_flash', label: 'Gemini 2.5 Flash (fast)', provider: 'gemini', model: 'gemini-2.5-flash' });
     providers.push({ id: 'env_gemini_pro', label: 'Gemini 2.5 Pro (smart)', provider: 'gemini', model: 'gemini-2.5-pro' });
+    providers.push({ id: 'env_gemini_31_pro', label: 'Gemini 3.1 Pro (latest)', provider: 'gemini', model: 'gemini-3.1-pro' });
     providers.push({ id: 'env_gemini_flash_2', label: 'Gemini 2.0 Flash', provider: 'gemini', model: 'gemini-2.0-flash' });
     providers.push({ id: 'env_gemini_pro_15', label: 'Gemini 1.5 Pro', provider: 'gemini', model: 'gemini-1.5-pro' });
   }
@@ -552,6 +553,8 @@ app.post('/api/ai/process', authMiddleware, async (req, res) => {
     keyRow = { provider: 'gemini', model: 'gemini-2.5-flash', api_key: ENV_KEYS.gemini };
   } else if (key_id === 'env_gemini_pro' && ENV_KEYS.gemini) {
     keyRow = { provider: 'gemini', model: 'gemini-2.5-pro', api_key: ENV_KEYS.gemini };
+  } else if (key_id === 'env_gemini_31_pro' && ENV_KEYS.gemini) {
+    keyRow = { provider: 'gemini', model: 'gemini-3.1-pro', api_key: ENV_KEYS.gemini };
   } else if (key_id === 'env_gemini_flash_2' && ENV_KEYS.gemini) {
     keyRow = { provider: 'gemini', model: 'gemini-2.0-flash', api_key: ENV_KEYS.gemini };
   } else if (key_id === 'env_gemini_pro_15' && ENV_KEYS.gemini) {
@@ -573,14 +576,22 @@ app.post('/api/ai/process', authMiddleware, async (req, res) => {
       if (image_base64) {
         parts.push({ inlineData: { mimeType: 'image/jpeg', data: image_base64 } });
       }
-      const payload = {
-        contents: [{ parts }],
-        generationConfig: { responseMimeType: 'application/json' }
-      };
+      const payload = { contents: [{ parts }] };
+      // Only use JSON response mode for text-only requests (some models hang on image+JSON mode)
+      if (!image_base64) {
+        payload.generationConfig = { responseMimeType: 'application/json' };
+      }
       if (system_prompt) {
         payload.systemInstruction = { parts: [{ text: system_prompt }] };
       }
-      const r = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      // Support multi-turn conversation
+      if (req.body.history && req.body.history.length > 0) {
+        payload.contents = req.body.history.concat(payload.contents);
+      }
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 120000); // 2 min timeout
+      const r = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: controller.signal });
+      clearTimeout(timeout);
       const data = await r.json();
       if (data.error) return res.status(400).json({ error: data.error.message });
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
@@ -849,7 +860,11 @@ app.get('/api/max-zs', (req, res) => {
 });
 
 // ---- REPORT GENERATION ----
-app.get('/api/sites/:id/report', authMiddleware, async (req, res) => {
+// Report accepts token via query param (for new tab/PDF download)
+app.get('/api/sites/:id/report', (req, res, next) => {
+  if (req.query.token) req.headers.authorization = 'Bearer ' + req.query.token;
+  authMiddleware(req, res, next);
+}, async (req, res) => {
   const siteId = req.params.id;
   const { rows: [site] } = await pool.query('SELECT * FROM sites WHERE id = $1', [siteId]);
   if (!site) return res.status(404).json({ error: 'Site not found' });

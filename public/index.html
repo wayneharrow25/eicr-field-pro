@@ -1008,6 +1008,27 @@ input,select,textarea { font-size:16px !important; }
     );
   }
 
+  /* Compress image to max 1600px wide before sending to AI */
+  function compressImage(file, maxWidth, quality) {
+    maxWidth = maxWidth || 1600;
+    quality = quality || 0.8;
+    return new Promise(function(resolve) {
+      var img = new Image();
+      img.onload = function() {
+        var canvas = document.createElement('canvas');
+        var scale = Math.min(1, maxWidth / img.width);
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', quality).split(',')[1]);
+      };
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  /* Scan state for multi-turn conversation with AI about the photo */
+  var _scanState = { base64: null, keyId: null, history: [], updates: null, systemPrompt: '' };
+
   function runPhotoScan() {
     var keyEl = document.getElementById('ai-scan-key');
     var fileEl = document.getElementById('ai-scan-file');
@@ -1019,71 +1040,206 @@ input,select,textarea { font-size:16px !important; }
       toast('Take a photo or select from gallery first', 'error');
       return;
     }
-    resultEl.innerHTML = '<div class="flex items-center gap-2 py-4"><div class="loading-spinner"></div><span>Analysing board photo...</span></div>';
 
-    var reader = new FileReader();
-    reader.onload = function(e) {
-      var base64 = e.target.result.split(',')[1];
-      var prompt = 'Analyse this UK distribution board photo for a BS 7671 EICR (Electrical Installation Condition Report).\n\n' +
-        'CRITICAL RULES:\n' +
-        '1. Number circuits sequentially starting from 1 at the TOP of the board going DOWN. Way 1 is always the top device.\n' +
-        '2. Include EVERY way/position — if a way is blank/spare, include it as {"number":"X","description":"Spare","ocpd_bsen":"","ocpd_type":"","ocpd_rating":""}\n' +
-        '3. For three-phase boards, number as L1/1, L2/1, L3/1, L1/2, L2/2 etc (phase/row).\n' +
-        '4. MCBs = BS(EN) 60898. RCBOs = BS(EN) 61009. MCCBs = BS(EN) 60947-2. HRC Fuses = BS(EN) 88-2.\n' +
-        '5. If devices are grouped under an RCD (e.g. 4-way RCBO block or RCD header), note the RCD details: rcd_bsen, rcd_type, rcd_idn.\n' +
-        '6. Curve types: B (domestic/commercial), C (motors/fluorescent), D (high inrush). Read from the device label.\n' +
-        '7. If a label/schedule is visible, use the descriptions shown. Common: Lighting, Sockets, Ring Main, Radial, FCU, Cooker, Immersion, Boiler, Alarm, Emergency Lighting, Mechanical Extract, Hand Dryer.\n' +
-        '8. Include wiring_type if visible at entries: A=T+E flat, B=T+E in metal conduit, C=T+E in PVC conduit, F=SWA, H=MICC.\n\n' +
-        'Return ONLY valid JSON: {"updates": [{"number":"1","description":"Lighting","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","wiring_type":"A","rcd_bsen":"","rcd_type":"","rcd_idn":""}]}';
-      var systemPrompt = 'You are a BS 7671 qualified electrical inspector filling out Form 4 — Schedule of Circuit Details and Test Results. ' +
-        'Extract every circuit breaker from the distribution board photo, numbered sequentially from top to bottom (way 1 = top device). ' +
-        'Include spare/blank ways. Be precise on BS(EN) standards: MCBs=60898, RCBOs=61009, MCCBs=60947-2. ' +
-        'If an RCD protects a group of circuits, add rcd_bsen/rcd_type/rcd_idn to each circuit in that group. ' +
-        'Do NOT skip ways. Do NOT reorder. Top-to-bottom, every single position.';
+    var startTime = Date.now();
+    resultEl.innerHTML = '<div class="flex items-center gap-2 py-4"><div class="loading-spinner"></div><span id="scan-timer">Analysing board photo... 0s</span></div>';
+    var timer = setInterval(function() {
+      var el = document.getElementById('scan-timer');
+      if (el) el.textContent = 'Analysing board photo... ' + Math.round((Date.now() - startTime) / 1000) + 's';
+      else clearInterval(timer);
+    }, 1000);
 
-      api('POST', '/ai/process', {
+    var systemPrompt = 'You are a BS 7671 qualified electrical inspector filling out Form 4 — Schedule of Circuit Details and Test Results. ' +
+      'Extract every circuit breaker from the distribution board photo, numbered sequentially from top to bottom (way 1 = top device). ' +
+      'Include spare/blank ways. Be precise on BS(EN) standards: MCBs=60898, RCBOs=61009, MCCBs=60947-2. ' +
+      'If an RCD protects a group of circuits, add rcd_bsen/rcd_type/rcd_idn to each circuit in that group. ' +
+      'Do NOT skip ways. Do NOT reorder. Top-to-bottom, every single position.';
+
+    var prompt = 'Analyse this UK distribution board photo for a BS 7671 EICR (Electrical Installation Condition Report).\n\n' +
+      'CRITICAL RULES:\n' +
+      '1. Number circuits sequentially starting from 1 at the TOP of the board going DOWN. Way 1 is always the top device.\n' +
+      '2. Include EVERY way/position — if a way is blank/spare, include it as {"number":"X","description":"Spare","ocpd_bsen":"","ocpd_type":"","ocpd_rating":""}\n' +
+      '3. For three-phase boards, number as L1/1, L2/1, L3/1, L1/2, L2/2 etc (phase/row).\n' +
+      '4. MCBs = BS(EN) 60898. RCBOs = BS(EN) 61009. MCCBs = BS(EN) 60947-2. HRC Fuses = BS(EN) 88-2.\n' +
+      '5. If devices are grouped under an RCD (e.g. 4-way RCBO block or RCD header), note the RCD details: rcd_bsen, rcd_type, rcd_idn.\n' +
+      '6. Curve types: B (domestic/commercial), C (motors/fluorescent), D (high inrush). Read from the device label.\n' +
+      '7. If a label/schedule is visible, use the descriptions shown. Common: Lighting, Sockets, Ring Main, Radial, FCU, Cooker, Immersion, Boiler, Alarm, Emergency Lighting, Mechanical Extract, Hand Dryer.\n' +
+      '8. Include wiring_type if visible at entries: A=T+E flat, B=T+E in metal conduit, C=T+E in PVC conduit, F=SWA, H=MICC.\n\n' +
+      'Return ONLY valid JSON: {"updates": [{"number":"1","description":"Lighting","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","wiring_type":"A","rcd_bsen":"","rcd_type":"","rcd_idn":""}]}';
+
+    compressImage(fileEl.files[0]).then(function(base64) {
+      _scanState = { base64: base64, keyId: keyEl.value, history: [], updates: null, systemPrompt: systemPrompt };
+
+      return api('POST', '/ai/process', {
         key_id: keyEl.value,
         prompt: prompt,
         image_base64: base64,
         system_prompt: systemPrompt
-      }).then(function(data) {
-        var result = data.result || '';
-        try {
-          var jsonMatch = result.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            var parsed = JSON.parse(jsonMatch[0]);
-            if (parsed.updates && parsed.updates.length > 0) {
-              /* Sort by circuit number to ensure correct order */
-              parsed.updates.sort(function(a, b) {
-                var na = parseInt((a.number || '').replace(/\D.*/, '')) || 999;
-                var nb = parseInt((b.number || '').replace(/\D.*/, '')) || 999;
-                return na - nb;
-              });
-              parsed.updates.forEach(function(u) {
-                var existing = state.circuits.findIndex(function(c) { return c.number === u.number; });
-                if (existing !== -1) {
-                  Object.assign(state.circuits[existing], u);
-                } else {
-                  state.circuits.push(u);
-                }
-              });
-              closeSheet();
-              navigate('board-detail');
-              toast(parsed.updates.length + ' circuits extracted (incl. spares) — save to persist', 'success');
-            } else {
-              resultEl.innerHTML = '<p class="text-amber-600">No circuits found in photo. Try a clearer image.</p>';
-            }
-          } else {
-            resultEl.innerHTML = '<p class="text-red-500">Could not parse AI response. Raw: ' + esc(result.substring(0, 200)) + '</p>';
-          }
-        } catch(e) {
-          resultEl.innerHTML = '<p class="text-red-500">Parse error: ' + esc(e.message) + '</p>';
-        }
-      }).catch(function(err) {
-        resultEl.innerHTML = '<p class="text-red-500">AI error: ' + esc(err.message) + '</p>';
       });
-    };
-    reader.readAsDataURL(fileEl.files[0]);
+    }).then(function(data) {
+      clearInterval(timer);
+      var result = data.result || '';
+      /* Store conversation history for follow-ups */
+      _scanState.history = [
+        { role: 'user', parts: [{ text: prompt }, { inlineData: { mimeType: 'image/jpeg', data: _scanState.base64 } }] },
+        { role: 'model', parts: [{ text: result }] }
+      ];
+
+      var jsonMatch = result.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        resultEl.innerHTML = '<p class="text-red-500">Could not parse AI response. Raw: ' + esc(result.substring(0, 300)) + '</p>' + renderScanRefineBox();
+        return;
+      }
+      var parsed = JSON.parse(jsonMatch[0]);
+      if (!parsed.updates || !parsed.updates.length) {
+        resultEl.innerHTML = '<p class="text-amber-600">No circuits found. Try a clearer image or tell the AI what you see:</p>' + renderScanRefineBox();
+        return;
+      }
+      /* Sort by circuit number */
+      parsed.updates.sort(function(a, b) {
+        var na = parseInt((a.number || '').replace(/\D.*/, '')) || 999;
+        var nb = parseInt((b.number || '').replace(/\D.*/, '')) || 999;
+        return na - nb;
+      });
+      _scanState.updates = parsed.updates;
+      showScanReview(resultEl, parsed.updates);
+
+    }).catch(function(err) {
+      clearInterval(timer);
+      resultEl.innerHTML = '<p class="text-red-500">AI error: ' + esc(err.message) + '</p>' +
+        '<p class="text-sm text-slate-500 mt-1">Try a different model or a smaller/clearer photo.</p>' + renderScanRefineBox();
+    });
+  }
+
+  /* Show extracted circuits for review before applying */
+  function showScanReview(container, updates) {
+    var html = '<div class="mt-3">' +
+      '<div class="flex items-center justify-between mb-2">' +
+        '<h4 class="font-semibold text-slate-800">Found ' + updates.length + ' circuits — Review:</h4>' +
+      '</div>' +
+      '<div class="space-y-1" style="max-height:250px;overflow-y:auto">';
+    updates.forEach(function(u, i) {
+      var desc = u.description || 'Spare';
+      var prot = (u.ocpd_type || '') + (u.ocpd_rating ? u.ocpd_rating + 'A' : '');
+      var bsen = u.ocpd_bsen ? 'BS(EN) ' + u.ocpd_bsen : '';
+      var rcd = u.rcd_idn ? ' | RCD ' + u.rcd_idn + 'mA' : '';
+      html += '<div class="flex items-center gap-2 p-2 bg-slate-50 rounded text-sm">' +
+        '<span class="font-mono font-bold text-slate-600 w-8 shrink-0">' + esc(u.number) + '</span>' +
+        '<span class="flex-1 text-slate-800">' + esc(desc) + '</span>' +
+        '<span class="text-xs text-slate-500">' + esc(prot) + ' ' + esc(bsen) + esc(rcd) + '</span>' +
+      '</div>';
+    });
+    html += '</div>';
+
+    /* Action buttons */
+    html += '<div class="flex gap-2 mt-3">' +
+      '<button class="btn btn-primary flex-1" data-action="apply-scan-results">&#10003; Apply All Circuits</button>' +
+      '<button class="btn btn-danger btn-sm" data-action="discard-scan-results">&#10007; Discard</button>' +
+    '</div>';
+
+    /* Refine box — ask AI to fix mistakes */
+    html += renderScanRefineBox();
+    html += '</div>';
+
+    container.innerHTML = html;
+  }
+
+  function renderScanRefineBox() {
+    return '<div class="mt-3 pt-3 border-t border-slate-100">' +
+      '<label class="block text-sm font-medium text-slate-700 mb-1">Tell AI what to fix:</label>' +
+      '<div class="input-with-mic">' +
+        '<input type="text" id="scan-refine-input" class="input-field input-mic-field" placeholder="e.g. Way 3 is a spare, not lighting. Add 2 spare ways after circuit 8.">' +
+        micBtn('scan-refine-input') +
+      '</div>' +
+      '<button class="btn btn-ghost btn-sm w-full mt-1" data-action="send-scan-refine">&#128172; Send Correction to AI</button>' +
+    '</div>';
+  }
+
+  /* Apply reviewed scan results to circuits */
+  function applyScanResults() {
+    if (!_scanState.updates || !_scanState.updates.length) return;
+    _scanState.updates.forEach(function(u) {
+      var existing = state.circuits.findIndex(function(c) { return c.number === u.number; });
+      if (existing !== -1) {
+        Object.assign(state.circuits[existing], u);
+      } else {
+        state.circuits.push(u);
+      }
+    });
+    closeSheet();
+    navigate('board-detail');
+    toast(_scanState.updates.length + ' circuits applied — save to persist', 'success');
+  }
+
+  /* Send follow-up correction to AI about the scanned photo */
+  function sendScanRefine() {
+    var input = document.getElementById('scan-refine-input');
+    var resultEl = document.getElementById('ai-scan-result');
+    if (!input || !input.value.trim()) { toast('Type or speak what needs fixing', 'error'); return; }
+
+    var correction = input.value.trim();
+    input.value = '';
+
+    var startTime = Date.now();
+    var timerHtml = '<div class="flex items-center gap-2 py-2"><div class="loading-spinner"></div><span id="refine-timer">AI refining... 0s</span></div>';
+
+    /* Keep review visible, add loading below */
+    var existingReview = resultEl.querySelector('.space-y-1');
+    if (existingReview) {
+      var old = existingReview.parentElement;
+      old.querySelector('[data-action="send-scan-refine"]').insertAdjacentHTML('afterend', timerHtml);
+    } else {
+      resultEl.innerHTML = timerHtml;
+    }
+
+    var refineTimer = setInterval(function() {
+      var el = document.getElementById('refine-timer');
+      if (el) el.textContent = 'AI refining... ' + Math.round((Date.now() - startTime) / 1000) + 's';
+      else clearInterval(refineTimer);
+    }, 1000);
+
+    var refinePrompt = 'The user says: "' + correction + '"\n\n' +
+      'Based on this correction, update the circuit list. Return the FULL updated JSON with ALL circuits (not just the changed ones). ' +
+      'Return ONLY valid JSON: {"updates": [...]}';
+
+    api('POST', '/ai/process', {
+      key_id: _scanState.keyId,
+      prompt: refinePrompt,
+      system_prompt: _scanState.systemPrompt,
+      history: _scanState.history
+    }).then(function(data) {
+      clearInterval(refineTimer);
+      var result = data.result || '';
+      /* Update conversation history */
+      _scanState.history.push({ role: 'user', parts: [{ text: refinePrompt }] });
+      _scanState.history.push({ role: 'model', parts: [{ text: result }] });
+
+      var jsonMatch = result.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        toast('AI could not parse correction — try rephrasing', 'error');
+        var el = document.getElementById('refine-timer');
+        if (el) el.parentElement.remove();
+        return;
+      }
+      var parsed = JSON.parse(jsonMatch[0]);
+      if (parsed.updates && parsed.updates.length > 0) {
+        parsed.updates.sort(function(a, b) {
+          var na = parseInt((a.number || '').replace(/\D.*/, '')) || 999;
+          var nb = parseInt((b.number || '').replace(/\D.*/, '')) || 999;
+          return na - nb;
+        });
+        _scanState.updates = parsed.updates;
+        showScanReview(resultEl, parsed.updates);
+        toast('Updated to ' + parsed.updates.length + ' circuits — review and apply', 'info');
+      } else {
+        toast('No updates in AI response', 'error');
+      }
+    }).catch(function(err) {
+      clearInterval(refineTimer);
+      toast('Refine error: ' + err.message, 'error');
+      var el = document.getElementById('refine-timer');
+      if (el) el.parentElement.remove();
+    });
   }
 
   /* ===== AI VOICE INPUT ===== */
@@ -1388,16 +1544,19 @@ input,select,textarea { font-size:16px !important; }
     } else {
       state.observations.forEach(function(o) {
         var badgeClass = o.code ? 'badge-' + o.code.toLowerCase() : '';
-        html += '<div class="card p-4">' +
+        html += '<div class="card p-4 active:bg-slate-50 transition-colors" data-action="edit-observation" data-id="' + o.id + '">' +
           '<div class="flex items-start justify-between mb-2">' +
             '<span class="badge ' + badgeClass + '">' + esc(o.code || '?') + '</span>' +
-            '<button class="p-1 rounded active:bg-slate-100" data-action="delete-observation" data-id="' + o.id + '">' +
-              '<svg class="w-4 h-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5z"/></svg>' +
-            '</button>' +
+            '<div class="flex gap-1">' +
+              '<span class="text-xs text-slate-400">tap to edit</span>' +
+              '<button class="p-1 rounded active:bg-slate-100" data-action="delete-observation" data-id="' + o.id + '">' +
+                '<svg class="w-4 h-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5z"/></svg>' +
+              '</button>' +
+            '</div>' +
           '</div>' +
           '<p class="text-sm text-slate-700">' + esc(o.description || '') + '</p>' +
           (o.location ? '<p class="text-xs text-slate-500 mt-1">Location: ' + esc(o.location) + '</p>' : '') +
-          (o.photo_url ? '<img src="' + esc(o.photo_url) + '" class="photo-thumb mt-2" alt="Observation photo">' : '') +
+          (o.photo ? '<img src="' + o.photo + '" class="photo-thumb mt-2" alt="Photo">' : '') +
         '</div>';
       });
     }
@@ -1415,9 +1574,15 @@ input,select,textarea { font-size:16px !important; }
     }).catch(function(err) { toast(err.message, 'error'); });
   }
 
-  function openNewObservationSheet() {
+  function openNewObservationSheet(existingId) {
+    var o = {};
+    if (existingId) {
+      o = state.observations.find(function(x) { return String(x.id) === String(existingId); }) || {};
+    }
+    var isEdit = !!o.id;
+
     openSheet(
-      '<h3 class="text-lg font-bold text-slate-800 mb-4">New Observation</h3>' +
+      '<h3 class="text-lg font-bold text-slate-800 mb-4">' + (isEdit ? 'Edit Observation' : 'New Observation') + '</h3>' +
       '<div class="space-y-3">' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Classification *</label>' +
           '<div class="grid grid-cols-4 gap-2">' +
@@ -1426,18 +1591,25 @@ input,select,textarea { font-size:16px !important; }
             '<button class="btn btn-sm border-2 border-blue-500 text-blue-500 bg-blue-50" data-action="select-obs-code" data-code="C3">C3</button>' +
             '<button class="btn btn-sm border-2 border-purple-500 text-purple-500 bg-purple-50" data-action="select-obs-code" data-code="FI">FI</button>' +
           '</div>' +
-          '<input type="hidden" id="obs-code" value="">' +
+          '<input type="hidden" id="obs-code" value="' + esc(o.code || '') + '">' +
+          '<input type="hidden" id="obs-edit-id" value="' + (o.id || '') + '">' +
           '<div id="obs-code-label" class="text-xs text-slate-500 mt-1 min-h-[1rem]"></div>' +
         '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Description *</label>' +
-          textareaWithMic('obs-description', 'Describe the observation/defect...', '', 3) + '</div>' +
+          textareaWithMic('obs-description', 'Describe the observation/defect...', o.description, 3) + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Location</label>' +
-          inputWithMic('obs-location', 'e.g. Kitchen DB, Way 3', '') + '</div>' +
-        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Photo (optional)</label>' +
-          '<input type="file" id="obs-photo" accept="image/*" class="input-field" style="padding:.5rem"></div>' +
+          inputWithMic('obs-location', 'e.g. Kitchen DB, Way 3', o.location) + '</div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Photo</label>' +
+          (o.photo ? '<div id="obs-existing-photo"><img src="' + o.photo + '" style="max-height:120px;border-radius:.5rem;margin-bottom:.5rem"><br>' +
+            '<button class="btn btn-danger btn-sm mb-2" data-action="remove-obs-photo">Remove Photo</button></div>' : '') +
+          '<input type="file" id="obs-photo" accept="image/*" class="input-field" style="padding:.5rem">' +
+          '<div id="obs-photo-preview"></div></div>' +
         '<button class="btn btn-primary w-full mt-4" data-action="save-observation">Save Observation</button>' +
       '</div>'
     );
+
+    /* Pre-select the code if editing */
+    if (o.code) setTimeout(function() { selectObsCode(o.code); }, 50);
   }
 
   function selectObsCode(code) {
@@ -1465,6 +1637,7 @@ input,select,textarea { font-size:16px !important; }
   function saveObservation() {
     var code = document.getElementById('obs-code');
     var desc = document.getElementById('obs-description');
+    var editId = (document.getElementById('obs-edit-id') || {}).value;
     if (!code || !code.value || !desc || !desc.value.trim()) {
       toast('Code and description are required', 'error');
       return;
@@ -1475,12 +1648,38 @@ input,select,textarea { font-size:16px !important; }
       location: (document.getElementById('obs-location') || {}).value || ''
     };
 
-    api('POST', '/sites/' + state.currentSite.id + '/observations', body).then(function(obs) {
-      state.observations.push(obs);
-      closeSheet();
-      toast('Observation recorded', 'success');
-      navigate('site-detail', {currentSiteTab: 'observations'});
-    }).catch(function(err) { toast(err.message, 'error'); });
+    /* Handle photo upload */
+    var photoInput = document.getElementById('obs-photo');
+    var doSave = function(photoData) {
+      if (photoData) body.photo = photoData;
+
+      if (editId) {
+        /* Update existing */
+        api('PUT', '/observations/' + editId, body).then(function(updated) {
+          var idx = state.observations.findIndex(function(o) { return String(o.id) === String(editId); });
+          if (idx !== -1) Object.assign(state.observations[idx], body, updated);
+          closeSheet();
+          toast('Observation updated', 'success');
+          navigate('site-detail', {currentSiteTab: 'observations'});
+        }).catch(function(err) { toast(err.message, 'error'); });
+      } else {
+        /* Create new */
+        api('POST', '/sites/' + state.currentSite.id + '/observations', body).then(function(obs) {
+          state.observations.push(obs);
+          closeSheet();
+          toast('Observation recorded', 'success');
+          navigate('site-detail', {currentSiteTab: 'observations'});
+        }).catch(function(err) { toast(err.message, 'error'); });
+      }
+    };
+
+    if (photoInput && photoInput.files && photoInput.files[0]) {
+      var reader = new FileReader();
+      reader.onload = function(e) { doSave(e.target.result); };
+      reader.readAsDataURL(photoInput.files[0]);
+    } else {
+      doSave(null);
+    }
   }
 
   function deleteObservation(id) {
@@ -1642,14 +1841,15 @@ input,select,textarea { font-size:16px !important; }
 
   function generateReport() {
     var siteId = state.currentSite.id;
-    var link = '/api/sites/' + siteId + '/report';
+    var link = '/api/sites/' + siteId + '/report?token=' + encodeURIComponent(state.token);
     var container = document.getElementById('report-link');
     if (container) {
-      container.innerHTML = '<a href="' + link + '" target="_blank" class="btn btn-ghost w-full">' +
+      container.innerHTML = '<a href="' + link + '" target="_blank" class="btn btn-primary w-full">' +
         '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>' +
-        'Open Full Report</a>';
+        'Open EICR Report</a>' +
+        '<p class="text-xs text-slate-500 mt-2 text-center">Opens as HTML — use Print / Save as PDF on your phone or browser</p>';
     }
-    toast('Report link ready — tap to view', 'success');
+    toast('Report ready — tap to view & print to PDF', 'success');
   }
 
   /* ===== SETTINGS VIEW ===== */
@@ -1693,7 +1893,23 @@ input,select,textarea { font-size:16px !important; }
       });
     }
 
-    html += '</div></div>';
+    html += '</div>';
+
+    /* Default AI Model selector */
+    var preferred = localStorage.getItem('eicr_preferred_model') || '';
+    if (state.aiKeys.length > 0) {
+      html += '<div class="mt-3 pt-3 border-t border-slate-100">' +
+        '<label class="block text-sm font-medium text-slate-700 mb-1">Default Model for Voice &amp; Photo Scan</label>' +
+        '<select id="preferred-model" class="select-field" data-action="set-preferred-model">';
+      state.aiKeys.forEach(function(k) {
+        html += '<option value="' + k.id + '"' + (k.id === preferred ? ' selected' : '') + '>' + esc(k.label) + '</option>';
+      });
+      html += '</select>' +
+        '<p class="text-xs text-slate-400 mt-1">🎤 Mic buttons use browser speech (Google on Chrome). This model is used for AI parsing &amp; photo scanning.</p>' +
+      '</div>';
+    }
+
+    html += '</div>';
 
     /* Testers */
     html += '<div class="card p-4">' +
@@ -2274,10 +2490,20 @@ input,select,textarea { font-size:16px !important; }
     try { _voiceRec.start(); _voiceActive = true; } catch(ex) { toast('Mic busy', 'error'); }
   }
 
-  /* Get the first available AI provider */
+  /* Get the user's preferred AI provider (or first available) */
   function getSelectedProvider() {
-    if (state.aiKeys && state.aiKeys.length) return state.aiKeys[0];
-    return null;
+    if (!state.aiKeys || !state.aiKeys.length) return null;
+    var preferred = localStorage.getItem('eicr_preferred_model');
+    if (preferred) {
+      var match = state.aiKeys.find(function(k) { return k.id === preferred; });
+      if (match) return match;
+    }
+    return state.aiKeys[0];
+  }
+
+  function setPreferredModel(id) {
+    localStorage.setItem('eicr_preferred_model', id);
+    toast('Default AI model updated', 'success');
   }
 
   /* ===== UTILITY ===== */
@@ -2428,6 +2654,17 @@ input,select,textarea { font-size:16px !important; }
       case 'run-photo-scan':
         runPhotoScan();
         break;
+      case 'apply-scan-results':
+        applyScanResults();
+        break;
+      case 'discard-scan-results':
+        _scanState = { base64: null, keyId: null, history: [], updates: null, systemPrompt: '' };
+        closeSheet();
+        toast('Scan discarded', 'info');
+        break;
+      case 'send-scan-refine':
+        sendScanRefine();
+        break;
       case 'run-voice-parse':
         runVoiceParse();
         break;
@@ -2442,6 +2679,23 @@ input,select,textarea { font-size:16px !important; }
         break;
       case 'new-observation':
         openNewObservationSheet();
+        break;
+      case 'edit-observation':
+        var eObsId = target.getAttribute('data-id');
+        if (eObsId) openNewObservationSheet(eObsId);
+        break;
+      case 'remove-obs-photo':
+        var existingPhotoDiv = document.getElementById('obs-existing-photo');
+        if (existingPhotoDiv) existingPhotoDiv.remove();
+        /* Mark for removal on save */
+        var obsEditIdEl = document.getElementById('obs-edit-id');
+        if (obsEditIdEl && obsEditIdEl.value) {
+          api('PUT', '/observations/' + obsEditIdEl.value, {photo: ''}).then(function() {
+            var idx = state.observations.findIndex(function(o) { return String(o.id) === obsEditIdEl.value; });
+            if (idx !== -1) state.observations[idx].photo = '';
+            toast('Photo removed', 'success');
+          }).catch(function() {});
+        }
         break;
       case 'select-obs-code':
         selectObsCode(target.getAttribute('data-code'));
@@ -2557,6 +2811,10 @@ input,select,textarea { font-size:16px !important; }
     /* Auto-save site info on select change */
     if (target.id && target.id.indexOf('si_') === 0 && state.view === 'site-detail' && state.currentSiteTab === 'info') {
       autoSave('site-info');
+    }
+    /* Default AI model preference */
+    if (target.getAttribute && target.getAttribute('data-action') === 'set-preferred-model') {
+      setPreferredModel(target.value);
     }
     /* Show preview when photo selected (camera or gallery) */
     if (target.id === 'ai-scan-file' || target.id === 'ai-scan-file-cam') {
