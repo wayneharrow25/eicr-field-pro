@@ -1015,12 +1015,22 @@ input,select,textarea { font-size:16px !important; }
     var reader = new FileReader();
     reader.onload = function(e) {
       var base64 = e.target.result.split(',')[1];
-      var prompt = 'Analyse this distribution board photo. Extract every visible circuit breaker. ' +
-        'For each, identify: circuit number (including phase e.g. L1/1, L2/3, TP/1 for three-phase), ' +
-        'description if labelled, BS(EN) standard, type/curve letter (B/C/D), rating in amps, ' +
-        'and wiring type if visible. Return ONLY valid JSON: ' +
-        '{"updates": [{"number":"1","description":"Lighting","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","wiring_type":"A"}]}';
-      var systemPrompt = 'You are a BS 7671 electrical testing expert. Extract circuit breaker specs from distribution board photos. Be accurate and thorough. If you cannot read a value, omit that field rather than guessing.';
+      var prompt = 'Analyse this UK distribution board photo for a BS 7671 EICR (Electrical Installation Condition Report).\n\n' +
+        'CRITICAL RULES:\n' +
+        '1. Number circuits sequentially starting from 1 at the TOP of the board going DOWN. Way 1 is always the top device.\n' +
+        '2. Include EVERY way/position — if a way is blank/spare, include it as {"number":"X","description":"Spare","ocpd_bsen":"","ocpd_type":"","ocpd_rating":""}\n' +
+        '3. For three-phase boards, number as L1/1, L2/1, L3/1, L1/2, L2/2 etc (phase/row).\n' +
+        '4. MCBs = BS(EN) 60898. RCBOs = BS(EN) 61009. MCCBs = BS(EN) 60947-2. HRC Fuses = BS(EN) 88-2.\n' +
+        '5. If devices are grouped under an RCD (e.g. 4-way RCBO block or RCD header), note the RCD details: rcd_bsen, rcd_type, rcd_idn.\n' +
+        '6. Curve types: B (domestic/commercial), C (motors/fluorescent), D (high inrush). Read from the device label.\n' +
+        '7. If a label/schedule is visible, use the descriptions shown. Common: Lighting, Sockets, Ring Main, Radial, FCU, Cooker, Immersion, Boiler, Alarm, Emergency Lighting, Mechanical Extract, Hand Dryer.\n' +
+        '8. Include wiring_type if visible at entries: A=T+E flat, B=T+E in metal conduit, C=T+E in PVC conduit, F=SWA, H=MICC.\n\n' +
+        'Return ONLY valid JSON: {"updates": [{"number":"1","description":"Lighting","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","wiring_type":"A","rcd_bsen":"","rcd_type":"","rcd_idn":""}]}';
+      var systemPrompt = 'You are a BS 7671 qualified electrical inspector filling out Form 4 — Schedule of Circuit Details and Test Results. ' +
+        'Extract every circuit breaker from the distribution board photo, numbered sequentially from top to bottom (way 1 = top device). ' +
+        'Include spare/blank ways. Be precise on BS(EN) standards: MCBs=60898, RCBOs=61009, MCCBs=60947-2. ' +
+        'If an RCD protects a group of circuits, add rcd_bsen/rcd_type/rcd_idn to each circuit in that group. ' +
+        'Do NOT skip ways. Do NOT reorder. Top-to-bottom, every single position.';
 
       api('POST', '/ai/process', {
         key_id: keyEl.value,
@@ -1034,6 +1044,12 @@ input,select,textarea { font-size:16px !important; }
           if (jsonMatch) {
             var parsed = JSON.parse(jsonMatch[0]);
             if (parsed.updates && parsed.updates.length > 0) {
+              /* Sort by circuit number to ensure correct order */
+              parsed.updates.sort(function(a, b) {
+                var na = parseInt((a.number || '').replace(/\D.*/, '')) || 999;
+                var nb = parseInt((b.number || '').replace(/\D.*/, '')) || 999;
+                return na - nb;
+              });
               parsed.updates.forEach(function(u) {
                 var existing = state.circuits.findIndex(function(c) { return c.number === u.number; });
                 if (existing !== -1) {
@@ -1044,7 +1060,7 @@ input,select,textarea { font-size:16px !important; }
               });
               closeSheet();
               navigate('board-detail');
-              toast(parsed.updates.length + ' circuits extracted — save to persist', 'success');
+              toast(parsed.updates.length + ' circuits extracted (incl. spares) — save to persist', 'success');
             } else {
               resultEl.innerHTML = '<p class="text-amber-600">No circuits found in photo. Try a clearer image.</p>';
             }
@@ -1110,10 +1126,13 @@ input,select,textarea { font-size:16px !important; }
       }
       textArea.value = transcript;
     };
-    recognition.onerror = function(e) { toast('Speech error: ' + e.error, 'error'); };
-    recognition.onend = function() { toast('Dictation ended', 'info'); };
-    recognition.start();
-    toast('Listening... speak your readings', 'info');
+    recognition.onerror = function(e) {
+      if (e.error === 'aborted' || e.error === 'no-speech') return;
+      toast('Speech: ' + e.error, 'error');
+    };
+    recognition.onend = function() { toast('Dictation ended — tap Parse', 'info'); };
+    try { recognition.start(); toast('Listening... speak your readings', 'info'); }
+    catch(ex) { toast('Mic busy — try again', 'error'); }
   }
 
   function runVoiceParse() {
@@ -1126,16 +1145,25 @@ input,select,textarea { font-size:16px !important; }
     }
     resultEl.innerHTML = '<div class="flex items-center gap-2 py-4"><div class="loading-spinner"></div><span>Parsing readings...</span></div>';
 
-    var prompt = 'Parse these spoken electrical test readings into structured data. Text: "' + textEl.value + '"\n\n' +
-      'Return ONLY valid JSON with this format: {"updates": [{"number":"1","description":"Lighting",' +
+    /* Build context of existing circuits so AI can amend them */
+    var existingInfo = state.circuits.length > 0 ?
+      '\n\nExisting circuits on this board: ' + state.circuits.map(function(c) { return '#' + (c.number || '?') + ' ' + (c.description || ''); }).join(', ') :
+      '';
+
+    var prompt = 'Parse these spoken electrical test readings into structured data. Text: "' + textEl.value + '"' + existingInfo + '\n\n' +
+      'IMPORTANT: The user may be adding NEW readings, AMENDING existing ones, or giving instructions like "change circuit 3 description to sockets". ' +
+      'Match circuit numbers to existing circuits where possible. Only include fields the user mentioned — omit fields they did not speak about.\n\n' +
+      'Return ONLY valid JSON: {"updates": [{"number":"1","description":"Lighting",' +
       '"ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","live_mm":"1.5","cpc_mm":"1.0",' +
       '"r1":"0.45","rn":"0.42","r2":"0.85","r1r2":"1.30","ir_test_v":"500","ir_ll":">200",' +
       '"ir_le":">200","polarity":true,"zs_measured":"0.98","rcd_time_x1":"18","rcd_time_x5":"12",' +
       '"remarks":""}]}';
-    var systemPrompt = 'Parse BS 7671 electrical test readings from spoken notes. Map spoken numbers to circuit fields. ' +
-      'Fields: number, description, ocpd_bsen, ocpd_type, ocpd_rating, live_mm, cpc_mm, r1, rn, r2, r1r2, r2_measured, r2_ring, ' +
-      'ir_test_v, ir_ll, ir_le, polarity (boolean), zs_measured, rcd_time_x1, rcd_time_x5, rcd_test_btn (boolean), remarks. ' +
-      'Be precise. Use ">" prefix for infinity insulation readings.';
+    var systemPrompt = 'You are parsing spoken BS 7671 electrical test readings for an EICR. ' +
+      'The user speaks naturally, e.g. "circuit 3 Zs 0.45, circuit 4 Zs 0.52, polarity correct on both". ' +
+      'Map to fields: number, description, ocpd_bsen (60898=MCB, 61009=RCBO), ocpd_type (B/C/D), ocpd_rating, ' +
+      'live_mm, cpc_mm, r1, rn, r2, r1r2, r2_measured, r2_ring, ir_test_v (250/500/1000), ir_ll, ir_le, ' +
+      'polarity (boolean), zs_measured, rcd_time_x1, rcd_time_x5, rcd_test_btn (boolean), remarks. ' +
+      '"greater than 200" or "infinity" for insulation = ">200". Only return fields the user mentioned.';
 
     api('POST', '/ai/process', {
       key_id: keyEl.value,
@@ -2008,16 +2036,17 @@ input,select,textarea { font-size:16px !important; }
     if (!field) return;
     var btn = document.querySelector('[data-voice-for="' + fieldId + '"]');
 
+    /* Stop any existing recognition first */
     if (_voiceActive && _voiceRec) {
-      _voiceRec.stop();
+      try { _voiceRec.stop(); } catch(ex) {}
       _voiceActive = false;
       if (btn) { btn.style.background = ''; btn.textContent = '🎤'; }
       return;
     }
 
     _voiceRec = new SR();
-    _voiceRec.continuous = true;
-    _voiceRec.interimResults = true;
+    _voiceRec.continuous = false;
+    _voiceRec.interimResults = false;
     _voiceRec.lang = 'en-GB';
     var startVal = field.value || '';
 
@@ -2026,18 +2055,24 @@ input,select,textarea { font-size:16px !important; }
       for (var i = 0; i < e.results.length; i++) transcript += e.results[i][0].transcript;
       field.value = startVal ? startVal + ' ' + transcript : transcript;
     };
-    _voiceRec.onerror = function() {
+    _voiceRec.onerror = function(ev) {
       _voiceActive = false;
       if (btn) { btn.style.background = ''; btn.textContent = '🎤'; }
+      if (ev.error === 'aborted' || ev.error === 'no-speech') return; /* Silent failures */
+      toast('Voice: ' + ev.error, 'error');
     };
     _voiceRec.onend = function() {
       _voiceActive = false;
       if (btn) { btn.style.background = ''; btn.textContent = '🎤'; }
     };
 
-    _voiceRec.start();
-    _voiceActive = true;
-    if (btn) { btn.style.background = '#ef4444'; btn.textContent = '⏹'; }
+    try {
+      _voiceRec.start();
+      _voiceActive = true;
+      if (btn) { btn.style.background = '#ef4444'; btn.textContent = '⏹'; }
+    } catch(ex) {
+      toast('Mic busy — try again', 'error');
+    }
   }
 
   /* Helper to render a mic button for any field */
@@ -2068,27 +2103,27 @@ input,select,textarea { font-size:16px !important; }
     if (!SR) return toast('Speech not supported', 'error');
 
     if (_voiceActive && _voiceRec) {
-      _voiceRec.stop();
+      try { _voiceRec.stop(); } catch(ex) {}
       _voiceActive = false;
       var voBtn = document.getElementById('voice-obs-btn');
-      if (voBtn) { voBtn.style.background = ''; voBtn.innerHTML = '🎤 SPEAK OBSERVATION'; }
+      if (voBtn) { voBtn.style.background = ''; voBtn.innerHTML = '&#127908; SPEAK OBSERVATION'; }
       return;
     }
 
     _voiceRec = new SR();
-    _voiceRec.continuous = true;
+    _voiceRec.continuous = false;
     _voiceRec.interimResults = false;
     _voiceRec.lang = 'en-GB';
 
     var voBtn = document.getElementById('voice-obs-btn');
-    if (voBtn) { voBtn.style.background = '#ef4444'; voBtn.innerHTML = '⏹ LISTENING... tap to stop'; }
+    if (voBtn) { voBtn.style.background = '#ef4444'; voBtn.innerHTML = '&#9209; LISTENING... tap to stop'; }
 
     _voiceRec.onresult = function(e) {
       var transcript = '';
       for (var i = 0; i < e.results.length; i++) transcript += e.results[i][0].transcript;
-      _voiceRec.stop();
+      try { _voiceRec.stop(); } catch(ex) {}
       _voiceActive = false;
-      if (voBtn) { voBtn.style.background = '#3b82f6'; voBtn.innerHTML = '⏳ Parsing...'; }
+      if (voBtn) { voBtn.style.background = '#3b82f6'; voBtn.innerHTML = '&#9203; Parsing...'; }
 
       /* Parse with AI */
       var provider = getSelectedProvider();
@@ -2124,18 +2159,18 @@ input,select,textarea { font-size:16px !important; }
       });
     };
 
-    _voiceRec.onerror = function() {
+    _voiceRec.onerror = function(ev) {
       _voiceActive = false;
-      if (voBtn) { voBtn.style.background = ''; voBtn.innerHTML = '🎤 SPEAK OBSERVATION'; }
-      toast('Voice error — try again', 'error');
+      if (voBtn) { voBtn.style.background = ''; voBtn.innerHTML = '&#127908; SPEAK OBSERVATION'; }
+      if (ev.error === 'aborted' || ev.error === 'no-speech') return;
+      toast('Voice: ' + ev.error, 'error');
     };
     _voiceRec.onend = function() {
       _voiceActive = false;
-      if (voBtn) { voBtn.style.background = ''; voBtn.innerHTML = '🎤 SPEAK OBSERVATION'; }
+      if (voBtn) { voBtn.style.background = ''; voBtn.innerHTML = '&#127908; SPEAK OBSERVATION'; }
     };
 
-    _voiceRec.start();
-    _voiceActive = true;
+    try { _voiceRec.start(); _voiceActive = true; } catch(ex) { toast('Mic busy', 'error'); }
   }
 
   /* Basic fallback parser for observations without AI */
@@ -2170,20 +2205,20 @@ input,select,textarea { font-size:16px !important; }
     if (!SR) return toast('Speech not supported', 'error');
 
     if (_voiceActive && _voiceRec) {
-      _voiceRec.stop();
+      try { _voiceRec.stop(); } catch(ex) {}
       _voiceActive = false;
       var viBtn = document.getElementById('voice-insp-btn');
-      if (viBtn) { viBtn.style.background = ''; viBtn.innerHTML = '🎤 SPEAK OUTCOMES'; }
+      if (viBtn) { viBtn.style.background = ''; viBtn.innerHTML = '&#127908; SPEAK OUTCOMES'; }
       return;
     }
 
     _voiceRec = new SR();
-    _voiceRec.continuous = true;
+    _voiceRec.continuous = false;
     _voiceRec.interimResults = false;
     _voiceRec.lang = 'en-GB';
 
     var viBtn = document.getElementById('voice-insp-btn');
-    if (viBtn) { viBtn.style.background = '#ef4444'; viBtn.innerHTML = '⏹ LISTENING... tap to stop'; }
+    if (viBtn) { viBtn.style.background = '#ef4444'; viBtn.innerHTML = '&#9209; LISTENING... tap to stop'; }
 
     _voiceRec.onresult = function(e) {
       var transcript = '';
@@ -2225,10 +2260,9 @@ input,select,textarea { font-size:16px !important; }
       });
     };
 
-    _voiceRec.onerror = function() { _voiceActive = false; if (viBtn) viBtn.innerHTML = '🎤 SPEAK OUTCOMES'; };
+    _voiceRec.onerror = function(ev) { _voiceActive = false; if (viBtn) viBtn.innerHTML = '&#127908; SPEAK OUTCOMES'; if (ev.error !== 'aborted' && ev.error !== 'no-speech') toast('Voice: ' + ev.error, 'error'); };
     _voiceRec.onend = function() { _voiceActive = false; };
-    _voiceRec.start();
-    _voiceActive = true;
+    try { _voiceRec.start(); _voiceActive = true; } catch(ex) { toast('Mic busy', 'error'); }
   }
 
   /* Get the first available AI provider */
