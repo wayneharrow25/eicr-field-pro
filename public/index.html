@@ -1,0 +1,1860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#1e293b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>EICR Field Pro</title>
+<link href="https://cdn.tailwindcss.com" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        primary: '#3b82f6',
+        'primary-dark': '#2563eb',
+        'primary-light': '#60a5fa',
+        nav: '#1e293b',
+        surface: '#f8fafc',
+        'card-bg': '#ffffff',
+        danger: '#ef4444',
+        success: '#22c55e',
+        warning: '#f59e0b',
+        c1: '#ef4444',
+        c2: '#f59e0b',
+        c3: '#3b82f6',
+        fi: '#a855f7',
+      }
+    }
+  }
+}
+</script>
+<style>
+* { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+html, body { margin:0; padding:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#f1f5f9; overscroll-behavior:none; -webkit-font-smoothing:antialiased; }
+body { padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px)); padding-top: env(safe-area-inset-top, 0px); }
+input,select,textarea { font-size:16px !important; }
+.card { background:#fff; border-radius:1rem; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+.card-lg { border-radius:1.25rem; }
+.btn { display:inline-flex; align-items:center; justify-content:center; gap:.5rem; padding:.75rem 1.5rem; border-radius:.75rem; font-weight:600; font-size:.938rem; border:none; cursor:pointer; transition:all .15s; min-height:3rem; }
+.btn-primary { background:#3b82f6; color:#fff; }
+.btn-primary:active { background:#2563eb; }
+.btn-danger { background:#ef4444; color:#fff; }
+.btn-danger:active { background:#dc2626; }
+.btn-ghost { background:transparent; color:#3b82f6; }
+.btn-ghost:active { background:#eff6ff; }
+.btn-sm { padding:.5rem 1rem; font-size:.813rem; min-height:2.25rem; }
+.input-field { width:100%; padding:.75rem 1rem; border:1.5px solid #e2e8f0; border-radius:.75rem; font-size:16px; background:#fff; transition:border-color .15s; outline:none; min-height:3rem; }
+.input-field:focus { border-color:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,.1); }
+.select-field { width:100%; padding:.75rem 1rem; border:1.5px solid #e2e8f0; border-radius:.75rem; font-size:16px; background:#fff; appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='%2394a3b8' viewBox='0 0 20 20'%3E%3Cpath d='M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right .75rem center; background-size:1.25rem; min-height:3rem; }
+.bottom-sheet-overlay { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:100; opacity:0; transition:opacity .2s; pointer-events:none; }
+.bottom-sheet-overlay.active { opacity:1; pointer-events:auto; }
+.bottom-sheet { position:fixed; bottom:0; left:0; right:0; background:#fff; border-radius:1.25rem 1.25rem 0 0; z-index:101; transform:translateY(100%); transition:transform .3s cubic-bezier(.32,.72,0,1); max-height:85vh; overflow-y:auto; padding-bottom:env(safe-area-inset-bottom,0); }
+.bottom-sheet.active { transform:translateY(0); }
+.bottom-sheet-handle { width:2.5rem; height:.25rem; background:#cbd5e1; border-radius:9999px; margin:.75rem auto; }
+.tab-bar { display:flex; gap:.25rem; background:#f1f5f9; padding:.25rem; border-radius:.75rem; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.tab-btn { flex:0 0 auto; padding:.5rem 1rem; border-radius:.5rem; font-size:.813rem; font-weight:600; color:#64748b; background:transparent; border:none; cursor:pointer; white-space:nowrap; transition:all .15s; }
+.tab-btn.active { background:#fff; color:#3b82f6; box-shadow:0 1px 2px rgba(0,0,0,.06); }
+.nav-bottom { position:fixed; bottom:0; left:0; right:0; background:#1e293b; display:flex; z-index:50; padding-bottom:env(safe-area-inset-bottom,0); }
+.nav-btn { flex:1; display:flex; flex-direction:column; align-items:center; gap:.25rem; padding:.625rem 0; color:#94a3b8; border:none; background:none; cursor:pointer; font-size:.688rem; font-weight:500; }
+.nav-btn.active { color:#3b82f6; }
+.nav-btn svg { width:1.5rem; height:1.5rem; }
+.badge { display:inline-flex; align-items:center; padding:.125rem .5rem; border-radius:9999px; font-size:.688rem; font-weight:700; }
+.badge-c1 { background:#fef2f2; color:#ef4444; }
+.badge-c2 { background:#fffbeb; color:#f59e0b; }
+.badge-c3 { background:#eff6ff; color:#3b82f6; }
+.badge-fi { background:#faf5ff; color:#a855f7; }
+.badge-pass { background:#f0fdf4; color:#22c55e; }
+.toast-container { position:fixed; top:env(safe-area-inset-top,1rem); left:1rem; right:1rem; z-index:200; display:flex; flex-direction:column; gap:.5rem; pointer-events:none; }
+.toast { padding:.75rem 1rem; border-radius:.75rem; color:#fff; font-size:.875rem; font-weight:500; pointer-events:auto; animation:toastIn .3s ease; box-shadow:0 4px 12px rgba(0,0,0,.15); }
+.toast-success { background:#22c55e; }
+.toast-error { background:#ef4444; }
+.toast-info { background:#3b82f6; }
+@keyframes toastIn { from{opacity:0;transform:translateY(-1rem)} to{opacity:1;transform:translateY(0)} }
+.loading-spinner { width:2rem; height:2rem; border:3px solid #e2e8f0; border-top-color:#3b82f6; border-radius:50%; animation:spin .6s linear infinite; }
+@keyframes spin { to{transform:rotate(360deg)} }
+.test-table { font-size:.75rem; border-collapse:separate; border-spacing:0; }
+.test-table th { background:#f1f5f9; position:sticky; top:0; z-index:5; padding:.375rem .5rem; white-space:nowrap; font-weight:600; color:#475569; border-bottom:2px solid #e2e8f0; text-align:left; }
+.test-table td { padding:.375rem .5rem; border-bottom:1px solid #f1f5f9; white-space:nowrap; cursor:pointer; min-width:3rem; }
+.test-table td:hover { background:#eff6ff; }
+.test-table tr:nth-child(even) td { background:#fafbfc; }
+.test-table .zs-fail { background:#fef2f2 !important; color:#ef4444; font-weight:700; }
+.test-table .zs-pass { color:#22c55e; }
+.scroll-wrapper { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.section-header { position:sticky; top:0; z-index:10; background:#f1f5f9; padding:.75rem 1rem; font-weight:700; font-size:.875rem; color:#334155; border-bottom:1px solid #e2e8f0; }
+.outcome-select { padding:.375rem .5rem; border:1.5px solid #e2e8f0; border-radius:.5rem; font-size:.813rem; font-weight:600; min-width:4rem; background:#fff; }
+.outcome-pass { border-color:#22c55e; color:#22c55e; background:#f0fdf4; }
+.outcome-c1 { border-color:#ef4444; color:#ef4444; background:#fef2f2; }
+.outcome-c2 { border-color:#f59e0b; color:#f59e0b; background:#fffbeb; }
+.outcome-c3 { border-color:#3b82f6; color:#3b82f6; background:#eff6ff; }
+.outcome-fi { border-color:#a855f7; color:#a855f7; background:#faf5ff; }
+.outcome-na { border-color:#94a3b8; color:#94a3b8; }
+.outcome-lim { border-color:#6b7280; color:#6b7280; background:#f9fafb; }
+.fade-in { animation:fadeIn .2s ease; }
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+.photo-thumb { width:4rem; height:4rem; object-fit:cover; border-radius:.5rem; }
+</style>
+</head>
+<body>
+
+<div id="toast-container" class="toast-container"></div>
+
+<div id="app"></div>
+
+<nav class="nav-bottom" id="bottom-nav" style="display:none">
+  <button class="nav-btn active" data-action="nav-sites">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    <span>Sites</span>
+  </button>
+  <button class="nav-btn" data-action="nav-settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    <span>Settings</span>
+  </button>
+</nav>
+
+<div class="bottom-sheet-overlay" id="sheet-overlay"></div>
+<div class="bottom-sheet" id="sheet-panel">
+  <div class="bottom-sheet-handle"></div>
+  <div id="sheet-content" style="padding:0 1rem 1rem"></div>
+</div>
+
+<script>
+(function() {
+  "use strict";
+
+  /* ===== STATE ===== */
+  var state = {
+    token: localStorage.getItem('eicr_token') || null,
+    user: null,
+    view: 'login',
+    sites: [],
+    currentSite: null,
+    currentSiteTab: 'info',
+    currentBoard: null,
+    boards: [],
+    circuits: [],
+    inspections: [],
+    observations: [],
+    aiKeys: [],
+    loading: false,
+    sheetOpen: false
+  };
+
+  /* ===== API HELPERS ===== */
+  function api(method, path, body) {
+    var opts = {
+      method: method,
+      headers: { 'Content-Type': 'application/json' }
+    };
+    if (state.token) {
+      opts.headers['Authorization'] = 'Bearer ' + state.token;
+    }
+    if (body !== undefined) {
+      opts.body = JSON.stringify(body);
+    }
+    return fetch('/api' + path, opts).then(function(res) {
+      if (res.status === 401) {
+        state.token = null;
+        localStorage.removeItem('eicr_token');
+        navigate('login');
+        throw new Error('Session expired');
+      }
+      if (!res.ok) {
+        return res.text().then(function(t) {
+          var msg;
+          try { msg = JSON.parse(t).detail || JSON.parse(t).message || t; } catch(e) { msg = t; }
+          throw new Error(msg || 'Request failed');
+        });
+      }
+      var ct = res.headers.get('content-type') || '';
+      if (ct.indexOf('json') !== -1) return res.json();
+      return res.text();
+    });
+  }
+
+  /* ===== TOAST ===== */
+  function toast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'toast toast-' + (type || 'info');
+    el.textContent = msg;
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(function() { el.remove(); }, 3000);
+  }
+
+  /* ===== BOTTOM SHEET ===== */
+  function openSheet(html) {
+    document.getElementById('sheet-content').innerHTML = html;
+    document.getElementById('sheet-overlay').classList.add('active');
+    document.getElementById('sheet-panel').classList.add('active');
+    state.sheetOpen = true;
+    bindSheetEvents();
+  }
+
+  function closeSheet() {
+    document.getElementById('sheet-overlay').classList.remove('active');
+    document.getElementById('sheet-panel').classList.remove('active');
+    state.sheetOpen = false;
+  }
+
+  function bindSheetEvents() {
+    /* Delegated events handle sheet actions */
+  }
+
+  /* ===== NAVIGATION ===== */
+  function navigate(view, data) {
+    state.view = view;
+    if (data) {
+      Object.keys(data).forEach(function(k) { state[k] = data[k]; });
+    }
+    render();
+  }
+
+  /* ===== RENDER ENGINE ===== */
+  function render() {
+    var app = document.getElementById('app');
+    var nav = document.getElementById('bottom-nav');
+    var isLoggedIn = !!state.token;
+    nav.style.display = isLoggedIn && state.view !== 'login' ? 'flex' : 'none';
+
+    /* Update nav active state */
+    var navBtns = nav.querySelectorAll('.nav-btn');
+    navBtns.forEach(function(b) {
+      var act = b.getAttribute('data-action');
+      b.classList.toggle('active',
+        (act === 'nav-sites' && (state.view === 'sites' || state.view === 'site-detail' || state.view === 'board-detail')) ||
+        (act === 'nav-settings' && state.view === 'settings')
+      );
+    });
+
+    switch(state.view) {
+      case 'login': app.innerHTML = renderLogin(); break;
+      case 'sites': app.innerHTML = renderSites(); loadSites(); break;
+      case 'site-detail': app.innerHTML = renderSiteDetail(); break;
+      case 'board-detail': app.innerHTML = renderBoardDetail(); break;
+      case 'settings': app.innerHTML = renderSettings(); loadAiKeys(); break;
+      default: app.innerHTML = renderLogin();
+    }
+    closeSheet();
+  }
+
+  /* ===== LOGIN VIEW ===== */
+  function renderLogin() {
+    return '<div class="min-h-screen flex items-center justify-center p-4" style="background:linear-gradient(135deg,#1e293b 0%,#334155 100%)">' +
+      '<div class="card p-8 w-full max-w-sm">' +
+        '<div class="text-center mb-6">' +
+          '<div class="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-3">' +
+            '<svg class="w-8 h-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>' +
+          '</div>' +
+          '<h1 class="text-xl font-bold text-slate-800">EICR Field Pro</h1>' +
+          '<p class="text-sm text-slate-500 mt-1">Expert Energy Group</p>' +
+        '</div>' +
+        '<div class="space-y-4">' +
+          '<div><label class="block text-sm font-medium text-slate-700 mb-1">Username</label>' +
+            '<input type="text" id="login-user" class="input-field" placeholder="Enter username" autocomplete="username" autocapitalize="none"></div>' +
+          '<div><label class="block text-sm font-medium text-slate-700 mb-1">Password</label>' +
+            '<input type="password" id="login-pass" class="input-field" placeholder="Enter password" autocomplete="current-password"></div>' +
+          '<button class="btn btn-primary w-full" data-action="do-login">Sign In</button>' +
+          '<div id="login-error" class="text-sm text-red-500 text-center hidden"></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function doLogin() {
+    var u = document.getElementById('login-user');
+    var p = document.getElementById('login-pass');
+    if (!u || !p) return;
+    var username = u.value.trim();
+    var password = p.value;
+    if (!username || !password) { toast('Enter username and password', 'error'); return; }
+
+    api('POST', '/auth/login', {username: username, password: password})
+      .then(function(data) {
+        state.token = data.token;
+        state.user = data.user;
+        localStorage.setItem('eicr_token', data.token);
+        toast('Welcome back, ' + (data.user.name || username), 'success');
+        navigate('sites');
+      })
+      .catch(function(err) {
+        toast(err.message || 'Login failed', 'error');
+      });
+  }
+
+  /* ===== SITES LIST ===== */
+  function renderSites() {
+    var html = '<div class="fade-in">' +
+      '<header class="sticky top-0 z-20 bg-white border-b border-slate-100 px-4 py-3 flex items-center justify-between">' +
+        '<h1 class="text-lg font-bold text-slate-800">Sites</h1>' +
+        '<button class="btn btn-primary btn-sm" data-action="new-site">' +
+          '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+          'New Site</button>' +
+      '</header>' +
+      '<div id="sites-list" class="p-4 space-y-3">';
+
+    if (state.sites.length === 0) {
+      html += '<div class="text-center py-12 text-slate-400">' +
+        '<svg class="w-12 h-12 mx-auto mb-3 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>' +
+        '<p class="font-medium">No sites yet</p><p class="text-sm mt-1">Tap New Site to get started</p></div>';
+    } else {
+      state.sites.forEach(function(s) {
+        var obs = s.observation_counts || {};
+        var total = (obs.c1||0) + (obs.c2||0) + (obs.c3||0) + (obs.fi||0);
+        html += '<div class="card p-4 active:bg-slate-50 transition-colors" data-action="open-site" data-id="' + s.id + '">' +
+          '<div class="flex items-start justify-between">' +
+            '<div class="flex-1 min-w-0">' +
+              '<h3 class="font-semibold text-slate-800 truncate">' + esc(s.name || 'Unnamed Site') + '</h3>' +
+              '<p class="text-sm text-slate-500 mt-0.5 truncate">' + esc(s.address || 'No address') + '</p>' +
+              '<p class="text-xs text-slate-400 mt-1">' + esc(s.client_name || '') + '</p>' +
+            '</div>' +
+            '<div class="flex items-center gap-1 ml-3">' +
+              (obs.c1 ? '<span class="badge badge-c1">C1:' + obs.c1 + '</span>' : '') +
+              (obs.c2 ? '<span class="badge badge-c2">C2:' + obs.c2 + '</span>' : '') +
+              '<svg class="w-5 h-5 text-slate-300 ml-1" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      });
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  function loadSites() {
+    api('GET', '/sites').then(function(data) {
+      state.sites = data;
+      var list = document.getElementById('sites-list');
+      if (list) {
+        var tmp = document.createElement('div');
+        tmp.innerHTML = renderSites();
+        var newList = tmp.querySelector('#sites-list');
+        if (newList) list.innerHTML = newList.innerHTML;
+      }
+    }).catch(function(err) {
+      toast('Failed to load sites: ' + err.message, 'error');
+    });
+  }
+
+  function openNewSiteSheet() {
+    openSheet(
+      '<h3 class="text-lg font-bold text-slate-800 mb-4">New Site</h3>' +
+      '<div class="space-y-3">' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Site Name *</label>' +
+          '<input type="text" id="new-site-name" class="input-field" placeholder="e.g. St Mary\'s Primary School"></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Address</label>' +
+          '<input type="text" id="new-site-address" class="input-field" placeholder="Full address"></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Client Name</label>' +
+          '<input type="text" id="new-site-client" class="input-field" placeholder="Client / contact name"></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Client Phone</label>' +
+          '<input type="tel" id="new-site-phone" class="input-field" placeholder="Phone number"></div>' +
+        '<button class="btn btn-primary w-full mt-4" data-action="save-new-site">Create Site</button>' +
+      '</div>'
+    );
+  }
+
+  function saveNewSite() {
+    var name = document.getElementById('new-site-name');
+    if (!name || !name.value.trim()) { toast('Site name is required', 'error'); return; }
+    var body = {
+      name: name.value.trim(),
+      address: (document.getElementById('new-site-address') || {}).value || '',
+      client_name: (document.getElementById('new-site-client') || {}).value || '',
+      client_phone: (document.getElementById('new-site-phone') || {}).value || ''
+    };
+    api('POST', '/sites', body).then(function(site) {
+      toast('Site created', 'success');
+      closeSheet();
+      state.sites.unshift(site);
+      navigate('site-detail', {currentSite: site, currentSiteTab: 'info'});
+    }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  /* ===== SITE DETAIL VIEW ===== */
+  function renderSiteDetail() {
+    var s = state.currentSite;
+    if (!s) return '<p>No site selected</p>';
+    var tabs = ['info','boards','inspection','observations','report'];
+    var tabLabels = {info:'Info',boards:'Boards',inspection:'Inspection',observations:'Observations',report:'Report'};
+
+    var html = '<div class="fade-in">' +
+      '<header class="sticky top-0 z-20 bg-white border-b border-slate-100 px-4 py-3">' +
+        '<div class="flex items-center gap-3">' +
+          '<button class="p-2 -ml-2 rounded-lg active:bg-slate-100" data-action="back-to-sites">' +
+            '<svg class="w-5 h-5 text-slate-600" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z"/></svg>' +
+          '</button>' +
+          '<div class="flex-1 min-w-0">' +
+            '<h1 class="text-lg font-bold text-slate-800 truncate">' + esc(s.name) + '</h1>' +
+          '</div>' +
+          '<button class="p-2 rounded-lg active:bg-slate-100" data-action="delete-site" data-id="' + s.id + '">' +
+            '<svg class="w-5 h-5 text-slate-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5z"/></svg>' +
+          '</button>' +
+        '</div>' +
+        '<div class="tab-bar mt-3">' +
+          tabs.map(function(t) {
+            return '<button class="tab-btn' + (state.currentSiteTab === t ? ' active' : '') + '" data-action="site-tab" data-tab="' + t + '">' + tabLabels[t] + '</button>';
+          }).join('') +
+        '</div>' +
+      '</header>';
+
+    switch(state.currentSiteTab) {
+      case 'info': html += renderSiteInfo(); break;
+      case 'boards': html += renderBoardsList(); break;
+      case 'inspection': html += renderInspection(); break;
+      case 'observations': html += renderObservations(); break;
+      case 'report': html += renderReport(); break;
+    }
+    html += '</div>';
+    return html;
+  }
+
+  /* ===== SITE INFO TAB ===== */
+  function renderSiteInfo() {
+    var s = state.currentSite;
+    return '<div class="p-4 space-y-4">' +
+      renderFieldGroup('Client Details', [
+        {id:'si_client_name', label:'Client Name', val:s.client_name},
+        {id:'si_address', label:'Installation Address', val:s.address},
+        {id:'si_client_address', label:'Client Address (if different)', val:s.client_address},
+        {id:'si_client_phone', label:'Phone', val:s.client_phone, type:'tel'},
+        {id:'si_client_email', label:'Email', val:s.client_email, type:'email'},
+        {id:'si_occupier', label:'Occupier', val:s.occupier},
+        {id:'si_purpose', label:'Purpose of Report', val:s.purpose, options:['Periodic inspection','Change of occupancy','Change of use','Insurance','Mortgage/sale','Other']},
+      ]) +
+      renderFieldGroup('Installation Details', [
+        {id:'si_desc_premises', label:'Description of Premises', val:s.desc_premises, options:['Commercial','Industrial','Domestic','Mixed use','Educational','Healthcare','Retail','Office','Agricultural','Other']},
+        {id:'si_estimated_age', label:'Estimated Age of Installation', val:s.estimated_age},
+        {id:'si_evidence_alteration', label:'Evidence of Alterations/Additions', val:s.evidence_alteration, options:['Yes','No','Unknown']},
+        {id:'si_date_last_inspection', label:'Date of Last Inspection', val:s.date_last_inspection, type:'date'},
+        {id:'si_date_inspection', label:'Date of This Inspection', val:s.date_inspection, type:'date'},
+        {id:'si_inspector_name', label:'Inspector Name', val:s.inspector_name},
+        {id:'si_inspector_position', label:'Inspector Position', val:s.inspector_position},
+      ]) +
+      renderFieldGroup('Extent and Limitations', [
+        {id:'si_extent', label:'Extent of Installation Covered', val:s.extent, textarea:true},
+        {id:'si_limitations', label:'Agreed Limitations', val:s.limitations, textarea:true},
+        {id:'si_operational_limitations', label:'Operational Limitations', val:s.operational_limitations, textarea:true},
+      ]) +
+      renderFieldGroup('Supply Characteristics', [
+        {id:'si_supply_system', label:'System Type (TN-S, TN-C-S, TT, IT)', val:s.supply_system, options:['TN-S','TN-C-S','TT','IT','TN-C','Unknown']},
+        {id:'si_supply_type', label:'Supply Type', val:s.supply_type, options:['Single phase AC','Three phase AC (4 wire)','Three phase AC (3 wire)','Two phase AC','DC','Other']},
+        {id:'si_supply_protective', label:'Supply Protective Device (DNO)', val:s.supply_protective},
+        {id:'si_supply_protective_rating', label:'DNO Fuse Rating (A)', val:s.supply_protective_rating, type:'number'},
+        {id:'si_nominal_voltage_ll', label:'Nominal Voltage L-L (V)', val:s.nominal_voltage_ll, type:'number'},
+        {id:'si_nominal_voltage_ln', label:'Nominal Voltage L-N (V)', val:s.nominal_voltage_ln, type:'number'},
+        {id:'si_nominal_freq', label:'Nominal Frequency (Hz)', val:s.nominal_freq || '50'},
+        {id:'si_pscc', label:'Prospective Short Circuit Current (kA)', val:s.pscc},
+        {id:'si_pfc_confirmed', label:'PFC Confirmed Adequate', val:s.pfc_confirmed, options:['Yes','No']},
+      ]) +
+      renderFieldGroup('Earthing Arrangements', [
+        {id:'si_earthing_type', label:'Earthing Type', val:s.earthing_type, options:['Supplier\'s facility (TN-S/TN-C-S)','Installation earth electrode (TT)','Other']},
+        {id:'si_earth_electrode_type', label:'Earth Electrode Type (if TT)', val:s.earth_electrode_type, options:['Rod(s)','Tape','Plate','Other','N/A']},
+        {id:'si_earth_electrode_location', label:'Earth Electrode Location', val:s.earth_electrode_location},
+        {id:'si_earth_electrode_resistance', label:'Earth Electrode Resistance (ohms)', val:s.earth_electrode_resistance, type:'number'},
+        {id:'si_ze', label:'Ze (External Loop Impedance) ohms', val:s.ze},
+      ]) +
+      renderFieldGroup('Main Switch / Isolator', [
+        {id:'si_main_switch_location', label:'Location', val:s.main_switch_location},
+        {id:'si_main_switch_type', label:'Type', val:s.main_switch_type, options:['Isolator','Switch Disconnector','MCCB','ACB','RCD','RCBO','Fuse Switch','Other']},
+        {id:'si_main_switch_bsen', label:'BS(EN)', val:s.main_switch_bsen},
+        {id:'si_main_switch_poles', label:'No. of Poles', val:s.main_switch_poles, options:['SP','SPN','DP','TP','TPN','4P']},
+        {id:'si_main_switch_rating', label:'Current Rating (A)', val:s.main_switch_rating, type:'number'},
+        {id:'si_main_switch_voltage', label:'Voltage Rating (V)', val:s.main_switch_voltage, type:'number'},
+        {id:'si_main_switch_rcd_idn', label:'RCD I\u0394n (mA) if applicable', val:s.main_switch_rcd_idn, type:'number'},
+        {id:'si_main_switch_rcd_type', label:'RCD Type', val:s.main_switch_rcd_type, options:['N/A','AC','A','B','F','S (time delayed)']},
+      ]) +
+      renderFieldGroup('Main Protective Bonding', [
+        {id:'si_bonding_water', label:'Water\u2003mm\u00b2', val:s.bonding_water},
+        {id:'si_bonding_gas', label:'Gas\u2003mm\u00b2', val:s.bonding_gas},
+        {id:'si_bonding_oil', label:'Oil\u2003mm\u00b2', val:s.bonding_oil},
+        {id:'si_bonding_structural', label:'Structural Steel\u2003mm\u00b2', val:s.bonding_structural},
+        {id:'si_bonding_lightning', label:'Lightning Protection\u2003mm\u00b2', val:s.bonding_lightning},
+        {id:'si_bonding_other', label:'Other\u2003mm\u00b2', val:s.bonding_other},
+        {id:'si_bonding_condition', label:'Overall Bonding Condition', val:s.bonding_condition, options:['Satisfactory','Unsatisfactory','Not verified','N/A']},
+      ]) +
+      '<button class="btn btn-primary w-full" data-action="save-site-info">Save Site Info</button>' +
+      '<div class="h-8"></div>' +
+    '</div>';
+  }
+
+  function renderFieldGroup(title, fields) {
+    var html = '<div class="card p-4">' +
+      '<h3 class="font-semibold text-slate-800 mb-3 text-sm uppercase tracking-wide">' + title + '</h3>' +
+      '<div class="space-y-3">';
+    fields.forEach(function(f) {
+      html += '<div><label class="block text-sm font-medium text-slate-600 mb-1" for="' + f.id + '">' + f.label + '</label>';
+      if (f.textarea) {
+        html += '<textarea id="' + f.id + '" class="input-field" rows="3" placeholder="' + f.label + '">' + esc(f.val || '') + '</textarea>';
+      } else if (f.options) {
+        html += '<select id="' + f.id + '" class="select-field">' +
+          '<option value="">-- Select --</option>' +
+          f.options.map(function(o) {
+            return '<option value="' + esc(o) + '"' + (f.val === o ? ' selected' : '') + '>' + esc(o) + '</option>';
+          }).join('') +
+        '</select>';
+      } else {
+        html += '<input type="' + (f.type || 'text') + '" id="' + f.id + '" class="input-field" value="' + esc(f.val || '') + '" placeholder="' + f.label + '">';
+      }
+      html += '</div>';
+    });
+    html += '</div></div>';
+    return html;
+  }
+
+  function saveSiteInfo() {
+    var s = state.currentSite;
+    var fields = [
+      'client_name','address','client_address','client_phone','client_email','occupier','purpose',
+      'desc_premises','estimated_age','evidence_alteration','date_last_inspection','date_inspection',
+      'inspector_name','inspector_position','extent','limitations','operational_limitations',
+      'supply_system','supply_type','supply_protective','supply_protective_rating','nominal_voltage_ll',
+      'nominal_voltage_ln','nominal_freq','pscc','pfc_confirmed',
+      'earthing_type','earth_electrode_type','earth_electrode_location','earth_electrode_resistance','ze',
+      'main_switch_location','main_switch_type','main_switch_bsen','main_switch_poles','main_switch_rating',
+      'main_switch_voltage','main_switch_rcd_idn','main_switch_rcd_type',
+      'bonding_water','bonding_gas','bonding_oil','bonding_structural','bonding_lightning','bonding_other','bonding_condition'
+    ];
+    var body = {};
+    fields.forEach(function(f) {
+      var el = document.getElementById('si_' + f);
+      if (el) body[f] = el.value;
+    });
+
+    api('PUT', '/sites/' + s.id, body).then(function(updated) {
+      Object.assign(state.currentSite, updated);
+      toast('Site info saved', 'success');
+    }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  /* ===== BOARDS TAB ===== */
+  function renderBoardsList() {
+    var s = state.currentSite;
+    var html = '<div class="p-4 space-y-3">' +
+      '<button class="btn btn-primary w-full" data-action="new-board">' +
+        '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+        'Add Distribution Board</button>' +
+      '<div id="boards-container" class="space-y-3">';
+
+    if (state.boards.length === 0) {
+      html += '<div class="text-center py-8 text-slate-400">' +
+        '<p class="font-medium">No boards yet</p><p class="text-sm mt-1">Add a distribution board to start testing</p></div>';
+    } else {
+      state.boards.forEach(function(b) {
+        html += '<div class="card p-4 active:bg-slate-50 transition-colors" data-action="open-board" data-id="' + b.id + '">' +
+          '<div class="flex items-center justify-between">' +
+            '<div class="flex-1 min-w-0">' +
+              '<h3 class="font-semibold text-slate-800">' + esc(b.ref || 'DB') + '</h3>' +
+              '<p class="text-sm text-slate-500">' + esc(b.location || 'No location') + '</p>' +
+              '<p class="text-xs text-slate-400 mt-1">' + (b.circuit_count || 0) + ' circuits</p>' +
+            '</div>' +
+            '<svg class="w-5 h-5 text-slate-300" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"/></svg>' +
+          '</div>' +
+        '</div>';
+      });
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  function loadBoards() {
+    if (!state.currentSite) return;
+    api('GET', '/sites/' + state.currentSite.id + '/boards').then(function(data) {
+      state.boards = data;
+      var container = document.getElementById('boards-container');
+      if (container) {
+        navigate('site-detail', {currentSiteTab: 'boards'});
+      }
+    }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  function openNewBoardSheet() {
+    openSheet(
+      '<h3 class="text-lg font-bold text-slate-800 mb-4">New Distribution Board</h3>' +
+      '<div class="space-y-3">' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Board Reference *</label>' +
+          '<input type="text" id="new-board-ref" class="input-field" placeholder="e.g. DB1, MSDB, Sub-DB-A"></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Location</label>' +
+          '<input type="text" id="new-board-location" class="input-field" placeholder="e.g. Plant Room, Ground Floor Corridor"></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Supplied From</label>' +
+          '<input type="text" id="new-board-supplied" class="input-field" placeholder="e.g. MSDB Way 3"></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Phase</label>' +
+          '<select id="new-board-phase" class="select-field"><option value="single">Single Phase</option><option value="three">Three Phase</option></select></div>' +
+        '<button class="btn btn-primary w-full mt-4" data-action="save-new-board">Create Board</button>' +
+      '</div>'
+    );
+  }
+
+  function saveNewBoard() {
+    var ref = document.getElementById('new-board-ref');
+    if (!ref || !ref.value.trim()) { toast('Board reference is required', 'error'); return; }
+    var body = {
+      ref: ref.value.trim(),
+      location: (document.getElementById('new-board-location') || {}).value || '',
+      supplied_from: (document.getElementById('new-board-supplied') || {}).value || '',
+      phase: (document.getElementById('new-board-phase') || {}).value || 'single'
+    };
+    api('POST', '/sites/' + state.currentSite.id + '/boards', body).then(function(board) {
+      toast('Board added', 'success');
+      closeSheet();
+      state.boards.push(board);
+      navigate('site-detail', {currentSiteTab: 'boards'});
+    }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  /* ===== BOARD DETAIL VIEW ===== */
+  function renderBoardDetail() {
+    var b = state.currentBoard;
+    if (!b) return '<p>No board selected</p>';
+
+    var html = '<div class="fade-in">' +
+      '<header class="sticky top-0 z-20 bg-white border-b border-slate-100 px-4 py-3">' +
+        '<div class="flex items-center gap-3">' +
+          '<button class="p-2 -ml-2 rounded-lg active:bg-slate-100" data-action="back-to-site">' +
+            '<svg class="w-5 h-5 text-slate-600" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z"/></svg>' +
+          '</button>' +
+          '<div class="flex-1 min-w-0">' +
+            '<h1 class="text-lg font-bold text-slate-800">' + esc(b.ref) + '</h1>' +
+            '<p class="text-xs text-slate-500">' + esc(b.location || '') + '</p>' +
+          '</div>' +
+          '<button class="p-2 rounded-lg active:bg-slate-100" data-action="delete-board" data-id="' + b.id + '">' +
+            '<svg class="w-5 h-5 text-slate-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5z"/></svg>' +
+          '</button>' +
+        '</div>' +
+      '</header>';
+
+    /* Board header info */
+    html += '<div class="p-4 space-y-3">' +
+      '<div class="card p-4">' +
+        '<div class="grid grid-cols-2 gap-3 text-sm">' +
+          '<div><span class="text-slate-500">Supplied From:</span><br><strong>' + esc(b.supplied_from || '-') + '</strong></div>' +
+          '<div><span class="text-slate-500">Phase:</span><br><strong>' + esc(b.phase || '-') + '</strong></div>' +
+          '<div><span class="text-slate-500">OCPD BS(EN):</span><br><strong>' + esc(b.ocpd_bsen || '-') + '</strong></div>' +
+          '<div><span class="text-slate-500">OCPD Rating:</span><br><strong>' + esc(b.ocpd_rating ? b.ocpd_rating + 'A' : '-') + '</strong></div>' +
+          '<div><span class="text-slate-500">Ze (ohms):</span><br><strong>' + esc(b.ze || '-') + '</strong></div>' +
+          '<div><span class="text-slate-500">Ipf (kA):</span><br><strong>' + esc(b.ipf || '-') + '</strong></div>' +
+        '</div>' +
+        '<button class="btn btn-ghost btn-sm mt-3" data-action="edit-board-header">Edit Board Details</button>' +
+      '</div>';
+
+    /* AI Tools */
+    html += '<div class="card p-4">' +
+      '<h3 class="font-semibold text-slate-800 mb-3">AI Tools</h3>' +
+      '<div class="flex gap-2">' +
+        '<button class="btn btn-primary flex-1" data-action="ai-photo-scan">' +
+          '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>' +
+          'Photo Scan</button>' +
+        '<button class="btn btn-primary flex-1" data-action="ai-voice-input">' +
+          '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>' +
+          'Voice Input</button>' +
+      '</div>' +
+    '</div>';
+
+    /* Wiring type legend */
+    html += '<div class="card p-3">' +
+      '<h4 class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Wiring Type Codes</h4>' +
+      '<div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600">' +
+        '<span><strong>A</strong>=T+E</span>' +
+        '<span><strong>B</strong>=T+E conduit(m)</span>' +
+        '<span><strong>C</strong>=T+E conduit(p)</span>' +
+        '<span><strong>D</strong>=T+E trunk(m)</span>' +
+        '<span><strong>E</strong>=T+E trunk(p)</span>' +
+        '<span><strong>F</strong>=SWA</span>' +
+        '<span><strong>G</strong>=SWA thermo</span>' +
+        '<span><strong>H</strong>=MICC</span>' +
+        '<span><strong>O</strong>=Other</span>' +
+      '</div>' +
+    '</div>';
+
+    /* Test schedule table */
+    html += '<div class="card overflow-hidden">' +
+      '<div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">' +
+        '<h3 class="font-semibold text-slate-800">Test Schedule (Form 4)</h3>' +
+        '<button class="btn btn-primary btn-sm" data-action="add-circuit">' +
+          '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+          'Add</button>' +
+      '</div>' +
+      '<div class="scroll-wrapper">' +
+        '<table class="test-table w-full">' +
+          '<thead><tr>' +
+            '<th>#</th><th>Description</th><th>Type</th><th>Ref</th><th>Pts</th>' +
+            '<th>L mm\u00b2</th><th>CPC mm\u00b2</th>' +
+            '<th>BS(EN)</th><th>Curve</th><th>Rating</th><th>kA</th><th>Max Zs</th>' +
+            '<th>RCD BS</th><th>RCD Type</th><th>I\u0394n</th><th>RCD A</th>' +
+            '<th>r1</th><th>rn</th><th>r2</th><th>R1+R2</th><th>R2</th><th>R2 ring</th>' +
+            '<th>Test V</th><th>L-L M\u03a9</th><th>L-E M\u03a9</th>' +
+            '<th>Pol</th>' +
+            '<th>Zs</th>' +
+            '<th>x1 ms</th><th>x5 ms</th><th>Test \u2713</th>' +
+            '<th>AFDD</th>' +
+            '<th>Remarks</th>' +
+          '</tr></thead>' +
+          '<tbody id="circuit-tbody">';
+
+    if (state.circuits.length === 0) {
+      html += '<tr><td colspan="32" class="text-center py-6 text-slate-400">No circuits — add one or use AI scan</td></tr>';
+    } else {
+      state.circuits.forEach(function(c, idx) {
+        var zsClass = '';
+        if (c.zs_measured && c.max_zs) {
+          var measured = parseFloat(c.zs_measured);
+          var maxZs = parseFloat(c.max_zs);
+          if (!isNaN(measured) && !isNaN(maxZs)) {
+            zsClass = measured <= maxZs ? 'zs-pass' : 'zs-fail';
+          }
+        }
+        html += '<tr data-action="edit-circuit" data-idx="' + idx + '">' +
+          '<td class="font-semibold">' + esc(c.number || '') + '</td>' +
+          '<td style="max-width:8rem;overflow:hidden;text-overflow:ellipsis">' + esc(c.description || '') + '</td>' +
+          '<td>' + esc(c.wiring_type || '') + '</td>' +
+          '<td>' + esc(c.ref_method || '') + '</td>' +
+          '<td>' + esc(c.points || '') + '</td>' +
+          '<td>' + esc(c.live_mm || '') + '</td>' +
+          '<td>' + esc(c.cpc_mm || '') + '</td>' +
+          '<td>' + esc(c.ocpd_bsen || '') + '</td>' +
+          '<td>' + esc(c.ocpd_type || '') + '</td>' +
+          '<td>' + esc(c.ocpd_rating || '') + '</td>' +
+          '<td>' + esc(c.breaking_cap || '') + '</td>' +
+          '<td>' + esc(c.max_zs || '') + '</td>' +
+          '<td>' + esc(c.rcd_bsen || '') + '</td>' +
+          '<td>' + esc(c.rcd_type || '') + '</td>' +
+          '<td>' + esc(c.rcd_idn || '') + '</td>' +
+          '<td>' + esc(c.rcd_rating || '') + '</td>' +
+          '<td>' + esc(c.r1 || '') + '</td>' +
+          '<td>' + esc(c.rn || '') + '</td>' +
+          '<td>' + esc(c.r2 || '') + '</td>' +
+          '<td>' + esc(c.r1r2 || '') + '</td>' +
+          '<td>' + esc(c.r2_measured || '') + '</td>' +
+          '<td>' + esc(c.r2_ring || '') + '</td>' +
+          '<td>' + esc(c.ir_test_v || '') + '</td>' +
+          '<td>' + esc(c.ir_ll || '') + '</td>' +
+          '<td>' + esc(c.ir_le || '') + '</td>' +
+          '<td>' + (c.polarity ? '\u2713' : '') + '</td>' +
+          '<td class="' + zsClass + '">' + esc(c.zs_measured || '') + '</td>' +
+          '<td>' + esc(c.rcd_time_x1 || '') + '</td>' +
+          '<td>' + esc(c.rcd_time_x5 || '') + '</td>' +
+          '<td>' + (c.rcd_test_btn ? '\u2713' : '') + '</td>' +
+          '<td>' + (c.afdd_test ? '\u2713' : '') + '</td>' +
+          '<td style="max-width:6rem;overflow:hidden;text-overflow:ellipsis">' + esc(c.remarks || '') + '</td>' +
+        '</tr>';
+      });
+    }
+
+    html += '</tbody></table></div>' +
+      '<div class="p-3 border-t border-slate-100 flex gap-2">' +
+        '<button class="btn btn-primary btn-sm flex-1" data-action="save-circuits">Save All Circuits</button>' +
+      '</div>' +
+    '</div>';
+
+    html += '</div></div>';
+    return html;
+  }
+
+  function loadCircuits(boardId) {
+    api('GET', '/boards/' + boardId + '/circuits').then(function(data) {
+      state.circuits = data;
+      navigate('board-detail');
+    }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  function openEditCircuitSheet(idx) {
+    var c = state.circuits[idx] || {};
+    var isNew = idx === -1;
+    if (isNew) {
+      c = {number: String(state.circuits.length + 1)};
+    }
+
+    var fields = [
+      {id:'ce_number', label:'Circuit #', val:c.number, placeholder:'1, L1/1, TP/1'},
+      {id:'ce_description', label:'Description', val:c.description, placeholder:'Lighting, Ring Main, etc'},
+      {id:'ce_wiring_type', label:'Wiring Type', val:c.wiring_type, options:['','A','B','C','D','E','F','G','H','O']},
+      {id:'ce_ref_method', label:'Ref Method', val:c.ref_method, options:['','A','B','C','100','101','102','103']},
+      {id:'ce_points', label:'Points/Outlets', val:c.points, type:'number'},
+      {id:'ce_live_mm', label:'Live CSA (mm\u00b2)', val:c.live_mm, placeholder:'1.5, 2.5, 4, 6, 10...'},
+      {id:'ce_cpc_mm', label:'CPC CSA (mm\u00b2)', val:c.cpc_mm, placeholder:'1.0, 1.5, 2.5...'},
+      {id:'ce_ocpd_bsen', label:'OCPD BS(EN)', val:c.ocpd_bsen, options:['','60898','61009','88-2','88-3','60947-2','Other']},
+      {id:'ce_ocpd_type', label:'OCPD Type/Curve', val:c.ocpd_type, options:['','B','C','D','gG','aM','Other']},
+      {id:'ce_ocpd_rating', label:'OCPD Rating (A)', val:c.ocpd_rating, type:'number'},
+      {id:'ce_breaking_cap', label:'Breaking Cap (kA)', val:c.breaking_cap},
+      {id:'ce_max_zs', label:'Max Zs (\u03a9)', val:c.max_zs, placeholder:'Auto-lookup'},
+      {id:'ce_rcd_bsen', label:'RCD BS(EN)', val:c.rcd_bsen, options:['','61008','61009','62423','Other','N/A']},
+      {id:'ce_rcd_type', label:'RCD Type', val:c.rcd_type, options:['','AC','A','B','F','S','N/A']},
+      {id:'ce_rcd_idn', label:'RCD I\u0394n (mA)', val:c.rcd_idn, options:['','10','30','100','300','500','N/A']},
+      {id:'ce_rcd_rating', label:'RCD Rating (A)', val:c.rcd_rating, type:'number'},
+      {id:'ce_r1', label:'r1 (\u03a9)', val:c.r1},
+      {id:'ce_rn', label:'rn (\u03a9)', val:c.rn},
+      {id:'ce_r2', label:'r2 (\u03a9)', val:c.r2},
+      {id:'ce_r1r2', label:'R1+R2 (\u03a9)', val:c.r1r2},
+      {id:'ce_r2_measured', label:'R2 (measured \u03a9)', val:c.r2_measured},
+      {id:'ce_r2_ring', label:'R2 ring (\u03a9)', val:c.r2_ring},
+      {id:'ce_ir_test_v', label:'Insulation Test Voltage (V)', val:c.ir_test_v, options:['','250','500','1000']},
+      {id:'ce_ir_ll', label:'Insulation L-L (M\u03a9)', val:c.ir_ll},
+      {id:'ce_ir_le', label:'Insulation L-E (M\u03a9)', val:c.ir_le},
+      {id:'ce_polarity', label:'Polarity Correct', val:c.polarity ? 'yes' : '', options:['','yes','no']},
+      {id:'ce_zs_measured', label:'Zs Measured (\u03a9)', val:c.zs_measured},
+      {id:'ce_rcd_time_x1', label:'RCD x1 Trip (ms)', val:c.rcd_time_x1},
+      {id:'ce_rcd_time_x5', label:'RCD x5 Trip (ms)', val:c.rcd_time_x5},
+      {id:'ce_rcd_test_btn', label:'RCD Test Button', val:c.rcd_test_btn ? 'yes' : '', options:['','yes','no']},
+      {id:'ce_afdd_test', label:'AFDD Test', val:c.afdd_test ? 'yes' : '', options:['','yes','no','N/A']},
+      {id:'ce_remarks', label:'Remarks', val:c.remarks, textarea:true},
+    ];
+
+    var html = '<h3 class="text-lg font-bold text-slate-800 mb-4">' + (isNew ? 'Add Circuit' : 'Edit Circuit ' + esc(c.number || '')) + '</h3>' +
+      '<div class="space-y-3" style="max-height:60vh;overflow-y:auto;padding-bottom:1rem">';
+
+    fields.forEach(function(f) {
+      html += '<div><label class="block text-sm font-medium text-slate-600 mb-1">' + f.label + '</label>';
+      if (f.textarea) {
+        html += '<textarea id="' + f.id + '" class="input-field" rows="2">' + esc(f.val || '') + '</textarea>';
+      } else if (f.options) {
+        html += '<select id="' + f.id + '" class="select-field">' +
+          f.options.map(function(o) {
+            return '<option value="' + esc(o) + '"' + (f.val === o ? ' selected' : '') + '>' + (o || '-- Select --') + '</option>';
+          }).join('') + '</select>';
+      } else {
+        html += '<input type="' + (f.type || 'text') + '" id="' + f.id + '" class="input-field" value="' + esc(f.val || '') + '" placeholder="' + (f.placeholder || f.label) + '">';
+      }
+      html += '</div>';
+    });
+
+    html += '</div>' +
+      '<div class="flex gap-2 mt-4">' +
+        (isNew ? '' : '<button class="btn btn-danger flex-1" data-action="delete-circuit" data-idx="' + idx + '">Delete</button>') +
+        '<button class="btn btn-primary flex-1" data-action="save-circuit" data-idx="' + idx + '">' + (isNew ? 'Add' : 'Save') + '</button>' +
+        '<button class="btn btn-ghost" data-action="lookup-max-zs">Max Zs</button>' +
+      '</div>';
+
+    openSheet(html);
+  }
+
+  function saveCircuitFromSheet(idx) {
+    var fields = [
+      'number','description','wiring_type','ref_method','points','live_mm','cpc_mm',
+      'ocpd_bsen','ocpd_type','ocpd_rating','breaking_cap','max_zs',
+      'rcd_bsen','rcd_type','rcd_idn','rcd_rating',
+      'r1','rn','r2','r1r2','r2_measured','r2_ring',
+      'ir_test_v','ir_ll','ir_le','polarity',
+      'zs_measured','rcd_time_x1','rcd_time_x5','rcd_test_btn','afdd_test','remarks'
+    ];
+    var c = {};
+    fields.forEach(function(f) {
+      var el = document.getElementById('ce_' + f);
+      if (!el) return;
+      var v = el.value;
+      if (f === 'polarity' || f === 'rcd_test_btn' || f === 'afdd_test') {
+        c[f] = v === 'yes';
+      } else {
+        c[f] = v;
+      }
+    });
+
+    if (idx === -1) {
+      state.circuits.push(c);
+    } else {
+      Object.assign(state.circuits[idx], c);
+    }
+    closeSheet();
+    navigate('board-detail');
+    toast('Circuit ' + (idx === -1 ? 'added' : 'updated') + ' (save all to persist)', 'info');
+  }
+
+  function deleteCircuit(idx) {
+    if (idx < 0 || idx >= state.circuits.length) return;
+    var c = state.circuits[idx];
+    state.circuits.splice(idx, 1);
+    closeSheet();
+    navigate('board-detail');
+    toast('Circuit removed (save all to persist)', 'info');
+  }
+
+  function saveAllCircuits() {
+    if (!state.currentBoard) return;
+    var updates = state.circuits.map(function(c) {
+      var obj = {};
+      Object.keys(c).forEach(function(k) {
+        if (k !== 'id' && k !== 'board_id') obj[k] = c[k];
+      });
+      return obj;
+    });
+    api('PUT', '/boards/' + state.currentBoard.id + '/circuits/bulk', updates).then(function(data) {
+      state.circuits = data;
+      toast('All circuits saved', 'success');
+      navigate('board-detail');
+    }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  function lookupMaxZs() {
+    var bsen = document.getElementById('ce_ocpd_bsen');
+    var type = document.getElementById('ce_ocpd_type');
+    var rating = document.getElementById('ce_ocpd_rating');
+    if (!bsen || !type || !rating || !bsen.value || !type.value || !rating.value) {
+      toast('Set BS(EN), Type and Rating first', 'error');
+      return;
+    }
+    api('GET', '/max-zs?bsen=' + encodeURIComponent(bsen.value) + '&type=' + encodeURIComponent(type.value) + '&rating=' + encodeURIComponent(rating.value))
+      .then(function(data) {
+        var maxZsField = document.getElementById('ce_max_zs');
+        if (maxZsField && data.max_zs) {
+          maxZsField.value = data.max_zs;
+          toast('Max Zs: ' + data.max_zs + '\u03a9' + (data.max_zs_80 ? ' (80%: ' + data.max_zs_80 + '\u03a9)' : ''), 'success');
+        } else {
+          toast('Max Zs not found for this combination', 'error');
+        }
+      }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  /* ===== AI PHOTO SCAN ===== */
+  function openPhotoScan() {
+    if (state.aiKeys.length === 0) {
+      toast('Add an AI key in Settings first', 'error');
+      return;
+    }
+    var keyOpts = state.aiKeys.map(function(k) {
+      return '<option value="' + k.id + '">' + esc(k.label) + ' (' + esc(k.provider) + ')</option>';
+    }).join('');
+
+    openSheet(
+      '<h3 class="text-lg font-bold text-slate-800 mb-4">Photo Scan — AI Circuit Extraction</h3>' +
+      '<div class="space-y-3">' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">AI Provider</label>' +
+          '<select id="ai-scan-key" class="select-field">' + keyOpts + '</select></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Board Photo</label>' +
+          '<input type="file" id="ai-scan-file" accept="image/*" capture="environment" class="input-field" style="padding:.5rem">' +
+          '<div id="ai-scan-preview" class="mt-2"></div></div>' +
+        '<button class="btn btn-primary w-full" data-action="run-photo-scan">' +
+          '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>' +
+          'Analyse Photo</button>' +
+        '<div id="ai-scan-result" class="text-sm text-slate-600"></div>' +
+      '</div>'
+    );
+  }
+
+  function runPhotoScan() {
+    var keyEl = document.getElementById('ai-scan-key');
+    var fileEl = document.getElementById('ai-scan-file');
+    var resultEl = document.getElementById('ai-scan-result');
+    if (!keyEl || !fileEl || !fileEl.files || !fileEl.files[0]) {
+      toast('Select a photo first', 'error');
+      return;
+    }
+    resultEl.innerHTML = '<div class="flex items-center gap-2 py-4"><div class="loading-spinner"></div><span>Analysing board photo...</span></div>';
+
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var base64 = e.target.result.split(',')[1];
+      var prompt = 'Analyse this distribution board photo. Extract every visible circuit breaker. ' +
+        'For each, identify: circuit number (including phase e.g. L1/1, L2/3, TP/1 for three-phase), ' +
+        'description if labelled, BS(EN) standard, type/curve letter (B/C/D), rating in amps, ' +
+        'and wiring type if visible. Return ONLY valid JSON: ' +
+        '{"updates": [{"number":"1","description":"Lighting","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","wiring_type":"A"}]}';
+      var systemPrompt = 'You are a BS 7671 electrical testing expert. Extract circuit breaker specs from distribution board photos. Be accurate and thorough. If you cannot read a value, omit that field rather than guessing.';
+
+      api('POST', '/ai/process', {
+        key_id: keyEl.value,
+        prompt: prompt,
+        image_base64: base64,
+        system_prompt: systemPrompt
+      }).then(function(data) {
+        var result = data.result || '';
+        try {
+          var jsonMatch = result.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            var parsed = JSON.parse(jsonMatch[0]);
+            if (parsed.updates && parsed.updates.length > 0) {
+              parsed.updates.forEach(function(u) {
+                var existing = state.circuits.findIndex(function(c) { return c.number === u.number; });
+                if (existing !== -1) {
+                  Object.assign(state.circuits[existing], u);
+                } else {
+                  state.circuits.push(u);
+                }
+              });
+              closeSheet();
+              navigate('board-detail');
+              toast(parsed.updates.length + ' circuits extracted — save to persist', 'success');
+            } else {
+              resultEl.innerHTML = '<p class="text-amber-600">No circuits found in photo. Try a clearer image.</p>';
+            }
+          } else {
+            resultEl.innerHTML = '<p class="text-red-500">Could not parse AI response. Raw: ' + esc(result.substring(0, 200)) + '</p>';
+          }
+        } catch(e) {
+          resultEl.innerHTML = '<p class="text-red-500">Parse error: ' + esc(e.message) + '</p>';
+        }
+      }).catch(function(err) {
+        resultEl.innerHTML = '<p class="text-red-500">AI error: ' + esc(err.message) + '</p>';
+      });
+    };
+    reader.readAsDataURL(fileEl.files[0]);
+  }
+
+  /* ===== AI VOICE INPUT ===== */
+  function openVoiceInput() {
+    if (state.aiKeys.length === 0) {
+      toast('Add an AI key in Settings first', 'error');
+      return;
+    }
+    var keyOpts = state.aiKeys.map(function(k) {
+      return '<option value="' + k.id + '">' + esc(k.label) + ' (' + esc(k.provider) + ')</option>';
+    }).join('');
+
+    var supportsRecognition = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+
+    openSheet(
+      '<h3 class="text-lg font-bold text-slate-800 mb-4">Voice Input — Dictate Test Readings</h3>' +
+      '<div class="space-y-3">' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">AI Provider</label>' +
+          '<select id="ai-voice-key" class="select-field">' + keyOpts + '</select></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Dictation</label>' +
+          (supportsRecognition ?
+            '<button class="btn btn-primary w-full mb-2" data-action="start-dictation">' +
+              '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>' +
+              'Tap to Dictate</button>' : '') +
+          '<textarea id="ai-voice-text" class="input-field" rows="5" placeholder="Speak or type test readings. Example: Circuit 1, lighting, B6, r1 0.45, rn 0.42, r2 0.85, insulation 500 volt test, L-L greater than 200, L-E greater than 200, polarity correct, Zs 0.98, no RCD"></textarea></div>' +
+        '<button class="btn btn-primary w-full" data-action="run-voice-parse">' +
+          '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>' +
+          'Parse Readings</button>' +
+        '<div id="ai-voice-result" class="text-sm text-slate-600"></div>' +
+      '</div>'
+    );
+  }
+
+  function startDictation() {
+    var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) { toast('Speech recognition not supported', 'error'); return; }
+    var recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-GB';
+
+    var textArea = document.getElementById('ai-voice-text');
+    if (!textArea) return;
+
+    recognition.onresult = function(event) {
+      var transcript = '';
+      for (var i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      textArea.value = transcript;
+    };
+    recognition.onerror = function(e) { toast('Speech error: ' + e.error, 'error'); };
+    recognition.onend = function() { toast('Dictation ended', 'info'); };
+    recognition.start();
+    toast('Listening... speak your readings', 'info');
+  }
+
+  function runVoiceParse() {
+    var keyEl = document.getElementById('ai-voice-key');
+    var textEl = document.getElementById('ai-voice-text');
+    var resultEl = document.getElementById('ai-voice-result');
+    if (!keyEl || !textEl || !textEl.value.trim()) {
+      toast('Enter or dictate readings first', 'error');
+      return;
+    }
+    resultEl.innerHTML = '<div class="flex items-center gap-2 py-4"><div class="loading-spinner"></div><span>Parsing readings...</span></div>';
+
+    var prompt = 'Parse these spoken electrical test readings into structured data. Text: "' + textEl.value + '"\n\n' +
+      'Return ONLY valid JSON with this format: {"updates": [{"number":"1","description":"Lighting",' +
+      '"ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","live_mm":"1.5","cpc_mm":"1.0",' +
+      '"r1":"0.45","rn":"0.42","r2":"0.85","r1r2":"1.30","ir_test_v":"500","ir_ll":">200",' +
+      '"ir_le":">200","polarity":true,"zs_measured":"0.98","rcd_time_x1":"18","rcd_time_x5":"12",' +
+      '"remarks":""}]}';
+    var systemPrompt = 'Parse BS 7671 electrical test readings from spoken notes. Map spoken numbers to circuit fields. ' +
+      'Fields: number, description, ocpd_bsen, ocpd_type, ocpd_rating, live_mm, cpc_mm, r1, rn, r2, r1r2, r2_measured, r2_ring, ' +
+      'ir_test_v, ir_ll, ir_le, polarity (boolean), zs_measured, rcd_time_x1, rcd_time_x5, rcd_test_btn (boolean), remarks. ' +
+      'Be precise. Use ">" prefix for infinity insulation readings.';
+
+    api('POST', '/ai/process', {
+      key_id: keyEl.value,
+      prompt: prompt,
+      system_prompt: systemPrompt
+    }).then(function(data) {
+      var result = data.result || '';
+      try {
+        var jsonMatch = result.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          var parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.updates && parsed.updates.length > 0) {
+            parsed.updates.forEach(function(u) {
+              var existing = state.circuits.findIndex(function(c) { return c.number === u.number; });
+              if (existing !== -1) {
+                Object.assign(state.circuits[existing], u);
+              } else {
+                state.circuits.push(u);
+              }
+            });
+            closeSheet();
+            navigate('board-detail');
+            toast(parsed.updates.length + ' circuits parsed — save to persist', 'success');
+          } else {
+            resultEl.innerHTML = '<p class="text-amber-600">No readings parsed. Try rephrasing.</p>';
+          }
+        } else {
+          resultEl.innerHTML = '<p class="text-red-500">Could not parse AI response.</p>';
+        }
+      } catch(e) {
+        resultEl.innerHTML = '<p class="text-red-500">Parse error: ' + esc(e.message) + '</p>';
+      }
+    }).catch(function(err) {
+      resultEl.innerHTML = '<p class="text-red-500">AI error: ' + esc(err.message) + '</p>';
+    });
+  }
+
+  /* ===== INSPECTION TAB ===== */
+  var INSPECTION_ITEMS = [
+    {section:'1.0', title:'External Condition of Intake Equipment'},
+    {ref:'1.1', desc:'Service cable adequacy', reg:'Reg 132.6'},
+    {ref:'1.2', desc:'Service head condition', reg:'Reg 132.6'},
+    {ref:'1.3', desc:'Meter tails adequacy — condition and correct size', reg:'Reg 132.6, 132.12'},
+    {ref:'1.4', desc:'Metering equipment condition', reg:'Reg 132.6'},
+    {ref:'1.5', desc:'Isolator — condition, accessibility, correct operation', reg:'Reg 132.15, 537.1'},
+    {ref:'1.6', desc:'Earthing conductor — condition, connection, correct size', reg:'Reg 542.3'},
+
+    {section:'2.0', title:'Parallel or Switched Alternative Sources of Supply'},
+    {ref:'2.1', desc:'Adequacy of means of isolation/switching', reg:'Reg 537.1, 551.6'},
+    {ref:'2.2', desc:'Condition of equipment and connections', reg:'Reg 551.6, 551.7'},
+
+    {section:'3.0', title:'Methods of Protection Against Electric Shock'},
+    {ref:'3.1.1', desc:'Main protective bonding conductors — correct size (BS 7671 Table 54.8)', reg:'Reg 544.1'},
+    {ref:'3.1.2', desc:'Main protective bonding conductors — presence and condition (water)', reg:'Reg 411.3.1.2'},
+    {ref:'3.1.3', desc:'Main protective bonding conductors — presence and condition (gas)', reg:'Reg 411.3.1.2'},
+    {ref:'3.1.4', desc:'Main protective bonding conductors — presence and condition (oil)', reg:'Reg 411.3.1.2'},
+    {ref:'3.1.5', desc:'Main protective bonding conductors — presence and condition (structural steel)', reg:'Reg 411.3.1.2'},
+    {ref:'3.1.6', desc:'Main protective bonding conductors — presence and condition (lightning protection)', reg:'Reg 411.3.1.2'},
+    {ref:'3.1.7', desc:'Main protective bonding conductors — presence and condition (other extraneous-conductive-parts)', reg:'Reg 411.3.1.2'},
+    {ref:'3.1.8', desc:'Main protective bonding connections are accessible', reg:'Reg 543.3.2'},
+    {ref:'3.2', desc:'Automatic disconnection of supply (ADS) — presence of RCDs for additional protection', reg:'Reg 411.3.3'},
+
+    {section:'4.0', title:'Other Methods of Protection'},
+    {ref:'4.1', desc:'Obstacles — present and effective where required', reg:'Reg 417.2'},
+    {ref:'4.2', desc:'Placing out of reach — adequate where required', reg:'Reg 417.3'},
+    {ref:'4.3', desc:'Non-conducting location — present and effective where required', reg:'Reg 418.1'},
+    {ref:'4.4', desc:'Earth-free local equipotential bonding — present and effective where required', reg:'Reg 418.2'},
+    {ref:'4.5', desc:'Electrical separation — adequate where required', reg:'Reg 418.3'},
+
+    {section:'5.0', title:'Distribution Equipment (Switchgear)'},
+    {ref:'5.1', desc:'Adequacy of access and working space', reg:'Reg 132.12, 513.1'},
+    {ref:'5.2', desc:'Security of fixing', reg:'Reg 134.1.1'},
+    {ref:'5.3', desc:'Condition of enclosure(s) — damage, deterioration', reg:'Reg 416.2, 421.1'},
+    {ref:'5.4', desc:'Suitability for the environment (IP rating)', reg:'Reg 512.2, 522'},
+    {ref:'5.5', desc:'Presence of danger/warning notices and other labelling', reg:'Reg 514'},
+    {ref:'5.6', desc:'Presence of circuit identification/schedule', reg:'Reg 514.9'},
+    {ref:'5.7', desc:'Switchgear adequately rated and suitable for its purpose', reg:'Reg 511.1, 536'},
+    {ref:'5.8', desc:'Condition of conductors/connections/terminations', reg:'Reg 526'},
+    {ref:'5.9', desc:'Adequacy of main earthing conductor size', reg:'Reg 543.1'},
+    {ref:'5.10', desc:'Adequacy of main earthing conductor connections', reg:'Reg 543.2'},
+    {ref:'5.11', desc:'Presence and adequacy of circuit protective conductors', reg:'Reg 543'},
+    {ref:'5.12', desc:'Adequacy of protective bonding conductors for distribution circuits', reg:'Reg 544.1'},
+    {ref:'5.13', desc:'Condition of surge protection device (SPD) if present', reg:'Reg 534'},
+    {ref:'5.14', desc:'Adequacy of SPD if required', reg:'Reg 443'},
+    {ref:'5.15', desc:'RCD quarterly test notice displayed at consumer unit', reg:'Reg 514.12.2'},
+    {ref:'5.16', desc:'Confirmation that all conductors are correctly connected', reg:'Reg 526.3'},
+    {ref:'5.17', desc:'Single-pole switching or protection in line conductors only', reg:'Reg 132.14.1'},
+    {ref:'5.18', desc:'Protection against mechanical damage where cables enter equipment', reg:'Reg 522.8.1'},
+    {ref:'5.19', desc:'Presence of fire barriers, seals and protection where necessary', reg:'Reg 527.1'},
+    {ref:'5.20', desc:'Correct connection of accessories and equipment', reg:'Reg 526.3'},
+    {ref:'5.21', desc:'Enclosures not damaged/deteriorated so as to impair safety', reg:'Reg 421.1, 522'},
+    {ref:'5.22', desc:'Adequacy of arrangements for parallel or switched supplies', reg:'Reg 551.6'},
+    {ref:'5.23', desc:'Adequate arrangements where a generating set operates as a switched alternative to the public supply', reg:'Reg 551.6'},
+
+    {section:'6.0', title:'Distribution Circuits'},
+    {ref:'6.1', desc:'Cables adequately supported throughout', reg:'Reg 522.8'},
+    {ref:'6.2', desc:'Wiring system(s) appropriate for the type and nature of the installation and the environment', reg:'Reg 522'},
+    {ref:'6.3', desc:'Cables adequately protected against mechanical damage', reg:'Reg 522.6, 522.8'},
+    {ref:'6.4', desc:'Cables adequately protected against electromagnetic effects where necessary', reg:'Reg 521.5'},
+    {ref:'6.5', desc:'Suitability of containment systems including cable tray, trunking, and conduit', reg:'Reg 521.4, 522'},
+    {ref:'6.6', desc:'Cables not found to be damaged or deteriorated', reg:'Reg 421.1'},
+    {ref:'6.7', desc:'Cables correctly terminated/connected at each end', reg:'Reg 526'},
+    {ref:'6.8', desc:'No basic insulation of a conductor visible outside of enclosure', reg:'Reg 416.2'},
+    {ref:'6.9', desc:'No single insulated conductors found outside of suitable enclosure', reg:'Reg 521.10'},
+    {ref:'6.10', desc:'Cables correctly selected for current-carrying capacity', reg:'Reg 523, 524'},
+    {ref:'6.11', desc:'Cables correctly selected for voltage drop', reg:'Reg 525'},
+    {ref:'6.12', desc:'Presence and adequacy of supplementary bonding', reg:'Reg 544.2'},
+    {ref:'6.13', desc:'Correct type of overcurrent protective device(s)', reg:'Reg 432, 433'},
+    {ref:'6.14', desc:'Correct rating of overcurrent protective device(s)', reg:'Reg 432, 433'},
+    {ref:'6.15', desc:'Presence of fire barriers, seals and protection where necessary', reg:'Reg 527.1'},
+    {ref:'6.16.1', desc:'Band II circuits separated from Band I circuits where necessary', reg:'Reg 528.1'},
+    {ref:'6.16.2', desc:'Separation from non-electrical services where necessary', reg:'Reg 528.3'},
+
+    {section:'7.0', title:'Final Circuits'},
+    {ref:'7.1', desc:'Cables adequately supported throughout', reg:'Reg 522.8'},
+    {ref:'7.2', desc:'Wiring system(s) appropriate for the type and nature of the installation and environment', reg:'Reg 522'},
+    {ref:'7.3', desc:'Cables not found to be damaged or deteriorated', reg:'Reg 421.1'},
+    {ref:'7.4', desc:'Cables correctly terminated/connected at each end', reg:'Reg 526'},
+    {ref:'7.5', desc:'No basic insulation of a conductor visible outside of enclosure', reg:'Reg 416.2'},
+    {ref:'7.6', desc:'Cables correctly selected for current-carrying capacity', reg:'Reg 523, 524'},
+    {ref:'7.7', desc:'Cables correctly selected for voltage drop', reg:'Reg 525'},
+    {ref:'7.8', desc:'Correct type of overcurrent protective device(s)', reg:'Reg 432, 433'},
+    {ref:'7.9', desc:'Correct rating of overcurrent protective device(s)', reg:'Reg 432, 433'},
+    {ref:'7.10', desc:'Presence and adequacy of supplementary bonding', reg:'Reg 544.2'},
+    {ref:'7.11', desc:'Presence of RCD protection for socket-outlets rated up to 32A', reg:'Reg 411.3.3'},
+    {ref:'7.12', desc:'Presence of RCD additional protection for cables concealed in walls/partitions at a depth less than 50mm', reg:'Reg 522.6.202'},
+    {ref:'7.13', desc:'Adequacy and security of accessories/equipment', reg:'Reg 421.1, 526'},
+    {ref:'7.14', desc:'Correct connection of accessories and equipment', reg:'Reg 526.3'},
+  ];
+
+  function renderInspection() {
+    var html = '<div id="inspection-container">';
+    var currentSection = '';
+
+    INSPECTION_ITEMS.forEach(function(item) {
+      if (item.section) {
+        currentSection = item.section;
+        html += '<div class="section-header">' + item.section + ' — ' + esc(item.title) + '</div>';
+        return;
+      }
+      var existing = state.inspections.find(function(ins) { return ins.item_ref === item.ref; });
+      var outcome = existing ? existing.outcome : '';
+      var outcomeClass = outcome ? 'outcome-' + outcome.toLowerCase().replace('/', '') : '';
+
+      html += '<div class="flex items-start gap-3 px-4 py-3 border-b border-slate-50">' +
+        '<div class="flex-shrink-0 w-10 text-xs font-bold text-slate-500 pt-1">' + item.ref + '</div>' +
+        '<div class="flex-1 min-w-0">' +
+          '<p class="text-sm text-slate-700 leading-snug">' + esc(item.desc) + '</p>' +
+          '<p class="text-xs text-slate-400 mt-0.5">' + esc(item.reg) + '</p>' +
+        '</div>' +
+        '<select class="outcome-select ' + outcomeClass + '" data-action="set-inspection-outcome" data-ref="' + item.ref + '">' +
+          '<option value="">--</option>' +
+          '<option value="Pass"' + (outcome === 'Pass' ? ' selected' : '') + '>Pass</option>' +
+          '<option value="C1"' + (outcome === 'C1' ? ' selected' : '') + '>C1</option>' +
+          '<option value="C2"' + (outcome === 'C2' ? ' selected' : '') + '>C2</option>' +
+          '<option value="C3"' + (outcome === 'C3' ? ' selected' : '') + '>C3</option>' +
+          '<option value="FI"' + (outcome === 'FI' ? ' selected' : '') + '>FI</option>' +
+          '<option value="N/A"' + (outcome === 'N/A' ? ' selected' : '') + '>N/A</option>' +
+          '<option value="LIM"' + (outcome === 'LIM' ? ' selected' : '') + '>LIM</option>' +
+        '</select>' +
+      '</div>';
+    });
+
+    html += '<div class="p-4"><button class="btn btn-primary w-full" data-action="save-inspections">Save Inspection Schedule</button></div>' +
+      '<div class="h-8"></div></div>';
+    return html;
+  }
+
+  function loadInspections() {
+    if (!state.currentSite) return;
+    api('GET', '/sites/' + state.currentSite.id + '/inspections').then(function(data) {
+      state.inspections = data;
+      if (state.currentSiteTab === 'inspection') {
+        navigate('site-detail', {currentSiteTab: 'inspection'});
+      }
+    }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  function saveInspections() {
+    var selects = document.querySelectorAll('[data-action="set-inspection-outcome"]');
+    var items = [];
+    selects.forEach(function(sel) {
+      var ref = sel.getAttribute('data-ref');
+      var val = sel.value;
+      if (ref && val) {
+        items.push({item_ref: ref, outcome: val});
+      }
+    });
+    api('PUT', '/sites/' + state.currentSite.id + '/inspections', items).then(function(data) {
+      state.inspections = data;
+      toast('Inspection schedule saved (' + items.length + ' items)', 'success');
+    }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  /* ===== OBSERVATIONS TAB ===== */
+  function renderObservations() {
+    var html = '<div class="p-4 space-y-3">' +
+      '<button class="btn btn-primary w-full" data-action="new-observation">' +
+        '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+        'Add Observation</button>' +
+      '<div id="observations-container" class="space-y-3">';
+
+    if (state.observations.length === 0) {
+      html += '<div class="text-center py-8 text-slate-400"><p class="font-medium">No observations recorded</p></div>';
+    } else {
+      state.observations.forEach(function(o) {
+        var badgeClass = o.code ? 'badge-' + o.code.toLowerCase() : '';
+        html += '<div class="card p-4">' +
+          '<div class="flex items-start justify-between mb-2">' +
+            '<span class="badge ' + badgeClass + '">' + esc(o.code || '?') + '</span>' +
+            '<button class="p-1 rounded active:bg-slate-100" data-action="delete-observation" data-id="' + o.id + '">' +
+              '<svg class="w-4 h-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5z"/></svg>' +
+            '</button>' +
+          '</div>' +
+          '<p class="text-sm text-slate-700">' + esc(o.description || '') + '</p>' +
+          (o.location ? '<p class="text-xs text-slate-500 mt-1">Location: ' + esc(o.location) + '</p>' : '') +
+          (o.photo_url ? '<img src="' + esc(o.photo_url) + '" class="photo-thumb mt-2" alt="Observation photo">' : '') +
+        '</div>';
+      });
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  function loadObservations() {
+    if (!state.currentSite) return;
+    api('GET', '/sites/' + state.currentSite.id + '/observations').then(function(data) {
+      state.observations = data;
+      if (state.currentSiteTab === 'observations') {
+        navigate('site-detail', {currentSiteTab: 'observations'});
+      }
+    }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  function openNewObservationSheet() {
+    openSheet(
+      '<h3 class="text-lg font-bold text-slate-800 mb-4">New Observation</h3>' +
+      '<div class="space-y-3">' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Classification *</label>' +
+          '<div class="grid grid-cols-4 gap-2">' +
+            '<button class="btn btn-sm border-2 border-red-500 text-red-500 bg-red-50" data-action="select-obs-code" data-code="C1">C1</button>' +
+            '<button class="btn btn-sm border-2 border-amber-500 text-amber-500 bg-amber-50" data-action="select-obs-code" data-code="C2">C2</button>' +
+            '<button class="btn btn-sm border-2 border-blue-500 text-blue-500 bg-blue-50" data-action="select-obs-code" data-code="C3">C3</button>' +
+            '<button class="btn btn-sm border-2 border-purple-500 text-purple-500 bg-purple-50" data-action="select-obs-code" data-code="FI">FI</button>' +
+          '</div>' +
+          '<input type="hidden" id="obs-code" value="">' +
+          '<div id="obs-code-label" class="text-xs text-slate-500 mt-1 min-h-[1rem]"></div>' +
+        '</div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Description *</label>' +
+          '<textarea id="obs-description" class="input-field" rows="3" placeholder="Describe the observation/defect..."></textarea></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Location</label>' +
+          '<input type="text" id="obs-location" class="input-field" placeholder="e.g. Kitchen DB, Way 3"></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Photo (optional)</label>' +
+          '<input type="file" id="obs-photo" accept="image/*" capture="environment" class="input-field" style="padding:.5rem"></div>' +
+        '<button class="btn btn-primary w-full mt-4" data-action="save-observation">Save Observation</button>' +
+      '</div>'
+    );
+  }
+
+  function selectObsCode(code) {
+    var codeEl = document.getElementById('obs-code');
+    var labelEl = document.getElementById('obs-code-label');
+    if (!codeEl) return;
+    codeEl.value = code;
+    var labels = {
+      C1: 'Danger present — risk of injury. Immediate remedial action required.',
+      C2: 'Potentially dangerous — urgent remedial action required.',
+      C3: 'Improvement recommended.',
+      FI: 'Further investigation required without delay.'
+    };
+    if (labelEl) labelEl.textContent = labels[code] || '';
+
+    /* Highlight selected button */
+    var btns = document.querySelectorAll('[data-action="select-obs-code"]');
+    btns.forEach(function(b) {
+      var isSelected = b.getAttribute('data-code') === code;
+      b.style.opacity = isSelected ? '1' : '0.4';
+      b.style.transform = isSelected ? 'scale(1.05)' : 'scale(1)';
+    });
+  }
+
+  function saveObservation() {
+    var code = document.getElementById('obs-code');
+    var desc = document.getElementById('obs-description');
+    if (!code || !code.value || !desc || !desc.value.trim()) {
+      toast('Code and description are required', 'error');
+      return;
+    }
+    var body = {
+      code: code.value,
+      description: desc.value.trim(),
+      location: (document.getElementById('obs-location') || {}).value || ''
+    };
+
+    api('POST', '/sites/' + state.currentSite.id + '/observations', body).then(function(obs) {
+      state.observations.push(obs);
+      closeSheet();
+      toast('Observation recorded', 'success');
+      navigate('site-detail', {currentSiteTab: 'observations'});
+    }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  function deleteObservation(id) {
+    api('DELETE', '/sites/' + state.currentSite.id + '/observations', {id: id}).then(function() {
+      state.observations = state.observations.filter(function(o) { return o.id !== id; });
+      toast('Observation deleted', 'success');
+      navigate('site-detail', {currentSiteTab: 'observations'});
+    }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  /* ===== REPORT TAB ===== */
+  function renderReport() {
+    var s = state.currentSite;
+    var c1 = 0, c2 = 0, c3 = 0, fi = 0, pass = 0;
+    state.inspections.forEach(function(ins) {
+      if (ins.outcome === 'C1') c1++;
+      else if (ins.outcome === 'C2') c2++;
+      else if (ins.outcome === 'C3') c3++;
+      else if (ins.outcome === 'FI') fi++;
+      else if (ins.outcome === 'Pass') pass++;
+    });
+    var total = INSPECTION_ITEMS.filter(function(i) { return i.ref; }).length;
+    var completed = state.inspections.filter(function(i) { return i.outcome; }).length;
+
+    var overallCondition = 'Unsatisfactory';
+    if (c1 === 0 && c2 === 0 && fi === 0) overallCondition = 'Satisfactory';
+
+    return '<div class="p-4 space-y-4">' +
+      '<div class="card p-4">' +
+        '<h3 class="font-semibold text-slate-800 mb-3">Report Summary</h3>' +
+        '<div class="grid grid-cols-2 gap-3 text-sm mb-4">' +
+          '<div class="text-center p-3 bg-slate-50 rounded-lg"><div class="text-2xl font-bold text-slate-800">' + completed + '/' + total + '</div><div class="text-slate-500">Inspected</div></div>' +
+          '<div class="text-center p-3 rounded-lg ' + (overallCondition === 'Satisfactory' ? 'bg-green-50' : 'bg-red-50') + '"><div class="text-lg font-bold ' + (overallCondition === 'Satisfactory' ? 'text-green-600' : 'text-red-600') + '">' + overallCondition + '</div><div class="text-slate-500">Overall</div></div>' +
+        '</div>' +
+        '<div class="flex flex-wrap gap-2">' +
+          '<span class="badge badge-pass">Pass: ' + pass + '</span>' +
+          '<span class="badge badge-c1">C1: ' + c1 + '</span>' +
+          '<span class="badge badge-c2">C2: ' + c2 + '</span>' +
+          '<span class="badge badge-c3">C3: ' + c3 + '</span>' +
+          '<span class="badge badge-fi">FI: ' + fi + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="card p-4">' +
+        '<h3 class="font-semibold text-slate-800 mb-3">Observations Summary</h3>' +
+        '<p class="text-sm text-slate-600">' + state.observations.length + ' observation(s) recorded</p>' +
+        '<div class="flex flex-wrap gap-2 mt-2">' +
+          state.observations.map(function(o) {
+            var bc = o.code ? 'badge-' + o.code.toLowerCase() : '';
+            return '<span class="badge ' + bc + '">' + esc(o.code) + ': ' + esc((o.description || '').substring(0, 30)) + '</span>';
+          }).join('') +
+        '</div>' +
+      '</div>' +
+      '<div class="card p-4">' +
+        '<h3 class="font-semibold text-slate-800 mb-3">Generate Report</h3>' +
+        '<p class="text-sm text-slate-500 mb-3">Generate a full BS 7671 EICR report for this site.</p>' +
+        '<button class="btn btn-primary w-full" data-action="generate-report">Generate EICR Report</button>' +
+        '<div id="report-link" class="mt-3"></div>' +
+      '</div>' +
+      '<div class="h-8"></div>' +
+    '</div>';
+  }
+
+  function generateReport() {
+    var siteId = state.currentSite.id;
+    var link = '/api/sites/' + siteId + '/report';
+    var container = document.getElementById('report-link');
+    if (container) {
+      container.innerHTML = '<a href="' + link + '" target="_blank" class="btn btn-ghost w-full">' +
+        '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>' +
+        'Open Full Report</a>';
+    }
+    toast('Report link ready — tap to view', 'success');
+  }
+
+  /* ===== SETTINGS VIEW ===== */
+  function renderSettings() {
+    var html = '<div class="fade-in">' +
+      '<header class="sticky top-0 z-20 bg-white border-b border-slate-100 px-4 py-3">' +
+        '<h1 class="text-lg font-bold text-slate-800">Settings</h1>' +
+      '</header>' +
+      '<div class="p-4 space-y-4">';
+
+    /* User info */
+    html += '<div class="card p-4">' +
+      '<h3 class="font-semibold text-slate-800 mb-3">Account</h3>' +
+      '<div class="text-sm text-slate-600">' +
+        (state.user ? '<p>Logged in as <strong>' + esc(state.user.name || state.user.username || 'User') + '</strong></p>' : '<p>Not logged in</p>') +
+      '</div>' +
+      '<button class="btn btn-danger btn-sm mt-3" data-action="logout">Sign Out</button>' +
+    '</div>';
+
+    /* AI Keys */
+    html += '<div class="card p-4">' +
+      '<div class="flex items-center justify-between mb-3">' +
+        '<h3 class="font-semibold text-slate-800">AI API Keys</h3>' +
+        '<button class="btn btn-primary btn-sm" data-action="new-ai-key">+ Add Key</button>' +
+      '</div>' +
+      '<div id="ai-keys-list" class="space-y-2">';
+
+    if (state.aiKeys.length === 0) {
+      html += '<p class="text-sm text-slate-400">No AI keys configured. Add one to enable photo scanning and voice parsing.</p>';
+    } else {
+      state.aiKeys.forEach(function(k) {
+        html += '<div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg">' +
+          '<div>' +
+            '<p class="text-sm font-medium text-slate-700">' + esc(k.label) + '</p>' +
+            '<p class="text-xs text-slate-500">' + esc(k.provider) + ' / ' + esc(k.model) + '</p>' +
+          '</div>' +
+          '<button class="p-2 rounded-lg active:bg-slate-200" data-action="delete-ai-key" data-id="' + k.id + '">' +
+            '<svg class="w-4 h-4 text-red-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5z"/></svg>' +
+          '</button>' +
+        '</div>';
+      });
+    }
+
+    html += '</div></div>';
+
+    /* App info */
+    html += '<div class="card p-4">' +
+      '<h3 class="font-semibold text-slate-800 mb-2">About</h3>' +
+      '<p class="text-sm text-slate-600">EICR Field Pro v1.0</p>' +
+      '<p class="text-sm text-slate-500">Expert Energy Group</p>' +
+      '<p class="text-xs text-slate-400 mt-2">BS 7671:2018+A2:2022 compliant inspection tool</p>' +
+    '</div>';
+
+    html += '</div></div>';
+    return html;
+  }
+
+  function loadAiKeys() {
+    api('GET', '/ai-keys').then(function(data) {
+      state.aiKeys = data;
+      var list = document.getElementById('ai-keys-list');
+      if (list) {
+        navigate('settings');
+      }
+    }).catch(function() { /* Ignore if not available */ });
+  }
+
+  function openNewAiKeySheet() {
+    openSheet(
+      '<h3 class="text-lg font-bold text-slate-800 mb-4">Add AI API Key</h3>' +
+      '<div class="space-y-3">' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Label *</label>' +
+          '<input type="text" id="aikey-label" class="input-field" placeholder="e.g. Gemini Flash, Claude Sonnet"></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Provider *</label>' +
+          '<select id="aikey-provider" class="select-field">' +
+            '<option value="gemini">Gemini (Google)</option>' +
+            '<option value="anthropic">Anthropic (Claude)</option>' +
+          '</select></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Model Name *</label>' +
+          '<input type="text" id="aikey-model" class="input-field" placeholder="e.g. gemini-2.0-flash, claude-sonnet-4-20250514"></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">API Key *</label>' +
+          '<input type="password" id="aikey-key" class="input-field" placeholder="Paste your API key"></div>' +
+        '<button class="btn btn-primary w-full mt-4" data-action="save-ai-key">Save Key</button>' +
+      '</div>'
+    );
+  }
+
+  function saveAiKey() {
+    var label = document.getElementById('aikey-label');
+    var provider = document.getElementById('aikey-provider');
+    var model = document.getElementById('aikey-model');
+    var key = document.getElementById('aikey-key');
+    if (!label || !label.value.trim() || !model || !model.value.trim() || !key || !key.value.trim()) {
+      toast('All fields are required', 'error');
+      return;
+    }
+    api('POST', '/ai-keys', {
+      label: label.value.trim(),
+      provider: provider.value,
+      model: model.value.trim(),
+      api_key: key.value.trim()
+    }).then(function(saved) {
+      state.aiKeys.push(saved);
+      closeSheet();
+      toast('AI key saved', 'success');
+      navigate('settings');
+    }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  function deleteAiKey(id) {
+    api('DELETE', '/ai-keys', {id: id}).then(function() {
+      state.aiKeys = state.aiKeys.filter(function(k) { return k.id !== id; });
+      toast('AI key removed', 'success');
+      navigate('settings');
+    }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  /* ===== EDIT BOARD HEADER ===== */
+  function openEditBoardHeaderSheet() {
+    var b = state.currentBoard;
+    openSheet(
+      '<h3 class="text-lg font-bold text-slate-800 mb-4">Edit Board Details</h3>' +
+      '<div class="space-y-3" style="max-height:60vh;overflow-y:auto">' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Board Reference</label>' +
+          '<input type="text" id="bh-ref" class="input-field" value="' + esc(b.ref || '') + '"></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Location</label>' +
+          '<input type="text" id="bh-location" class="input-field" value="' + esc(b.location || '') + '"></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Supplied From</label>' +
+          '<input type="text" id="bh-supplied" class="input-field" value="' + esc(b.supplied_from || '') + '"></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Phase</label>' +
+          '<select id="bh-phase" class="select-field">' +
+            '<option value="single"' + (b.phase === 'single' ? ' selected' : '') + '>Single Phase</option>' +
+            '<option value="three"' + (b.phase === 'three' ? ' selected' : '') + '>Three Phase</option>' +
+          '</select></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">OCPD BS(EN)</label>' +
+          '<input type="text" id="bh-ocpd-bsen" class="input-field" value="' + esc(b.ocpd_bsen || '') + '"></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">OCPD Type/Curve</label>' +
+          '<input type="text" id="bh-ocpd-type" class="input-field" value="' + esc(b.ocpd_type || '') + '"></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">OCPD Rating (A)</label>' +
+          '<input type="number" id="bh-ocpd-rating" class="input-field" value="' + esc(b.ocpd_rating || '') + '"></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Ze (ohms)</label>' +
+          '<input type="text" id="bh-ze" class="input-field" value="' + esc(b.ze || '') + '"></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Ipf (kA)</label>' +
+          '<input type="text" id="bh-ipf" class="input-field" value="' + esc(b.ipf || '') + '"></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Test Instrument (Loop)</label>' +
+          '<input type="text" id="bh-instrument-loop" class="input-field" value="' + esc(b.instrument_loop || '') + '" placeholder="Make, model, serial"></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Test Instrument (Insulation)</label>' +
+          '<input type="text" id="bh-instrument-ir" class="input-field" value="' + esc(b.instrument_ir || '') + '" placeholder="Make, model, serial"></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Test Instrument (RCD)</label>' +
+          '<input type="text" id="bh-instrument-rcd" class="input-field" value="' + esc(b.instrument_rcd || '') + '" placeholder="Make, model, serial"></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Test Instrument (Continuity)</label>' +
+          '<input type="text" id="bh-instrument-cont" class="input-field" value="' + esc(b.instrument_cont || '') + '" placeholder="Make, model, serial"></div>' +
+      '</div>' +
+      '<button class="btn btn-primary w-full mt-4" data-action="save-board-header">Save Board Details</button>'
+    );
+  }
+
+  function saveBoardHeader() {
+    var body = {
+      ref: (document.getElementById('bh-ref') || {}).value || '',
+      location: (document.getElementById('bh-location') || {}).value || '',
+      supplied_from: (document.getElementById('bh-supplied') || {}).value || '',
+      phase: (document.getElementById('bh-phase') || {}).value || 'single',
+      ocpd_bsen: (document.getElementById('bh-ocpd-bsen') || {}).value || '',
+      ocpd_type: (document.getElementById('bh-ocpd-type') || {}).value || '',
+      ocpd_rating: (document.getElementById('bh-ocpd-rating') || {}).value || '',
+      ze: (document.getElementById('bh-ze') || {}).value || '',
+      ipf: (document.getElementById('bh-ipf') || {}).value || '',
+      instrument_loop: (document.getElementById('bh-instrument-loop') || {}).value || '',
+      instrument_ir: (document.getElementById('bh-instrument-ir') || {}).value || '',
+      instrument_rcd: (document.getElementById('bh-instrument-rcd') || {}).value || '',
+      instrument_cont: (document.getElementById('bh-instrument-cont') || {}).value || '',
+    };
+    api('PUT', '/boards/' + state.currentBoard.id, body).then(function(updated) {
+      Object.assign(state.currentBoard, updated);
+      closeSheet();
+      toast('Board details saved', 'success');
+      navigate('board-detail');
+    }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  /* ===== UTILITY ===== */
+  function esc(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  /* ===== EVENT DELEGATION ===== */
+  document.addEventListener('click', function(e) {
+    var target = e.target.closest('[data-action]');
+    if (!target) return;
+    var action = target.getAttribute('data-action');
+
+    switch(action) {
+      case 'do-login':
+        doLogin();
+        break;
+      case 'nav-sites':
+        navigate('sites');
+        break;
+      case 'nav-settings':
+        navigate('settings');
+        break;
+      case 'new-site':
+        openNewSiteSheet();
+        break;
+      case 'save-new-site':
+        saveNewSite();
+        break;
+      case 'open-site':
+        var siteId = target.getAttribute('data-id');
+        var site = state.sites.find(function(s) { return String(s.id) === siteId; });
+        if (site) {
+          state.currentSite = site;
+          state.currentSiteTab = 'info';
+          state.boards = [];
+          state.circuits = [];
+          state.inspections = [];
+          state.observations = [];
+          /* Preload data */
+          api('GET', '/sites/' + site.id + '/boards').then(function(d) { state.boards = d; }).catch(function(){});
+          api('GET', '/sites/' + site.id + '/inspections').then(function(d) { state.inspections = d; }).catch(function(){});
+          api('GET', '/sites/' + site.id + '/observations').then(function(d) { state.observations = d; }).catch(function(){});
+          navigate('site-detail');
+        }
+        break;
+      case 'back-to-sites':
+        navigate('sites');
+        break;
+      case 'back-to-site':
+        navigate('site-detail', {currentSiteTab: 'boards'});
+        break;
+      case 'site-tab':
+        var tab = target.getAttribute('data-tab');
+        state.currentSiteTab = tab;
+        if (tab === 'boards') loadBoards();
+        else if (tab === 'inspection') loadInspections();
+        else if (tab === 'observations') loadObservations();
+        navigate('site-detail');
+        break;
+      case 'save-site-info':
+        saveSiteInfo();
+        break;
+      case 'delete-site':
+        if (confirm('Delete this site and all its data? This cannot be undone.')) {
+          api('DELETE', '/sites/' + state.currentSite.id).then(function() {
+            toast('Site deleted', 'success');
+            navigate('sites');
+          }).catch(function(err) { toast(err.message, 'error'); });
+        }
+        break;
+      case 'new-board':
+        openNewBoardSheet();
+        break;
+      case 'save-new-board':
+        saveNewBoard();
+        break;
+      case 'open-board':
+        var boardId = target.getAttribute('data-id');
+        var board = state.boards.find(function(b) { return String(b.id) === boardId; });
+        if (board) {
+          state.currentBoard = board;
+          state.circuits = [];
+          loadCircuits(board.id);
+        }
+        break;
+      case 'delete-board':
+        var dbId = target.getAttribute('data-id');
+        if (confirm('Delete this board and all its circuits?')) {
+          api('DELETE', '/boards/' + dbId).then(function() {
+            toast('Board deleted', 'success');
+            loadBoards();
+          }).catch(function(err) { toast(err.message, 'error'); });
+        }
+        break;
+      case 'edit-board-header':
+        openEditBoardHeaderSheet();
+        break;
+      case 'save-board-header':
+        saveBoardHeader();
+        break;
+      case 'add-circuit':
+        openEditCircuitSheet(-1);
+        break;
+      case 'edit-circuit':
+        var idx = parseInt(target.getAttribute('data-idx'));
+        if (!isNaN(idx)) openEditCircuitSheet(idx);
+        break;
+      case 'save-circuit':
+        var saveIdx = parseInt(target.getAttribute('data-idx'));
+        saveCircuitFromSheet(saveIdx);
+        break;
+      case 'delete-circuit':
+        var delIdx = parseInt(target.getAttribute('data-idx'));
+        if (confirm('Remove this circuit?')) deleteCircuit(delIdx);
+        break;
+      case 'lookup-max-zs':
+        lookupMaxZs();
+        break;
+      case 'save-circuits':
+        saveAllCircuits();
+        break;
+      case 'ai-photo-scan':
+        loadAiKeys().catch ? openPhotoScan() : (function() {
+          api('GET', '/ai-keys').then(function(d) { state.aiKeys = d; openPhotoScan(); }).catch(function() { openPhotoScan(); });
+        })();
+        break;
+      case 'ai-voice-input':
+        (function() {
+          api('GET', '/ai-keys').then(function(d) { state.aiKeys = d; openVoiceInput(); }).catch(function() { openVoiceInput(); });
+        })();
+        break;
+      case 'run-photo-scan':
+        runPhotoScan();
+        break;
+      case 'run-voice-parse':
+        runVoiceParse();
+        break;
+      case 'start-dictation':
+        startDictation();
+        break;
+      case 'save-inspections':
+        saveInspections();
+        break;
+      case 'set-inspection-outcome':
+        /* Handled by change event */
+        break;
+      case 'new-observation':
+        openNewObservationSheet();
+        break;
+      case 'select-obs-code':
+        selectObsCode(target.getAttribute('data-code'));
+        break;
+      case 'save-observation':
+        saveObservation();
+        break;
+      case 'delete-observation':
+        var obsId = target.getAttribute('data-id');
+        if (confirm('Delete this observation?')) deleteObservation(obsId);
+        break;
+      case 'generate-report':
+        generateReport();
+        break;
+      case 'new-ai-key':
+        openNewAiKeySheet();
+        break;
+      case 'save-ai-key':
+        saveAiKey();
+        break;
+      case 'delete-ai-key':
+        var keyId = target.getAttribute('data-id');
+        if (confirm('Remove this AI key?')) deleteAiKey(keyId);
+        break;
+      case 'logout':
+        state.token = null;
+        state.user = null;
+        localStorage.removeItem('eicr_token');
+        toast('Signed out', 'info');
+        navigate('login');
+        break;
+    }
+  });
+
+  /* Handle change events for inspection outcomes */
+  document.addEventListener('change', function(e) {
+    var target = e.target;
+    if (target.getAttribute && target.getAttribute('data-action') === 'set-inspection-outcome') {
+      var val = target.value;
+      /* Update styling */
+      target.className = 'outcome-select';
+      if (val) {
+        target.classList.add('outcome-' + val.toLowerCase().replace('/', ''));
+      }
+    }
+  });
+
+  /* Handle enter key on login */
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && state.view === 'login') {
+      var loginPass = document.getElementById('login-pass');
+      if (document.activeElement === loginPass || document.activeElement === document.getElementById('login-user')) {
+        doLogin();
+      }
+    }
+  });
+
+  /* Close sheet on overlay tap */
+  document.getElementById('sheet-overlay').addEventListener('click', function() {
+    closeSheet();
+  });
+
+  /* Table row click delegation for circuit editing */
+  document.addEventListener('click', function(e) {
+    var row = e.target.closest('tr[data-action="edit-circuit"]');
+    if (row) {
+      var idx = parseInt(row.getAttribute('data-idx'));
+      if (!isNaN(idx)) openEditCircuitSheet(idx);
+    }
+  });
+
+  /* ===== INIT ===== */
+  function init() {
+    if (state.token) {
+      api('GET', '/auth/me').then(function(user) {
+        state.user = user;
+        navigate('sites');
+      }).catch(function() {
+        state.token = null;
+        localStorage.removeItem('eicr_token');
+        navigate('login');
+      });
+    } else {
+      navigate('login');
+    }
+  }
+
+  init();
+
+})();
+</script>
+</body>
+</html>
