@@ -448,6 +448,18 @@ app.post('/api/sites/:id/boards', authMiddleware, async (req, res) => {
   res.json(rows[0]);
 });
 
+// Apply instruments to all boards in a site
+app.put('/api/sites/:id/boards/instruments', authMiddleware, async (req, res) => {
+  const d = req.body;
+  const instrumentCols = ['instruments_multi', 'instruments_ir', 'instruments_cont', 'instruments_earth', 'instruments_loop', 'instruments_rcd'];
+  const fields = instrumentCols.filter(k => d[k] !== undefined);
+  if (!fields.length) return res.json({ count: 0 });
+  const sets = fields.map((f, i) => `${f} = $${i + 2}`);
+  const vals = fields.map(f => d[f]);
+  const result = await pool.query(`UPDATE boards SET ${sets.join(', ')} WHERE site_id = $1`, [req.params.id, ...vals]);
+  res.json({ count: result.rowCount });
+});
+
 app.put('/api/boards/:id', authMiddleware, async (req, res) => {
   const d = req.body;
   const fields = Object.keys(d).filter(k => k !== 'id' && k !== 'site_id' && k !== 'created_at');

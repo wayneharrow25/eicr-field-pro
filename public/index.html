@@ -2733,16 +2733,22 @@ input,select,textarea { font-size:16px !important; }
           inputWithMic('bh-ze', 'Ze (ohms)', b.ze) + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Ipf (kA)</label>' +
           inputWithMic('bh-ipf', 'Ipf (kA)', b.ipf) + '</div>' +
-        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Test Instrument (Loop)</label>' +
-          inputWithMic('bh-instrument-loop', 'Make, model, serial', b.instrument_loop) + '</div>' +
-        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Test Instrument (Insulation)</label>' +
-          inputWithMic('bh-instrument-ir', 'Make, model, serial', b.instrument_ir) + '</div>' +
-        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Test Instrument (RCD)</label>' +
-          inputWithMic('bh-instrument-rcd', 'Make, model, serial', b.instrument_rcd) + '</div>' +
-        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Test Instrument (Continuity)</label>' +
-          inputWithMic('bh-instrument-cont', 'Make, model, serial', b.instrument_cont) + '</div>' +
+        '<div class="pt-3 border-t border-slate-200 mt-3"><h4 class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Test Instruments</h4></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Multi-functional</label>' +
+          inputWithMic('bh-instruments-multi', 'Make, model, serial', b.instruments_multi) + '</div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Insulation Resistance</label>' +
+          inputWithMic('bh-instruments-ir', 'Make, model, serial', b.instruments_ir) + '</div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Continuity</label>' +
+          inputWithMic('bh-instruments-cont', 'Make, model, serial', b.instruments_cont) + '</div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Earth Electrode Resistance</label>' +
+          inputWithMic('bh-instruments-earth', 'Make, model, serial', b.instruments_earth) + '</div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Earth Fault Loop Impedance</label>' +
+          inputWithMic('bh-instruments-loop', 'Make, model, serial', b.instruments_loop) + '</div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">RCD</label>' +
+          inputWithMic('bh-instruments-rcd', 'Make, model, serial', b.instruments_rcd) + '</div>' +
       '</div>' +
-      '<button class="btn btn-primary w-full mt-4" data-action="save-board-header">Save Board Details</button>'
+      '<button class="btn btn-primary w-full mt-4" data-action="save-board-header">Save Board Details</button>' +
+      '<button class="btn btn-ghost w-full mt-2 text-sm" data-action="apply-instruments-all">Apply instruments to all boards</button>'
     );
   }
 
@@ -2757,15 +2763,39 @@ input,select,textarea { font-size:16px !important; }
       ocpd_rating: (document.getElementById('bh-ocpd-rating') || {}).value || '',
       ze: (document.getElementById('bh-ze') || {}).value || '',
       ipf: (document.getElementById('bh-ipf') || {}).value || '',
-      instrument_loop: (document.getElementById('bh-instrument-loop') || {}).value || '',
-      instrument_ir: (document.getElementById('bh-instrument-ir') || {}).value || '',
-      instrument_rcd: (document.getElementById('bh-instrument-rcd') || {}).value || '',
-      instrument_cont: (document.getElementById('bh-instrument-cont') || {}).value || '',
+      instruments_multi: (document.getElementById('bh-instruments-multi') || {}).value || '',
+      instruments_ir: (document.getElementById('bh-instruments-ir') || {}).value || '',
+      instruments_cont: (document.getElementById('bh-instruments-cont') || {}).value || '',
+      instruments_earth: (document.getElementById('bh-instruments-earth') || {}).value || '',
+      instruments_loop: (document.getElementById('bh-instruments-loop') || {}).value || '',
+      instruments_rcd: (document.getElementById('bh-instruments-rcd') || {}).value || '',
     };
     api('PUT', '/boards/' + state.currentBoard.id, body).then(function(updated) {
       Object.assign(state.currentBoard, updated);
       closeSheet();
       toast('Board details saved', 'success');
+      navigate('board-detail');
+    }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  function applyInstrumentsToAll() {
+    if (!state.currentSite || !state.currentBoard) return;
+    var instruments = {
+      instruments_multi: (document.getElementById('bh-instruments-multi') || {}).value || state.currentBoard.instruments_multi || '',
+      instruments_ir: (document.getElementById('bh-instruments-ir') || {}).value || state.currentBoard.instruments_ir || '',
+      instruments_cont: (document.getElementById('bh-instruments-cont') || {}).value || state.currentBoard.instruments_cont || '',
+      instruments_earth: (document.getElementById('bh-instruments-earth') || {}).value || state.currentBoard.instruments_earth || '',
+      instruments_loop: (document.getElementById('bh-instruments-loop') || {}).value || state.currentBoard.instruments_loop || '',
+      instruments_rcd: (document.getElementById('bh-instruments-rcd') || {}).value || state.currentBoard.instruments_rcd || '',
+    };
+    var hasAny = Object.values(instruments).some(function(v) { return v; });
+    if (!hasAny) {
+      toast('Fill in at least one instrument first', 'error');
+      return;
+    }
+    api('PUT', '/sites/' + state.currentSite.id + '/boards/instruments', instruments).then(function(res) {
+      toast('Instruments applied to ' + (res.count || 'all') + ' boards', 'success');
+      closeSheet();
       navigate('board-detail');
     }).catch(function(err) { toast(err.message, 'error'); });
   }
@@ -3222,6 +3252,9 @@ input,select,textarea { font-size:16px !important; }
         break;
       case 'save-board-header':
         saveBoardHeader();
+        break;
+      case 'apply-instruments-all':
+        applyInstrumentsToAll();
         break;
       case 'add-circuit':
         openEditCircuitSheet(-1);
