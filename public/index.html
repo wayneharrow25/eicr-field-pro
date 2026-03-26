@@ -154,6 +154,8 @@ input,select,textarea { font-size:16px !important; }
     inspections: [],
     observations: [],
     aiKeys: [],
+    testers: [],
+    siteTesters: [],
     loading: false,
     sheetOpen: false
   };
@@ -303,7 +305,7 @@ input,select,textarea { font-size:16px !important; }
       case 'sites': app.innerHTML = renderSites(); loadSites(); break;
       case 'site-detail': app.innerHTML = renderSiteDetail(); break;
       case 'board-detail': app.innerHTML = renderBoardDetail(); break;
-      case 'settings': app.innerHTML = renderSettings(); loadAiKeys(); break;
+      case 'settings': app.innerHTML = renderSettings(); loadAiKeys(); loadTesters(); break;
       default: app.innerHTML = renderLogin();
     }
     closeSheet();
@@ -314,9 +316,7 @@ input,select,textarea { font-size:16px !important; }
     return '<div class="min-h-screen flex items-center justify-center p-4" style="background:linear-gradient(135deg,#1e293b 0%,#334155 100%)">' +
       '<div class="card p-8 w-full max-w-sm">' +
         '<div class="text-center mb-6">' +
-          '<div class="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-3">' +
-            '<svg class="w-8 h-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>' +
-          '</div>' +
+          '<img src="/logo.jpeg" alt="Expert Energy Group" style="max-height:64px;max-width:200px;margin:0 auto 0.5rem;display:block" onerror="this.style.display=\'none\'">' +
           '<h1 class="text-xl font-bold text-slate-800">EICR Field Pro</h1>' +
           '<p class="text-sm text-slate-500 mt-1">Expert Energy Group</p>' +
         '</div>' +
@@ -447,8 +447,8 @@ input,select,textarea { font-size:16px !important; }
   function renderSiteDetail() {
     var s = state.currentSite;
     if (!s) return '<p>No site selected</p>';
-    var tabs = ['info','boards','inspection','observations','report'];
-    var tabLabels = {info:'Info',boards:'Boards',inspection:'Inspection',observations:'Observations',report:'Report'};
+    var tabs = ['info','boards','inspection','observations','testers','report'];
+    var tabLabels = {info:'Info',boards:'Boards',inspection:'Inspection',observations:'Observations',testers:'Testers',report:'Report'};
 
     var html = '<div class="fade-in">' +
       '<header class="sticky top-0 z-20 bg-white border-b border-slate-100 px-4 py-3">' +
@@ -475,6 +475,7 @@ input,select,textarea { font-size:16px !important; }
       case 'boards': html += renderBoardsList(); break;
       case 'inspection': html += renderInspection(); break;
       case 'observations': html += renderObservations(); break;
+      case 'testers': html += renderSiteTesters(); break;
       case 'report': html += renderReport(); break;
     }
     html += '</div>';
@@ -1453,6 +1454,103 @@ input,select,textarea { font-size:16px !important; }
     }).catch(function(err) { toast(err.message, 'error'); });
   }
 
+  /* ===== SITE TESTERS TAB ===== */
+  function renderSiteTesters() {
+    var html = '<div class="p-4 space-y-3">' +
+      '<div class="card p-4">' +
+        '<h3 class="font-semibold text-slate-800 mb-2">Assigned Testers for this Site</h3>' +
+        '<p class="text-xs text-slate-500 mb-3">Assign testers who worked on this site. They appear on the EICR report.</p>' +
+        '<button class="btn btn-primary btn-sm mb-3" data-action="assign-tester">+ Assign Tester</button>' +
+        '<div id="site-testers-list" class="space-y-2">';
+
+    if (state.siteTesters.length === 0) {
+      html += '<p class="text-sm text-slate-400">No testers assigned yet.</p>';
+    } else {
+      state.siteTesters.forEach(function(t) {
+        var qual = t.napit_number || t.niceic_number || t.ecs_number || t.jib_number || t.other_qual || '';
+        html += '<div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg">' +
+          '<div>' +
+            '<p class="text-sm font-medium text-slate-700">' + esc(t.name) + (t.is_qs ? ' <span class="text-xs text-blue-600 font-bold">QS</span>' : '') + '</p>' +
+            '<p class="text-xs text-slate-500">' + esc(t.position || '') + ' — ' + esc(t.role || 'tester') + (qual ? ' — ' + esc(qual) : '') + '</p>' +
+            (t.date_signed ? '<p class="text-xs text-slate-400">Signed: ' + esc(t.date_signed) + '</p>' : '') +
+            (t.signature_data ? '<img src="' + t.signature_data + '" style="max-height:25px;margin-top:2px">' : '') +
+          '</div>' +
+          '<button class="p-2 rounded-lg active:bg-slate-200" data-action="remove-site-tester" data-tester-id="' + t.tester_id + '">' +
+            '<svg class="w-4 h-4 text-red-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5z"/></svg>' +
+          '</button>' +
+        '</div>';
+      });
+    }
+    html += '</div></div></div>';
+    return html;
+  }
+
+  function loadSiteTesters() {
+    if (!state.currentSite) return;
+    api('GET', '/sites/' + state.currentSite.id + '/testers').then(function(data) {
+      state.siteTesters = data || [];
+      if (state.currentSiteTab === 'testers') {
+        navigate('site-detail', {currentSiteTab: 'testers'});
+      }
+    }).catch(function() {});
+  }
+
+  function openAssignTesterSheet() {
+    /* Need to load all testers first */
+    api('GET', '/testers').then(function(testers) {
+      state.testers = testers || [];
+      var assignedIds = state.siteTesters.map(function(st) { return String(st.tester_id); });
+      var available = state.testers.filter(function(t) { return assignedIds.indexOf(String(t.id)) === -1; });
+
+      if (available.length === 0) {
+        toast('All testers already assigned. Add new testers in Settings.', 'info');
+        return;
+      }
+
+      var opts = available.map(function(t) {
+        return '<option value="' + t.id + '">' + esc(t.name) + ' (' + esc(t.position || '') + ')' + (t.is_qs ? ' — QS' : '') + '</option>';
+      }).join('');
+
+      openSheet(
+        '<h3 class="text-lg font-bold text-slate-800 mb-4">Assign Tester to Site</h3>' +
+        '<div class="space-y-3">' +
+          '<div><label class="block text-sm font-medium text-slate-700 mb-1">Tester</label>' +
+            '<select id="assign-tester-id" class="select-field">' + opts + '</select></div>' +
+          '<div><label class="block text-sm font-medium text-slate-700 mb-1">Role on this Report</label>' +
+            '<select id="assign-tester-role" class="select-field">' +
+              '<option value="tester">Inspector/Tester</option>' +
+              '<option value="qs">Qualified Supervisor</option>' +
+            '</select></div>' +
+          '<div><label class="block text-sm font-medium text-slate-700 mb-1">Date Signed</label>' +
+            '<input type="date" id="assign-tester-date" class="input-field"></div>' +
+          '<button class="btn btn-primary w-full mt-4" data-action="save-assign-tester">Assign</button>' +
+        '</div>'
+      );
+    }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  function saveAssignTester() {
+    var testerId = (document.getElementById('assign-tester-id') || {}).value;
+    var role = (document.getElementById('assign-tester-role') || {}).value || 'tester';
+    var dateSigned = (document.getElementById('assign-tester-date') || {}).value || '';
+    if (!testerId) { toast('Select a tester', 'error'); return; }
+
+    api('POST', '/sites/' + state.currentSite.id + '/testers', {
+      tester_id: parseInt(testerId), role: role, date_signed: dateSigned
+    }).then(function() {
+      closeSheet();
+      toast('Tester assigned', 'success');
+      loadSiteTesters();
+    }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  function removeSiteTester(testerId) {
+    api('DELETE', '/sites/' + state.currentSite.id + '/testers/' + testerId).then(function() {
+      toast('Tester removed from site', 'success');
+      loadSiteTesters();
+    }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
   /* ===== REPORT TAB ===== */
   function renderReport() {
     var s = state.currentSite;
@@ -1560,16 +1658,195 @@ input,select,textarea { font-size:16px !important; }
 
     html += '</div></div>';
 
+    /* Testers */
+    html += '<div class="card p-4">' +
+      '<div class="flex items-center justify-between mb-3">' +
+        '<h3 class="font-semibold text-slate-800">Testers / Inspectors</h3>' +
+        '<button class="btn btn-primary btn-sm" data-action="new-tester">+ Add Tester</button>' +
+      '</div>' +
+      '<div id="testers-list" class="space-y-2">' +
+        '<p class="text-sm text-slate-400">Loading...</p>' +
+      '</div>' +
+    '</div>';
+
+    /* Company info */
+    html += '<div class="card p-4">' +
+      '<h3 class="font-semibold text-slate-800 mb-2">Company Details</h3>' +
+      '<div class="text-sm text-slate-600 space-y-1">' +
+        '<p><strong>Expert Energy Group</strong></p>' +
+        '<p class="text-xs text-slate-500">Trading style of UK Sustainability Group Limited</p>' +
+        '<p class="text-xs">Company No: 13349877 — VAT No: 383 7414 76</p>' +
+        '<p class="text-xs">Unit 21, Industrial Estate, Old Church Road, East Hanningfield, Essex, CM3 8AB</p>' +
+        '<p class="text-xs">NAPIT Reg: 64559 — Tel: 08000016724</p>' +
+      '</div>' +
+    '</div>';
+
     /* App info */
     html += '<div class="card p-4">' +
-      '<h3 class="font-semibold text-slate-800 mb-2">About</h3>' +
-      '<p class="text-sm text-slate-600">EICR Field Pro v1.0</p>' +
-      '<p class="text-sm text-slate-500">Expert Energy Group</p>' +
-      '<p class="text-xs text-slate-400 mt-2">BS 7671:2018+A2:2022 compliant inspection tool</p>' +
+      '<div class="flex items-center gap-3 mb-2">' +
+        '<img src="/logo.jpeg" alt="Logo" style="max-height:40px;max-width:120px" onerror="this.style.display=\'none\'">' +
+        '<div>' +
+          '<h3 class="font-semibold text-slate-800">EICR Field Pro v1.0</h3>' +
+          '<p class="text-sm text-slate-500">Expert Energy Group</p>' +
+        '</div>' +
+      '</div>' +
+      '<p class="text-xs text-slate-400">BS 7671:2018+A2:2022 compliant inspection tool</p>' +
     '</div>';
 
     html += '</div></div>';
     return html;
+  }
+
+  function loadTesters() {
+    api('GET', '/testers').then(function(data) {
+      state.testers = data || [];
+      var list = document.getElementById('testers-list');
+      if (!list) return;
+      if (!state.testers.length) {
+        list.innerHTML = '<p class="text-sm text-slate-400">No testers — add one.</p>';
+        return;
+      }
+      list.innerHTML = state.testers.map(function(t) {
+        var qual = t.napit_number || t.niceic_number || t.ecs_number || t.jib_number || t.other_qual || '';
+        return '<div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg">' +
+          '<div class="flex-1 min-w-0" data-action="edit-tester" data-id="' + t.id + '">' +
+            '<p class="text-sm font-medium text-slate-700">' + esc(t.name) + (t.is_qs ? ' <span class="text-xs text-blue-600 font-bold">QS</span>' : '') + '</p>' +
+            '<p class="text-xs text-slate-500">' + esc(t.position || '') + (qual ? ' — ' + esc(qual) : '') + '</p>' +
+            (t.signature_data ? '<img src="' + t.signature_data + '" style="max-height:20px;margin-top:2px">' : '<p class="text-xs text-amber-500">No signature</p>') +
+          '</div>' +
+          '<button class="p-2 rounded-lg active:bg-slate-200" data-action="delete-tester" data-id="' + t.id + '">' +
+            '<svg class="w-4 h-4 text-red-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5z"/></svg>' +
+          '</button>' +
+        '</div>';
+      }).join('');
+    }).catch(function() {});
+  }
+
+  function openNewTesterSheet(existingId) {
+    var t = {};
+    if (existingId) {
+      t = state.testers.find(function(x) { return String(x.id) === String(existingId); }) || {};
+    }
+    var isEdit = !!t.id;
+    openSheet(
+      '<h3 class="text-lg font-bold text-slate-800 mb-4">' + (isEdit ? 'Edit Tester' : 'Add Tester') + '</h3>' +
+      '<div class="space-y-3" style="max-height:60vh;overflow-y:auto">' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Full Name *</label>' +
+          inputWithMic('tester-name', 'e.g. Wayne Harrow', t.name) + '</div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Position</label>' +
+          '<select id="tester-position" class="select-field">' +
+            '<option value="Electrician"' + (t.position === 'Electrician' ? ' selected' : '') + '>Electrician</option>' +
+            '<option value="Qualified Supervisor"' + (t.position === 'Qualified Supervisor' ? ' selected' : '') + '>Qualified Supervisor</option>' +
+            '<option value="Apprentice"' + (t.position === 'Apprentice' ? ' selected' : '') + '>Apprentice</option>' +
+          '</select></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Is Qualified Supervisor?</label>' +
+          '<select id="tester-is-qs" class="select-field">' +
+            '<option value="false"' + (!t.is_qs ? ' selected' : '') + '>No</option>' +
+            '<option value="true"' + (t.is_qs ? ' selected' : '') + '>Yes</option>' +
+          '</select></div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">NAPIT Number</label>' +
+          inputWithMic('tester-napit', 'NAPIT registration', t.napit_number) + '</div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">ECS Card Number</label>' +
+          inputWithMic('tester-ecs', 'ECS/JIB card', t.ecs_number) + '</div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">NICEIC Number</label>' +
+          inputWithMic('tester-niceic', 'NICEIC registration', t.niceic_number) + '</div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">JIB Number</label>' +
+          inputWithMic('tester-jib', 'JIB number', t.jib_number) + '</div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Other Qualification</label>' +
+          inputWithMic('tester-other', 'Other qual / cert number', t.other_qual) + '</div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Signature</label>' +
+          (t.signature_data ? '<img src="' + t.signature_data + '" style="max-height:40px;margin-bottom:4px"><br>' : '') +
+          '<canvas id="sig-canvas" width="300" height="80" style="border:1.5px solid #e2e8f0;border-radius:.5rem;width:100%;touch-action:none;background:#fff"></canvas>' +
+          '<div class="flex gap-2 mt-1"><button class="btn btn-ghost btn-sm" data-action="clear-sig">Clear</button>' +
+          '<input type="file" id="sig-upload" accept="image/*" class="input-field" style="padding:.25rem;font-size:12px"></div></div>' +
+      '</div>' +
+      '<button class="btn btn-primary w-full mt-4" data-action="save-tester" data-id="' + (t.id || '') + '">' + (isEdit ? 'Update' : 'Add') + ' Tester</button>'
+    );
+    /* Init signature canvas */
+    setTimeout(function() { initSigCanvas(); }, 100);
+  }
+
+  var _sigCtx = null;
+  var _sigDrawing = false;
+  function initSigCanvas() {
+    var canvas = document.getElementById('sig-canvas');
+    if (!canvas) return;
+    _sigCtx = canvas.getContext('2d');
+    _sigCtx.lineWidth = 2;
+    _sigCtx.lineCap = 'round';
+    _sigCtx.strokeStyle = '#000';
+
+    function getPos(ev) {
+      var rect = canvas.getBoundingClientRect();
+      var t = ev.touches ? ev.touches[0] : ev;
+      return { x: (t.clientX - rect.left) * (canvas.width / rect.width), y: (t.clientY - rect.top) * (canvas.height / rect.height) };
+    }
+    canvas.addEventListener('mousedown', function(ev) { _sigDrawing = true; var p = getPos(ev); _sigCtx.beginPath(); _sigCtx.moveTo(p.x, p.y); });
+    canvas.addEventListener('mousemove', function(ev) { if (!_sigDrawing) return; var p = getPos(ev); _sigCtx.lineTo(p.x, p.y); _sigCtx.stroke(); });
+    canvas.addEventListener('mouseup', function() { _sigDrawing = false; });
+    canvas.addEventListener('touchstart', function(ev) { ev.preventDefault(); _sigDrawing = true; var p = getPos(ev); _sigCtx.beginPath(); _sigCtx.moveTo(p.x, p.y); }, {passive:false});
+    canvas.addEventListener('touchmove', function(ev) { ev.preventDefault(); if (!_sigDrawing) return; var p = getPos(ev); _sigCtx.lineTo(p.x, p.y); _sigCtx.stroke(); }, {passive:false});
+    canvas.addEventListener('touchend', function() { _sigDrawing = false; });
+
+    /* File upload for existing signature image */
+    var upload = document.getElementById('sig-upload');
+    if (upload) {
+      upload.addEventListener('change', function() {
+        if (!this.files[0]) return;
+        var reader = new FileReader();
+        reader.onload = function(ev) {
+          var img = new Image();
+          img.onload = function() {
+            _sigCtx.clearRect(0, 0, canvas.width, canvas.height);
+            _sigCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          };
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(this.files[0]);
+      });
+    }
+  }
+
+  function clearSigCanvas() {
+    var canvas = document.getElementById('sig-canvas');
+    if (canvas && _sigCtx) _sigCtx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function saveTester(existingId) {
+    var name = document.getElementById('tester-name');
+    if (!name || !name.value.trim()) { toast('Name is required', 'error'); return; }
+
+    var sigData = '';
+    var canvas = document.getElementById('sig-canvas');
+    if (canvas) {
+      /* Check if canvas has anything drawn */
+      var imgData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+      var hasContent = false;
+      for (var i = 3; i < imgData.data.length; i += 4) {
+        if (imgData.data[i] > 0) { hasContent = true; break; }
+      }
+      if (hasContent) sigData = canvas.toDataURL('image/png');
+    }
+
+    var body = {
+      name: name.value.trim(),
+      position: (document.getElementById('tester-position') || {}).value || 'Electrician',
+      is_qs: (document.getElementById('tester-is-qs') || {}).value === 'true',
+      napit_number: (document.getElementById('tester-napit') || {}).value || '',
+      ecs_number: (document.getElementById('tester-ecs') || {}).value || '',
+      niceic_number: (document.getElementById('tester-niceic') || {}).value || '',
+      jib_number: (document.getElementById('tester-jib') || {}).value || '',
+      other_qual: (document.getElementById('tester-other') || {}).value || '',
+    };
+    if (sigData) body.signature_data = sigData;
+
+    var method = existingId ? 'PUT' : 'POST';
+    var url = existingId ? '/testers/' + existingId : '/testers';
+    api(method, url, body).then(function() {
+      closeSheet();
+      toast('Tester ' + (existingId ? 'updated' : 'added'), 'success');
+      loadTesters();
+    }).catch(function(err) { toast(err.message, 'error'); });
   }
 
   function loadAiKeys() {
@@ -2017,6 +2294,7 @@ input,select,textarea { font-size:16px !important; }
         if (tab === 'boards') loadBoards();
         else if (tab === 'inspection') loadInspections();
         else if (tab === 'observations') loadObservations();
+        else if (tab === 'testers') loadSiteTesters();
         navigate('site-detail');
         break;
       case 'save-site-info':
@@ -2126,6 +2404,34 @@ input,select,textarea { font-size:16px !important; }
         break;
       case 'generate-report':
         generateReport();
+        break;
+      case 'new-tester':
+        openNewTesterSheet();
+        break;
+      case 'edit-tester':
+        openNewTesterSheet(target.getAttribute('data-id'));
+        break;
+      case 'delete-tester':
+        var dtId = target.getAttribute('data-id');
+        if (confirm('Delete this tester?')) {
+          api('DELETE', '/testers/' + dtId).then(function() { toast('Tester deleted', 'success'); loadTesters(); }).catch(function(err) { toast(err.message, 'error'); });
+        }
+        break;
+      case 'save-tester':
+        saveTester(target.getAttribute('data-id') || null);
+        break;
+      case 'clear-sig':
+        clearSigCanvas();
+        break;
+      case 'assign-tester':
+        openAssignTesterSheet();
+        break;
+      case 'save-assign-tester':
+        saveAssignTester();
+        break;
+      case 'remove-site-tester':
+        var rtId = target.getAttribute('data-tester-id');
+        if (confirm('Remove this tester from the site?')) removeSiteTester(rtId);
         break;
       case 'new-ai-key':
         openNewAiKeySheet();

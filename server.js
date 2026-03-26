@@ -239,6 +239,29 @@ async function initDB() {
         created_by INT REFERENCES users(id),
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
+
+      CREATE TABLE IF NOT EXISTS testers (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        position TEXT DEFAULT 'Electrician',
+        ecs_number TEXT,
+        napit_number TEXT,
+        niceic_number TEXT,
+        jib_number TEXT,
+        other_qual TEXT,
+        signature_data TEXT,
+        is_qs BOOLEAN DEFAULT false,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS site_testers (
+        id SERIAL PRIMARY KEY,
+        site_id INT REFERENCES sites(id) ON DELETE CASCADE,
+        tester_id INT REFERENCES testers(id) ON DELETE CASCADE,
+        role TEXT DEFAULT 'tester',
+        date_signed TEXT,
+        UNIQUE(site_id, tester_id)
+      );
     `);
 
     // Seed default users if none exist
@@ -249,6 +272,32 @@ async function initDB() {
       await client.query(`INSERT INTO users (username, password_hash, name, role) VALUES ('wayne', $1, 'Wayne Harrow', 'admin')`, [hash1]);
       await client.query(`INSERT INTO users (username, password_hash, name, role) VALUES ('john', $1, 'John Harrow', 'inspector')`, [hash2]);
       console.log('Default users created: wayne/wayne1, john/john1');
+    }
+
+    // Seed company profile if none exists
+    const { rows: compRows } = await client.query('SELECT COUNT(*) FROM company_profile');
+    if (parseInt(compRows[0].count) === 0) {
+      await client.query(`INSERT INTO company_profile (name, address, postcode, tel, registration_body, registration_number) VALUES ($1, $2, $3, $4, $5, $6)`, [
+        'Expert Energy Group',
+        'Unit 21, Industrial Estate, Old Church Road, East Hanningfield, Essex',
+        'CM3 8AB',
+        '08000016724',
+        'NAPIT',
+        '64559'
+      ]);
+      console.log('Company profile seeded');
+    }
+
+    // Seed testers if none exist
+    const { rows: testerRows } = await client.query('SELECT COUNT(*) FROM testers');
+    if (parseInt(testerRows[0].count) === 0) {
+      await client.query(`INSERT INTO testers (name, position, napit_number, is_qs) VALUES ($1, $2, $3, $4)`, [
+        'Wayne Harrow', 'Qualified Supervisor', '64559', true
+      ]);
+      await client.query(`INSERT INTO testers (name, position) VALUES ($1, $2)`, [
+        'John Harrow', 'Electrician'
+      ]);
+      console.log('Default testers seeded: Wayne (QS), John (Electrician)');
     }
   } finally {
     client.release();
@@ -480,10 +529,12 @@ app.delete('/api/observations/:id', authMiddleware, async (req, res) => {
 // Endpoint to list available AI providers (including env var ones)
 app.get('/api/ai/providers', authMiddleware, async (req, res) => {
   const providers = [];
-  // Gemini key works for ALL models — offer both Flash and Pro
+  // Gemini key works for ALL models — offer Flash, Pro and legacy
   if (ENV_KEYS.gemini) {
     providers.push({ id: 'env_gemini_flash', label: 'Gemini 2.5 Flash (fast)', provider: 'gemini', model: 'gemini-2.5-flash' });
     providers.push({ id: 'env_gemini_pro', label: 'Gemini 2.5 Pro (smart)', provider: 'gemini', model: 'gemini-2.5-pro' });
+    providers.push({ id: 'env_gemini_flash_2', label: 'Gemini 2.0 Flash', provider: 'gemini', model: 'gemini-2.0-flash' });
+    providers.push({ id: 'env_gemini_pro_15', label: 'Gemini 1.5 Pro', provider: 'gemini', model: 'gemini-1.5-pro' });
   }
   if (ENV_KEYS.anthropic) providers.push({ id: 'env_anthropic', label: 'Claude Sonnet', provider: 'anthropic', model: DEFAULT_MODELS.anthropic });
   // Also include user's own keys
@@ -501,6 +552,10 @@ app.post('/api/ai/process', authMiddleware, async (req, res) => {
     keyRow = { provider: 'gemini', model: 'gemini-2.5-flash', api_key: ENV_KEYS.gemini };
   } else if (key_id === 'env_gemini_pro' && ENV_KEYS.gemini) {
     keyRow = { provider: 'gemini', model: 'gemini-2.5-pro', api_key: ENV_KEYS.gemini };
+  } else if (key_id === 'env_gemini_flash_2' && ENV_KEYS.gemini) {
+    keyRow = { provider: 'gemini', model: 'gemini-2.0-flash', api_key: ENV_KEYS.gemini };
+  } else if (key_id === 'env_gemini_pro_15' && ENV_KEYS.gemini) {
+    keyRow = { provider: 'gemini', model: 'gemini-1.5-pro', api_key: ENV_KEYS.gemini };
   } else if (key_id === 'env_gemini' && ENV_KEYS.gemini) {
     keyRow = { provider: 'gemini', model: DEFAULT_MODELS.gemini, api_key: ENV_KEYS.gemini };
   } else if (key_id === 'env_anthropic' && ENV_KEYS.anthropic) {
@@ -586,6 +641,63 @@ app.put('/api/company', authMiddleware, async (req, res) => {
   }
   const { rows } = await pool.query('SELECT * FROM company_profile LIMIT 1');
   res.json(rows[0]);
+});
+
+// ---- TESTERS ----
+app.get('/api/testers', authMiddleware, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM testers ORDER BY is_qs DESC, name');
+  res.json(rows);
+});
+
+app.post('/api/testers', authMiddleware, async (req, res) => {
+  const { name, position, ecs_number, napit_number, niceic_number, jib_number, other_qual, signature_data, is_qs } = req.body;
+  const { rows } = await pool.query(
+    `INSERT INTO testers (name, position, ecs_number, napit_number, niceic_number, jib_number, other_qual, signature_data, is_qs)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+    [name, position || 'Electrician', ecs_number, napit_number, niceic_number, jib_number, other_qual, signature_data, is_qs || false]
+  );
+  res.json(rows[0]);
+});
+
+app.put('/api/testers/:id', authMiddleware, async (req, res) => {
+  const d = req.body;
+  const fields = Object.keys(d).filter(k => k !== 'id' && k !== 'created_at');
+  if (!fields.length) return res.status(400).json({ error: 'No fields' });
+  const sets = fields.map((f, i) => `${f} = $${i + 2}`);
+  const vals = fields.map(f => d[f]);
+  await pool.query(`UPDATE testers SET ${sets.join(', ')} WHERE id = $1`, [req.params.id, ...vals]);
+  const { rows } = await pool.query('SELECT * FROM testers WHERE id = $1', [req.params.id]);
+  res.json(rows[0]);
+});
+
+app.delete('/api/testers/:id', authMiddleware, async (req, res) => {
+  await pool.query('DELETE FROM testers WHERE id = $1', [req.params.id]);
+  res.json({ ok: true });
+});
+
+// Site testers — assign testers to a site
+app.get('/api/sites/:id/testers', authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT st.*, t.name, t.position, t.ecs_number, t.napit_number, t.niceic_number, t.jib_number, t.other_qual, t.is_qs, t.signature_data
+     FROM site_testers st JOIN testers t ON st.tester_id = t.id WHERE st.site_id = $1 ORDER BY t.is_qs DESC, t.name`,
+    [req.params.id]
+  );
+  res.json(rows);
+});
+
+app.post('/api/sites/:id/testers', authMiddleware, async (req, res) => {
+  const { tester_id, role, date_signed } = req.body;
+  const { rows } = await pool.query(
+    `INSERT INTO site_testers (site_id, tester_id, role, date_signed) VALUES ($1,$2,$3,$4)
+     ON CONFLICT (site_id, tester_id) DO UPDATE SET role = $3, date_signed = $4 RETURNING *`,
+    [req.params.id, tester_id, role || 'tester', date_signed]
+  );
+  res.json(rows[0]);
+});
+
+app.delete('/api/sites/:id/testers/:testerId', authMiddleware, async (req, res) => {
+  await pool.query('DELETE FROM site_testers WHERE site_id = $1 AND tester_id = $2', [req.params.id, req.params.testerId]);
+  res.json({ ok: true });
 });
 
 // ---- SIGNATURES ----
@@ -744,8 +856,12 @@ app.get('/api/sites/:id/report', authMiddleware, async (req, res) => {
   const { rows: siteBoards } = await pool.query('SELECT * FROM boards WHERE site_id = $1 ORDER BY sort_order, id', [siteId]);
   const { rows: obs } = await pool.query('SELECT * FROM observations WHERE site_id = $1 ORDER BY item_no', [siteId]);
   const { rows: insp } = await pool.query('SELECT * FROM inspections WHERE site_id = $1 ORDER BY item_ref', [siteId]);
+  const { rows: [company] } = await pool.query('SELECT * FROM company_profile LIMIT 1');
+  const { rows: siteTestersRaw } = await pool.query(
+    `SELECT st.*, t.name, t.position, t.ecs_number, t.napit_number, t.niceic_number, t.jib_number, t.other_qual, t.is_qs, t.signature_data
+     FROM site_testers st JOIN testers t ON st.tester_id = t.id WHERE st.site_id = $1 ORDER BY t.is_qs DESC, t.name`, [siteId]
+  );
 
-  // Build circuits per board
   const boardCircuits = {};
   for (const b of siteBoards) {
     const { rows } = await pool.query('SELECT * FROM circuits WHERE board_id = $1 ORDER BY sort_order, id', [b.id]);
@@ -754,132 +870,222 @@ app.get('/api/sites/:id/report', authMiddleware, async (req, res) => {
 
   const e = (s) => (s || '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const hasC1C2FI = obs.some(o => ['C1', 'C2', 'FI'].includes(o.code));
+  const comp = company || {};
+  const qs = siteTestersRaw.find(t => t.is_qs) || {};
+  const testers = siteTestersRaw.filter(t => !t.is_qs);
 
   let html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>EICR - ${e(site.name)}</title>
 <style>
-  @page { size: A4; margin: 15mm; }
-  body { font-family: Arial, sans-serif; font-size: 10px; line-height: 1.4; color: #000; }
-  h1 { font-size: 16px; text-align: center; margin: 0 0 10px; }
-  h2 { font-size: 12px; background: #e8e8e8; padding: 4px 8px; margin: 15px 0 5px; page-break-after: avoid; }
-  table { border-collapse: collapse; width: 100%; margin: 5px 0; }
-  th, td { border: 1px solid #999; padding: 3px 5px; text-align: left; font-size: 9px; }
-  th { background: #f0f0f0; font-weight: bold; }
-  .field-label { font-weight: bold; background: #f8f8f8; width: 30%; }
-  .obs-c1 { background: #fdd; } .obs-c2 { background: #fed; } .obs-fi { background: #def; }
-  .pass { color: green; } .fail { color: red; font-weight: bold; }
+  @page { size: A4; margin: 12mm 15mm; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 9.5px; line-height: 1.35; color: #000; margin: 0; }
+  .report-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #1a365d; padding-bottom: 8px; margin-bottom: 10px; }
+  .report-header img { max-height: 60px; max-width: 180px; }
+  .report-header .company-info { text-align: right; font-size: 8px; line-height: 1.3; }
+  .report-header .company-name { font-size: 12px; font-weight: bold; color: #1a365d; }
+  h1 { font-size: 14px; text-align: center; margin: 8px 0; color: #1a365d; text-transform: uppercase; letter-spacing: 0.5px; }
+  h2 { font-size: 11px; background: #1a365d; color: #fff; padding: 4px 8px; margin: 12px 0 5px; page-break-after: avoid; }
+  h3 { font-size: 10px; margin: 8px 0 3px; color: #1a365d; }
+  table { border-collapse: collapse; width: 100%; margin: 4px 0; }
+  th, td { border: 1px solid #94a3b8; padding: 2px 4px; text-align: left; font-size: 8.5px; }
+  th { background: #e2e8f0; font-weight: bold; color: #1e293b; }
+  .field-label { font-weight: bold; background: #f1f5f9; width: 28%; color: #334155; }
+  .section-title td { background: #1a365d; color: #fff; font-weight: bold; font-size: 9px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .obs-c1 { background: #fecaca; } .obs-c2 { background: #fed7aa; } .obs-c3 { background: #bfdbfe; } .obs-fi { background: #ddd6fe; }
+  .pass { color: #16a34a; } .fail { color: #dc2626; font-weight: bold; }
   .page-break { page-break-before: always; }
-  @media print { .no-print { display: none; } }
+  .sig-block { display: inline-block; width: 48%; vertical-align: top; margin: 8px 0; }
+  .sig-block img { max-height: 40px; }
+  .sig-line { border-top: 1px solid #000; margin-top: 4px; padding-top: 2px; font-size: 8px; }
+  .trading-style { font-size: 7px; color: #666; text-align: center; margin: 4px 0; }
+  @media print { .no-print { display: none; } body { margin: 0; } }
 </style></head><body>
-<div class="no-print" style="text-align:center;padding:10px;background:#3b82f6;color:white;margin-bottom:20px">
-  <button onclick="window.print()" style="padding:10px 30px;font-size:14px;font-weight:bold;cursor:pointer">Print / Save as PDF</button>
+<div class="no-print" style="text-align:center;padding:10px;background:#1a365d;color:white;margin-bottom:15px">
+  <button onclick="window.print()" style="padding:10px 30px;font-size:14px;font-weight:bold;cursor:pointer;border:none;background:#3b82f6;color:#fff;border-radius:8px">Print / Save as PDF</button>
 </div>`;
 
+  // Header with logo and company info
+  html += `<div class="report-header">
+  <div><img src="/logo.jpeg" alt="Logo" onerror="this.style.display='none'"></div>
+  <div class="company-info">
+    <div class="company-name">${e(comp.name || 'Expert Energy Group')}</div>
+    <div>${e(comp.address || '')} ${e(comp.postcode || '')}</div>
+    <div>Tel: ${e(comp.tel || '')}</div>
+    <div>${e(comp.registration_body || 'NAPIT')} Reg: ${e(comp.registration_number || '')}</div>
+  </div>
+</div>
+<p class="trading-style">Expert Energy Group is a trading style of UK Sustainability Group Limited &mdash; Company No: 13349877 &mdash; VAT No: 383 7414 76</p>`;
+
   // Page 1: Report Details
-  html += `<h1>ELECTRICAL INSTALLATION CONDITION REPORT</h1>
-<p style="text-align:center;font-size:9px">Requirements for Electrical Installations - BS 7671:2018+A2:2022</p>
-<p style="text-align:right;font-size:9px">Report Ref: ${e(site.report_ref)}</p>
+  html += `<h1>Electrical Installation Condition Report</h1>
+<p style="text-align:center;font-size:8px;color:#666">In accordance with BS 7671:2018+A2:2022 &mdash; Requirements for Electrical Installations (IET Wiring Regulations)</p>
+<table style="margin-bottom:3px"><tr><td style="text-align:right;border:none;font-size:8px"><strong>Report Ref:</strong> ${e(site.report_ref || '')}</td></tr></table>
+
 <table>
-  <tr><td class="field-label" colspan="2">DETAILS OF THE PERSON ORDERING THE REPORT</td></tr>
+  <tr class="section-title"><td colspan="2">Details of the Person Ordering the Report</td></tr>
   <tr><td class="field-label">Client:</td><td>${e(site.client_name)}</td></tr>
-  <tr><td class="field-label">Address:</td><td>${e(site.client_address)} ${e(site.postcode)}</td></tr>
+  <tr><td class="field-label">Address:</td><td>${e(site.client_address || site.address)} ${e(site.postcode)}</td></tr>
   <tr><td class="field-label">Telephone:</td><td>${e(site.client_tel)}</td></tr>
 </table>
 <table>
-  <tr><td class="field-label" colspan="2">REASON FOR PRODUCING THIS REPORT</td></tr>
+  <tr class="section-title"><td colspan="2">Reason for Producing this Report</td></tr>
   <tr><td class="field-label">Purpose:</td><td>${e(site.purpose)}</td></tr>
 </table>
 <table>
-  <tr><td class="field-label" colspan="2">DETAILS OF THE INSTALLATION</td></tr>
-  <tr><td class="field-label">Installation Address:</td><td>${e(site.address)} ${e(site.postcode)}</td></tr>
-  <tr><td class="field-label">Description:</td><td>${e(site.description)}</td></tr>
-  <tr><td class="field-label">Estimated age of wiring:</td><td>${e(site.wiring_age)} years</td></tr>
-  <tr><td class="field-label">Additions/Alterations:</td><td>${e(site.additions)}${site.additions_age ? ' (' + site.additions_age + ' years)' : ''}</td></tr>
-  <tr><td class="field-label">Date of last inspection:</td><td>${e(site.last_inspection_date)}</td></tr>
-  <tr><td class="field-label">Records available:</td><td>${e(site.records_available)}</td></tr>
+  <tr class="section-title"><td colspan="4">Details of the Installation</td></tr>
+  <tr><td class="field-label">Installation Address:</td><td colspan="3">${e(site.address)} ${e(site.postcode)}</td></tr>
+  <tr><td class="field-label">Description of Premises:</td><td>${e(site.description)}</td><td class="field-label">Estimated age:</td><td>${e(site.wiring_age)}${site.wiring_age ? ' years' : ''}</td></tr>
+  <tr><td class="field-label">Additions/Alterations:</td><td>${e(site.additions)}${site.additions_age ? ' (' + site.additions_age + ' years)' : ''}</td><td class="field-label">Date of last inspection:</td><td>${e(site.last_inspection_date)}</td></tr>
+  <tr><td class="field-label">Records available:</td><td colspan="3">${e(site.records_available)}</td></tr>
 </table>
 <table>
-  <tr><td class="field-label" colspan="2">EXTENT AND LIMITATIONS</td></tr>
-  <tr><td class="field-label">Extent:</td><td>${e(site.extent)}</td></tr>
+  <tr class="section-title"><td colspan="2">Extent and Limitations</td></tr>
+  <tr><td class="field-label">Extent of installation covered:</td><td>${e(site.extent)}</td></tr>
   <tr><td class="field-label">Agreed limitations:</td><td>${e(site.agreed_limitations)}</td></tr>
   <tr><td class="field-label">Operational limitations:</td><td>${e(site.operational_limitations)}</td></tr>
 </table>
 <table>
-  <tr><td class="field-label" colspan="2">SUMMARY</td></tr>
-  <tr><td class="field-label">Overall assessment:</td><td style="font-size:12px;font-weight:bold;color:${hasC1C2FI ? 'red' : 'green'}">${hasC1C2FI ? 'UNSATISFACTORY' : 'SATISFACTORY'}</td></tr>
-  <tr><td class="field-label">Next inspection by:</td><td>${e(site.next_inspection_date)}</td></tr>
+  <tr class="section-title"><td colspan="2">Summary of the Condition of the Installation</td></tr>
+  <tr><td class="field-label">Overall assessment of the installation:</td>
+    <td style="font-size:12px;font-weight:bold;padding:6px;color:${hasC1C2FI ? '#dc2626' : '#16a34a'};background:${hasC1C2FI ? '#fef2f2' : '#f0fdf4'}">${hasC1C2FI ? 'UNSATISFACTORY' : 'SATISFACTORY'}</td></tr>
+  <tr><td class="field-label">Date of next inspection (recommended):</td><td>${e(site.next_inspection_date)}</td></tr>
+  <tr><td class="field-label">General condition of installation:</td><td>${e(site.general_condition)}</td></tr>
 </table>`;
 
-  // Observations page
-  if (obs.length) {
-    html += `<div class="page-break"></div><h2>OBSERVATIONS AND RECOMMENDATIONS</h2>
-    <table><thead><tr><th>#</th><th>Observation</th><th>Location</th><th>Code</th></tr></thead><tbody>`;
-    obs.forEach(o => {
-      const cls = o.code === 'C1' ? 'obs-c1' : o.code === 'C2' ? 'obs-c2' : o.code === 'FI' ? 'obs-fi' : '';
-      html += `<tr class="${cls}"><td>${o.item_no}</td><td>${e(o.description)}</td><td>${e(o.location)}</td><td><strong>${e(o.code)}</strong></td></tr>`;
-    });
-    html += `</tbody></table>`;
+  // Contractor & personnel
+  html += `<table>
+  <tr class="section-title"><td colspan="4">Details of the Contractor</td></tr>
+  <tr><td class="field-label">Trading title:</td><td>${e(comp.name || 'Expert Energy Group')}</td><td class="field-label">Reg body:</td><td>${e(comp.registration_body || 'NAPIT')}</td></tr>
+  <tr><td class="field-label">Address:</td><td>${e(comp.address || '')} ${e(comp.postcode || '')}</td><td class="field-label">Reg no:</td><td>${e(comp.registration_number || '')}</td></tr>
+  <tr><td class="field-label">Telephone:</td><td colspan="3">${e(comp.tel || '')}</td></tr>
+</table>`;
+
+  // Testers / QS section
+  html += `<table>
+  <tr class="section-title"><td colspan="4">Declaration &mdash; Inspection, Testing and Reporting</td></tr>`;
+  if (qs.name) {
+    html += `<tr><td class="field-label">Qualified Supervisor:</td><td>${e(qs.name)}</td><td class="field-label">Position:</td><td>${e(qs.position || 'Qualified Supervisor')}</td></tr>`;
+    const qNum = qs.napit_number || qs.niceic_number || qs.ecs_number || qs.jib_number || qs.other_qual || '';
+    if (qNum) html += `<tr><td class="field-label">Qualification No:</td><td colspan="3">${e(qNum)}</td></tr>`;
+    if (qs.signature_data) html += `<tr><td class="field-label">Signature:</td><td><img src="${qs.signature_data}" style="max-height:35px"></td><td class="field-label">Date:</td><td>${e(qs.date_signed || '')}</td></tr>`;
   }
+  testers.forEach(t => {
+    html += `<tr><td class="field-label">Inspector/Tester:</td><td>${e(t.name)}</td><td class="field-label">Position:</td><td>${e(t.position || 'Electrician')}</td></tr>`;
+    const tNum = t.napit_number || t.niceic_number || t.ecs_number || t.jib_number || t.other_qual || '';
+    if (tNum) html += `<tr><td class="field-label">Qualification No:</td><td colspan="3">${e(tNum)}</td></tr>`;
+    if (t.signature_data) html += `<tr><td class="field-label">Signature:</td><td><img src="${t.signature_data}" style="max-height:35px"></td><td class="field-label">Date:</td><td>${e(t.date_signed || '')}</td></tr>`;
+  });
+  html += `</table>`;
 
   // Supply Characteristics
-  html += `<div class="page-break"></div><h2>SUPPLY CHARACTERISTICS AND EARTHING ARRANGEMENTS</h2>
+  html += `<div class="page-break"></div>
+  <div class="report-header">
+    <div><img src="/logo.jpeg" alt="" onerror="this.style.display='none'"></div>
+    <div class="company-info"><div class="company-name">${e(comp.name || 'Expert Energy Group')}</div></div>
+  </div>
+  <h2>Supply Characteristics and Earthing Arrangements</h2>
   <table>
-    <tr><td class="field-label">Earthing:</td><td>${e(site.earthing_type)}</td><td class="field-label">Phases:</td><td>${e(site.num_phases)}</td></tr>
-    <tr><td class="field-label">Nominal Voltage:</td><td>${e(site.nominal_voltage)}V</td><td class="field-label">Frequency:</td><td>${e(site.nominal_frequency)}Hz</td></tr>
-    <tr><td class="field-label">Ipf at origin:</td><td>${e(site.ipf_at_origin)} kA</td><td class="field-label">Ze:</td><td>${e(site.ze_at_origin)} &Omega;</td></tr>
-    <tr><td class="field-label">Supply device BS(EN):</td><td>${e(site.supply_device_bsen)}</td><td class="field-label">Rating:</td><td>${e(site.supply_device_rating)}A</td></tr>
+    <tr><td class="field-label">System type / earthing:</td><td>${e(site.earthing_type)}</td><td class="field-label">No. of phases:</td><td>${e(site.num_phases)}</td></tr>
+    <tr><td class="field-label">Nominal voltage (L-N):</td><td>${e(site.nominal_voltage)}V</td><td class="field-label">Frequency:</td><td>${e(site.nominal_frequency)}Hz</td></tr>
+    <tr><td class="field-label">Prospective fault current (Ipf):</td><td>${e(site.ipf_at_origin)} kA</td><td class="field-label">External loop impedance (Ze):</td><td>${e(site.ze_at_origin)} &Omega;</td></tr>
+    <tr><td class="field-label">Supply protective device BS(EN):</td><td>${e(site.supply_device_bsen)}</td><td class="field-label">Type:</td><td>${e(site.supply_device_type)}</td></tr>
+    <tr><td class="field-label">Rating:</td><td>${e(site.supply_device_rating)}A</td><td class="field-label">Means of earthing:</td><td>${e(site.means_of_earthing)}</td></tr>
+  </table>
+  <h3>Main Protective Bonding</h3>
+  <table>
+    <tr><th>Service</th><th>Water</th><th>Gas</th><th>Oil</th><th>Lightning</th><th>Structural Steel</th><th>Other</th></tr>
+    <tr><td>Size (mm&sup2;)</td><td>${e(site.bonding_water)}</td><td>${e(site.bonding_gas)}</td><td>${e(site.bonding_oil)}</td><td>${e(site.bonding_lightning)}</td><td>${e(site.bonding_steel)}</td><td>${e(site.bonding_other)}</td></tr>
+  </table>`;
+
+  // Observations
+  html += `<div class="page-break"></div>
+  <div class="report-header">
+    <div><img src="/logo.jpeg" alt="" onerror="this.style.display='none'"></div>
+    <div class="company-info"><div class="company-name">${e(comp.name || 'Expert Energy Group')}</div></div>
+  </div>
+  <h2>Observations and Recommendations</h2>`;
+  if (obs.length) {
+    html += `<table><thead><tr><th style="width:30px">#</th><th>Observation / Recommendation</th><th>Location</th><th style="width:40px">Code</th></tr></thead><tbody>`;
+    obs.forEach((o, i) => {
+      const cls = o.code === 'C1' ? 'obs-c1' : o.code === 'C2' ? 'obs-c2' : o.code === 'C3' ? 'obs-c3' : o.code === 'FI' ? 'obs-fi' : '';
+      html += `<tr class="${cls}"><td>${i + 1}</td><td>${e(o.description)}</td><td>${e(o.location)}</td><td><strong>${e(o.code)}</strong></td></tr>`;
+    });
+    html += `</tbody></table>`;
+  } else {
+    html += `<p style="color:#666;font-style:italic">No observations recorded.</p>`;
+  }
+  html += `<table style="margin-top:10px">
+    <tr><th>Code</th><th>Classification</th></tr>
+    <tr class="obs-c1"><td><strong>C1</strong></td><td>Danger present — risk of injury. Immediate remedial action required.</td></tr>
+    <tr class="obs-c2"><td><strong>C2</strong></td><td>Potentially dangerous — urgent remedial action required.</td></tr>
+    <tr class="obs-c3"><td><strong>C3</strong></td><td>Improvement recommended.</td></tr>
+    <tr class="obs-fi"><td><strong>FI</strong></td><td>Further investigation required without delay.</td></tr>
   </table>`;
 
   // Inspection Schedule
   if (insp.length) {
-    html += `<div class="page-break"></div><h2>SCHEDULE OF INSPECTIONS</h2>
-    <table><thead><tr><th>Item</th><th>Description</th><th>Outcome</th></tr></thead><tbody>`;
-    // We'll add a helper to get inspection outcome
+    html += `<div class="page-break"></div>
+    <div class="report-header">
+      <div><img src="/logo.jpeg" alt="" onerror="this.style.display='none'"></div>
+      <div class="company-info"><div class="company-name">${e(comp.name || 'Expert Energy Group')}</div></div>
+    </div>
+    <h2>Schedule of Inspections</h2>
+    <table><thead><tr><th style="width:40px">Ref</th><th>Inspection Item</th><th style="width:50px">Outcome</th></tr></thead><tbody>`;
     const inspMap = {};
     insp.forEach(i => { inspMap[i.item_ref] = i.outcome; });
-    // The full inspection items would be rendered from the INSPECTION_ITEMS constant
     insp.forEach(i => {
-      html += `<tr><td>${e(i.item_ref)}</td><td></td><td>${e(i.outcome)}</td></tr>`;
+      const oClass = i.outcome === 'Pass' ? 'pass' : ['C1','C2','FI'].includes(i.outcome) ? 'fail' : '';
+      html += `<tr><td>${e(i.item_ref)}</td><td></td><td class="${oClass}"><strong>${e(i.outcome)}</strong></td></tr>`;
     });
     html += `</tbody></table>`;
   }
 
-  // Per-board test results
+  // Per-board test results (Form 4)
   for (const b of siteBoards) {
     const ccts = boardCircuits[b.id] || [];
     html += `<div class="page-break"></div>
-    <h2>DB: ${e(b.ref)} — ${e(b.location)}</h2>
+    <div class="report-header">
+      <div><img src="/logo.jpeg" alt="" onerror="this.style.display='none'"></div>
+      <div class="company-info"><div class="company-name">${e(comp.name || 'Expert Energy Group')}</div></div>
+    </div>
+    <h2>Schedule of Circuit Details and Test Results &mdash; ${e(b.ref)}</h2>
     <table>
-      <tr><td class="field-label">Supplied from:</td><td>${e(b.supplied_from)}</td><td class="field-label">Ze at DB:</td><td>${e(b.ze)}&Omega;</td></tr>
-      <tr><td class="field-label">OCPD BS(EN):</td><td>${e(b.dist_bsen)}</td><td class="field-label">Ipf at DB:</td><td>${e(b.ipf)} kA</td></tr>
+      <tr><td class="field-label">DB Designation:</td><td>${e(b.ref)}</td><td class="field-label">Location:</td><td>${e(b.location)}</td></tr>
+      <tr><td class="field-label">Supplied from:</td><td>${e(b.supplied_from)}</td><td class="field-label">Phase:</td><td>${e(b.num_phases || 'Single')}</td></tr>
+      <tr><td class="field-label">OCPD BS(EN):</td><td>${e(b.dist_bsen)}</td><td class="field-label">Rating:</td><td>${e(b.dist_rating)}A</td></tr>
+      <tr><td class="field-label">Ze at DB (&Omega;):</td><td>${e(b.ze)}</td><td class="field-label">Ipf at DB (kA):</td><td>${e(b.ipf)}</td></tr>
     </table>`;
 
     if (ccts.length) {
-      html += `<table><thead><tr>
-        <th>#</th><th>Description</th><th>Type</th><th>BS(EN)</th><th>Curve</th><th>In(A)</th>
-        <th>Live</th><th>CPC</th><th>R1+R2</th><th>R2</th><th>IR L-L</th><th>IR L-E</th>
-        <th>Pol</th><th>Zs</th><th>Max Zs</th><th>RCD x1</th><th>RCD x5</th><th>Remarks</th>
+      html += `<table style="font-size:7.5px"><thead><tr>
+        <th>Cct</th><th>Description</th><th>Type</th><th>Ref</th>
+        <th>BS(EN)</th><th>Type</th><th>In(A)</th><th>Max Zs</th>
+        <th>Live</th><th>CPC</th><th>R1+R2</th><th>R2</th>
+        <th>IR(V)</th><th>L-L</th><th>L-E</th><th>Pol</th>
+        <th>Zs</th><th>RCDx1</th><th>RCDx5</th><th>Remarks</th>
       </tr></thead><tbody>`;
       ccts.forEach(c => {
         const zsNum = parseFloat(c.zs_measured);
         const maxNum = parseFloat(c.max_zs);
         const zsFail = zsNum && maxNum && zsNum > maxNum * 0.8;
         html += `<tr>
-          <td>${e(c.number)}</td><td>${e(c.description)}</td><td>${e(c.wiring_type)}</td>
-          <td>${e(c.ocpd_bsen)}</td><td>${e(c.ocpd_type)}</td><td>${e(c.ocpd_rating)}</td>
+          <td>${e(c.number)}</td><td>${e(c.description)}</td><td>${e(c.wiring_type)}</td><td>${e(c.ref_method)}</td>
+          <td>${e(c.ocpd_bsen)}</td><td>${e(c.ocpd_type)}</td><td>${e(c.ocpd_rating)}</td><td>${e(c.max_zs)}</td>
           <td>${e(c.live_mm)}</td><td>${e(c.cpc_mm)}</td>
           <td>${e(c.r1r2)}</td><td>${e(c.r2_ring)}</td>
-          <td>${e(c.ir_ll)}</td><td>${e(c.ir_le)}</td>
-          <td>${e(c.polarity)}</td>
+          <td>${e(c.test_voltage)}</td><td>${e(c.ir_ll)}</td><td>${e(c.ir_le)}</td>
+          <td>${c.polarity === 'true' || c.polarity === true ? '&#10003;' : e(c.polarity)}</td>
           <td class="${zsFail ? 'fail' : 'pass'}">${e(c.zs_measured)}</td>
-          <td>${e(c.max_zs)}</td>
           <td>${e(c.rcd_time_x1)}</td><td>${e(c.rcd_time_x5)}</td>
           <td>${e(c.remarks)}</td>
         </tr>`;
       });
       html += `</tbody></table>`;
+    } else {
+      html += `<p style="color:#666;font-style:italic">No circuits recorded for this board.</p>`;
     }
   }
 
+  html += `<p class="trading-style" style="margin-top:15px">Expert Energy Group is a trading style of UK Sustainability Group Limited &mdash; Company No: 13349877 &mdash; VAT No: 383 7414 76<br>Produced using EICR Field Pro</p>`;
   html += `</body></html>`;
   res.setHeader('Content-Type', 'text/html');
   res.send(html);
