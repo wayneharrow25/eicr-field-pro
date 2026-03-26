@@ -1750,185 +1750,37 @@ input,select,textarea { font-size:16px !important; }
     }
     resultEl.innerHTML = '<div class="flex items-center gap-2 py-4"><div class="loading-spinner"></div><span>AI processing...</span></div>';
 
-    /* Build full context — circuits, board header, inspections, observations, site info */
-    var existingInfo = '';
-
-    /* Board header */
-    if (state.currentBoard) {
-      var b = state.currentBoard;
-      existingInfo += '\n\nCURRENT BOARD: ' + (b.ref || '') + ' at ' + (b.location || '');
-      existingInfo += '\nSupplied from: ' + (b.supplied_from || 'N/A') + ' | Phases: ' + (b.num_phases || '1');
-      existingInfo += '\nZe: ' + (b.ze || '-') + ' | Ipf: ' + (b.ipf || '-');
-      existingInfo += '\nDist type: ' + (b.dist_type || '-') + ' | OCPD: ' + (b.ocpd_type || '-') + ' ' + (b.ocpd_rating || '-') + 'A';
-      existingInfo += '\nInstruments — Multi: ' + (b.instruments_multi || '-') + ' | IR: ' + (b.instruments_ir || '-') +
-        ' | Cont: ' + (b.instruments_cont || '-') + ' | Loop: ' + (b.instruments_loop || '-') +
-        ' | RCD: ' + (b.instruments_rcd || '-') + ' | Earth: ' + (b.instruments_earth || '-');
-    }
-
-    /* Circuits */
-    if (state.circuits.length > 0) {
-      existingInfo += '\n\nCURRENT CIRCUITS (' + state.circuits.length + '):\n' + state.circuits.map(function(c) {
-        var parts = ['#' + (c.number || '?') + ' ' + (c.description || 'Unknown')];
-        if (c.ocpd_type || c.ocpd_rating) parts.push((c.ocpd_type || '') + (c.ocpd_rating || '') + 'A');
-        if (c.ocpd_bsen) parts.push('BS(EN) ' + c.ocpd_bsen);
-        if (c.zs_measured) parts.push('Zs=' + c.zs_measured);
-        if (c.ir_ll || c.ir_le) parts.push('IR=' + (c.ir_ll || '-') + '/' + (c.ir_le || '-'));
-        return parts.join(' | ');
-      }).join('\n');
-    }
-
-    /* Observations */
-    if (state.observations && state.observations.length > 0) {
-      existingInfo += '\n\nOBSERVATIONS:\n' + state.observations.map(function(o) {
-        return o.code + ': ' + (o.description || '') + (o.location ? ' [' + o.location + ']' : '');
-      }).join('\n');
-    }
-
-    /* Inspection outcomes already set */
-    if (state.inspections && state.inspections.length > 0) {
-      existingInfo += '\n\nINSPECTION OUTCOMES SET:\n' + state.inspections.map(function(i) {
-        return i.item_ref + '=' + i.outcome;
-      }).join(', ');
-    }
-
-    /* Site info */
-    if (state.currentSite) {
-      var s = state.currentSite;
-      existingInfo += '\n\nSITE: ' + (s.name || '') + ' | ' + (s.address || '');
-    }
-
-    var systemPrompt = 'You are an expert AI assistant for a BS 7671:2018+A2:2022 EICR (Electrical Installation Condition Report) app. ' +
-      'You have FULL control of the app. You can modify circuits, board header, inspection schedule, and add observations. ' +
-      'You must understand natural speech and return structured JSON actions.\n\n' +
-      'SUPPORTED ACTIONS (include only keys that apply):\n' +
-      '1. "updates" — Add or amend circuit data [{number, ...fields}]\n' +
-      '2. "delete" — Remove circuits by number ["15","16"]\n' +
-      '3. "renumber" — true to renumber circuits after deletion\n' +
-      '4. "board_updates" — Update board header {ze, ipf, dist_type, dist_bsen, dist_rating, ocpd_bsen, ocpd_type, ocpd_rating, ' +
-        'instruments_multi, instruments_ir, instruments_cont, instruments_earth, instruments_loop, instruments_rcd, supplied_from, location}\n' +
-      '5. "inspection_updates" — Set inspection schedule outcomes [{item_ref:"7.1", outcome:"C2"}]\n' +
-      '   Outcomes: "Sat" (satisfactory), "C1" (danger), "C2" (potentially dangerous), "C3" (improvement), "FI" (further investigation), "N/A", "LIM"\n' +
-      '6. "observations" — Add observations [{code:"C2", description:"...", location:"..."}]\n' +
-      '7. "message" — Text response to questions\n\n' +
-      'CIRCUIT FIELDS: number, description, ocpd_bsen (60898=MCB, 61009=RCBO, 61008=RCD, 60947-2=MCCB, 88-2=HRC fuse), ' +
-      'ocpd_type (B/C/D), ocpd_rating, live_mm, cpc_mm, wiring_type (A=T+E, B=conduit metal, C=conduit plastic, F=SWA, H=MICC), ref_method, ' +
-      'r1, rn, r2, r1r2, r2_measured, r2_ring, ir_test_v (250/500/1000), ir_ll, ir_le, ' +
-      'polarity (boolean), zs_measured, max_zs, rcd_bsen, rcd_type, rcd_idn, ' +
-      'rcd_time_x1, rcd_time_x5, rcd_test_btn (boolean), remarks.\n\n' +
-      'INSPECTION SCHEDULE ITEMS (for reference):\n' +
-      INSPECTION_ITEMS.filter(function(i) { return i.ref; }).map(function(i) { return i.ref + ': ' + i.desc; }).join('\n') + '\n\n' +
-      'RULES:\n' +
-      '- "greater than 200" or "infinity" for insulation = ">200"\n' +
-      '- Only include fields the user actually mentioned\n' +
-      '- "Ze" or "ze" refers to the board_updates.ze field (earth fault loop impedance at origin)\n' +
-      '- "Ipf" refers to board_updates.ipf (prospective fault current)\n' +
-      '- If user says "set Ze to 0.35" → {"board_updates": {"ze": "0.35"}}\n' +
-      '- If user says "5.6 pass" → {"inspection_updates": [{"item_ref":"5.6","outcome":"Sat"}]}\n' +
-      '- If user says "cable loose in kitchen" → both observation AND inspection update\n\n' +
-      'RETURN FORMAT (always valid JSON):\n' +
-      '{"updates":[...], "delete":[...], "renumber":true, "board_updates":{...}, "inspection_updates":[...], "observations":[...], "message":"..."}\n' +
-      'Include only the keys that apply.';
-
-    var prompt = 'User instruction: "' + textEl.value + '"' + existingInfo + '\n\nReturn ONLY valid JSON.';
-
-    api('POST', '/ai/process', {
-      key_id: keyEl.value,
-      prompt: prompt,
-      system_prompt: systemPrompt
-    }).then(function(data) {
-      var result = data.result || '';
+    /* Use unified AI brain */
+    var userText = textEl.value;
+    sendToAI('User instruction: "' + userText + '"\n\n' + buildAIContext(), { keyId: keyEl.value }, function(result, err) {
+      if (err) { resultEl.innerHTML = '<p class="text-red-500">AI error: ' + esc(err) + '</p>'; return; }
       try {
-        var jsonMatch = result.match(/\{[\s\S]*\}/);
+        var jsonMatch = (result || '').match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
-          /* Maybe AI returned plain text — show it */
           resultEl.innerHTML = '<p class="text-slate-700">' + esc(result) + '</p>';
           return;
         }
         var parsed = JSON.parse(jsonMatch[0]);
-        var actionsTaken = [];
+        var aiResult = processAIActions(parsed);
 
-        /* Handle deletions first */
-        if (parsed.delete && parsed.delete.length > 0) {
-          var deleteNums = parsed.delete.map(String);
-          var before = state.circuits.length;
-          state.circuits = state.circuits.filter(function(c) {
-            return deleteNums.indexOf(String(c.number)) === -1;
-          });
-          actionsTaken.push('Removed ' + (before - state.circuits.length) + ' circuit(s)');
-        }
-
-        /* Handle renumbering */
-        if (parsed.renumber) {
-          state.circuits.forEach(function(c, i) { c.number = String(i + 1); });
-          actionsTaken.push('Renumbered to 1-' + state.circuits.length);
-        }
-
-        /* Handle circuit updates/additions */
-        if (parsed.updates && parsed.updates.length > 0) {
-          parsed.updates.forEach(function(u) {
-            var existing = state.circuits.findIndex(function(c) { return String(c.number) === String(u.number); });
-            if (existing !== -1) {
-              Object.assign(state.circuits[existing], u);
-            } else {
-              state.circuits.push(u);
-            }
-          });
-          actionsTaken.push('Updated ' + parsed.updates.length + ' circuit(s)');
-        }
-
-        /* Handle board header updates */
-        if (parsed.board_updates && state.currentBoard) {
-          api('PUT', '/boards/' + state.currentBoard.id, parsed.board_updates).then(function(updated) {
-            Object.assign(state.currentBoard, updated);
-          }).catch(function() {});
-          var boardFields = Object.keys(parsed.board_updates);
-          actionsTaken.push('Board: set ' + boardFields.join(', '));
-        }
-
-        /* Handle inspection schedule updates */
-        if (parsed.inspection_updates && parsed.inspection_updates.length > 0 && state.currentSite) {
-          api('PUT', '/sites/' + state.currentSite.id + '/inspections', parsed.inspection_updates).then(function(data) {
-            state.inspections = data;
-          }).catch(function() {});
-          var inspRefs = parsed.inspection_updates.map(function(i) { return i.item_ref + '→' + i.outcome; });
-          actionsTaken.push('Inspection: ' + inspRefs.join(', '));
-        }
-
-        /* Handle new observations */
-        if (parsed.observations && parsed.observations.length > 0 && state.currentSite) {
-          parsed.observations.forEach(function(o) {
-            api('POST', '/sites/' + state.currentSite.id + '/observations', {
-              code: o.code || 'C2',
-              description: o.description || '',
-              location: o.location || ''
-            }).then(function(saved) {
-              state.observations.push(saved);
-            }).catch(function() {});
-          });
-          actionsTaken.push('Added ' + parsed.observations.length + ' observation(s)');
-        }
-
-        /* Show AI message if present */
         if (parsed.message) {
           resultEl.innerHTML = '<div class="p-3 bg-blue-50 rounded-lg text-sm text-blue-800 mb-2">' +
             '<strong>AI:</strong> ' + esc(parsed.message) + '</div>';
         }
 
-        if (actionsTaken.length > 0) {
+        if (aiResult.actions.length > 0) {
           closeSheet();
           navigate('board-detail');
-          toast(actionsTaken.join(', '), 'success');
+          toast(aiResult.actions.join(' • '), 'success');
+          showAIBanner(aiResult, userText, parsed);
         } else if (!parsed.message) {
-          resultEl.innerHTML = '<p class="text-amber-600">AI didn\'t make any changes. Try rephrasing your instruction.</p>';
+          resultEl.innerHTML = '<p class="text-amber-600">AI didn\'t make any changes. Try rephrasing.</p>';
         }
       } catch(e) {
-        /* Show raw AI response if JSON parse fails */
         resultEl.innerHTML = '<div class="p-3 bg-slate-50 rounded-lg text-sm">' +
           '<p class="font-medium text-slate-700 mb-1">AI response:</p>' +
-          '<p class="text-slate-600">' + esc(result.substring(0, 500)) + '</p></div>';
+          '<p class="text-slate-600">' + esc((result || '').substring(0, 500)) + '</p></div>';
       }
-    }).catch(function(err) {
-      resultEl.innerHTML = '<p class="text-red-500">AI error: ' + esc(err.message) + '</p>';
     });
   }
 
@@ -2236,99 +2088,71 @@ input,select,textarea { font-size:16px !important; }
     var saveBtn = document.querySelector('[data-action="save-observation"]');
     if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<div class="loading-spinner" style="width:1.25rem;height:1.25rem"></div> AI processing...'; }
 
-    var itemList = INSPECTION_ITEMS.filter(function(i) { return i.ref; }).map(function(i) {
-      return i.ref + ': ' + i.desc;
-    }).join('\n');
+    /* Use unified AI brain — ask it to reword + map to inspection */
+    var aiPrompt = 'Reword this observation technically and identify inspection schedule items.\n' +
+      'Observation (' + obsCode + '): "' + rawDesc + '"' + (location ? ' Location: ' + location : '') +
+      '\n\nReturn JSON with: observations (with reworded description), inspection_updates, message.\n\n' + buildAIContext();
 
-    var sysPrompt = 'You are a BS 7671:2018+A2:2022 EICR expert. Given a rough observation from an electrical inspector, you must:\n' +
-      '1. Rewrite the description in proper technical language suitable for an EICR report\n' +
-      '2. Identify which Schedule of Inspection item(s) it relates to\n\n' +
-      'SCHEDULE OF INSPECTION ITEMS:\n' + itemList + '\n\n' +
-      'RULES:\n' +
-      '- Rewrite concisely but technically — proper terminology, reference to BS 7671 where relevant\n' +
-      '- Keep it factual and professional, suitable for a formal EICR report\n' +
-      '- Return 1-3 inspection item refs that directly relate\n' +
-      '- Section 7 = final circuits, Section 6 = distribution circuits, Section 5 = switchgear\n\n' +
-      'RETURN FORMAT (valid JSON only):\n' +
-      '{"description": "reworded technical description", "refs": ["7.13"], "reason": "brief explanation of why these refs"}';
-
-    var prompt = 'Observation (' + obsCode + '): "' + rawDesc + '"' + (location ? ' Location: ' + location : '') +
-      '\n\nReword technically and identify inspection schedule items. Return JSON only.';
-
-    api('POST', '/ai/process', {
-      key_id: provider.id,
-      system_prompt: sysPrompt,
-      prompt: prompt
-    }).then(function(res) {
-      var jsonMatch = (res.result || '').match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error('No JSON returned');
-      var parsed = JSON.parse(jsonMatch[0]);
-
-      var finalDesc = parsed.description || rawDesc;
-      var refs = parsed.refs || [];
-      var reason = parsed.reason || '';
-
-      /* Show what AI did before completing */
-      closeSheet();
-
-      /* Build confirmation banner */
-      var refDetails = refs.map(function(ref) {
-        var item = INSPECTION_ITEMS.find(function(i) { return i.ref === ref; });
-        return ref + (item ? ' — ' + item.desc : '');
-      });
-
-      var bannerHtml = '<div class="p-4 bg-blue-50 border border-blue-200 rounded-xl mb-3">' +
-        '<h4 class="font-bold text-blue-800 text-sm mb-2">AI Observation Processing</h4>' +
-        '<div class="text-sm space-y-2">' +
-          '<div><span class="font-medium text-slate-600">Original:</span> <span class="text-slate-500 italic">' + esc(rawDesc) + '</span></div>' +
-          '<div><span class="font-medium text-slate-600">Reworded:</span> <span class="text-slate-800">' + esc(finalDesc) + '</span></div>' +
-          '<div class="pt-2 border-t border-blue-100">' +
-            '<span class="font-medium text-slate-600">Inspection items (' + obsCode + '):</span>' +
-            '<ul class="mt-1 space-y-1">' + refDetails.map(function(r) {
-              return '<li class="text-blue-700 text-xs">• ' + esc(r) + '</li>';
-            }).join('') + '</ul>' +
-          '</div>' +
-          (reason ? '<div class="text-xs text-slate-500 italic mt-1">' + esc(reason) + '</div>' : '') +
-        '</div></div>';
-
-      toast(obsCode + ' → ' + refs.join(', ') + ': ' + finalDesc.substring(0, 60) + '...', 'success');
-
-      /* Save observation with reworded description */
-      getPhoto(function(photo) {
-        var body = { code: obsCode, description: finalDesc, location: location };
-        if (photo) body.photo = photo;
-
-        doSaveObservation(editId, body, function() {
-          /* Update inspection schedule items */
-          if (refs.length > 0 && state.currentSite) {
-            var items = refs.map(function(ref) { return { item_ref: ref, outcome: obsCode }; });
-            api('PUT', '/sites/' + state.currentSite.id + '/inspections', items).then(function(data) {
-              state.inspections = data;
-            }).catch(function() {});
-          }
+    sendToAI(aiPrompt, {}, function(result, err) {
+      if (err) {
+        /* Fallback: save raw */
+        getPhoto(function(photo) {
+          doSaveObservation(editId, { code: obsCode, description: rawDesc, location: location, photo: photo });
         });
-      });
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Observation'; }
+        return;
+      }
 
-      /* Show banner at top of observations view */
-      navigate('site-detail', {currentSiteTab: 'observations'});
-      setTimeout(function() {
-        var obsContainer = document.getElementById('observations-container');
-        if (obsContainer) {
-          var bannerEl = document.createElement('div');
-          bannerEl.innerHTML = bannerHtml;
-          bannerEl.style.cursor = 'pointer';
-          bannerEl.onclick = function() { bannerEl.remove(); };
-          obsContainer.insertBefore(bannerEl, obsContainer.firstChild);
+      try {
+        var jsonMatch = (result || '').match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('No JSON');
+        var parsed = JSON.parse(jsonMatch[0]);
+
+        /* Get reworded description from AI response */
+        var finalDesc = rawDesc;
+        if (parsed.observations && parsed.observations.length > 0 && parsed.observations[0].description) {
+          finalDesc = parsed.observations[0].description;
+        } else if (parsed.description) {
+          finalDesc = parsed.description;
         }
-      }, 200);
 
-    }).catch(function(err) {
-      console.error('AI observation processing failed, saving raw:', err);
-      /* Fallback: save raw description without AI */
-      getPhoto(function(photo) {
-        doSaveObservation(editId, { code: obsCode, description: rawDesc, location: location, photo: photo });
-      });
-      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Observation'; }
+        /* Close sheet and save */
+        closeSheet();
+
+        getPhoto(function(photo) {
+          var body = { code: obsCode, description: finalDesc, location: location };
+          if (photo) body.photo = photo;
+
+          doSaveObservation(editId, body, function() {
+            /* Update inspection schedule */
+            var inspItems = parsed.inspection_updates || [];
+            if (parsed.refs) {
+              inspItems = parsed.refs.map(function(r) { return { item_ref: r, outcome: obsCode }; });
+            }
+            if (inspItems.length > 0 && state.currentSite) {
+              api('PUT', '/sites/' + state.currentSite.id + '/inspections', inspItems).then(function(data) {
+                state.inspections = data;
+              }).catch(function() {});
+            }
+          });
+        });
+
+        /* Show result */
+        navigate('site-detail', {currentSiteTab: 'observations'});
+        var aiResult = { actions: [], message: parsed.message || '' };
+        if (parsed.inspection_updates && parsed.inspection_updates.length > 0) {
+          aiResult.actions.push('Inspection: ' + parsed.inspection_updates.map(function(i) { return i.item_ref + '→' + i.outcome; }).join(', '));
+        }
+        if (finalDesc !== rawDesc) aiResult.actions.push('Reworded');
+        toast(obsCode + ': ' + finalDesc.substring(0, 60) + (aiResult.actions.length ? ' • ' + aiResult.actions.join(' • ') : ''), 'success');
+        showAIBanner(aiResult, rawDesc, parsed);
+
+      } catch(e) {
+        getPhoto(function(photo) {
+          doSaveObservation(editId, { code: obsCode, description: rawDesc, location: location, photo: photo });
+        });
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Observation'; }
+      }
     });
   }
 
@@ -2992,11 +2816,252 @@ input,select,textarea { font-size:16px !important; }
 
   /* ===== VOICE HELPERS ===== */
 
+  /* ===== UNIFIED AI BRAIN ===== */
+  /* One system prompt, one result handler, used by ALL AI entry points */
+
+  function buildAISystemPrompt(mode) {
+    /* mode: 'full' (default), 'field' (single field input) */
+    var itemList = INSPECTION_ITEMS.filter(function(i) { return i.ref; }).map(function(i) {
+      return i.ref + ': ' + i.desc;
+    }).join('\n');
+
+    if (mode === 'field') {
+      return 'You are a BS 7671:2018+A2:2022 EICR expert assistant. ' +
+        'The user is dictating into a specific field. Return ONLY the clean value for that field. ' +
+        'No explanation, no quotes, no JSON. Just the value.\n\n' +
+        'RULES:\n' +
+        '- Test readings: "point one three" → "0.13", "infinity"/"greater than 200" → ">200"\n' +
+        '- OCPD BS(EN): 60898=MCB, 61009=RCBO, 61008=RCD, 60947-2=MCCB\n' +
+        '- OCPD types: B (general), C (motors), D (high inrush)\n' +
+        '- RCD IΔn: 30, 100, 300 mA. RCD types: AC, A, B, S\n' +
+        '- Wiring types: A=T+E, B=conduit(m), C=conduit(p), F=SWA, H=MICC\n' +
+        '- CSA sizes: 1.0, 1.5, 2.5, 4, 6, 10, 16, 25mm²\n' +
+        '- Instruments: "Make Model Serial" e.g. "Megger MFT1741 12345678"\n' +
+        '- Capitalise descriptions/locations properly\n' +
+        '- If user says something that sounds like a command rather than a field value, ' +
+        'still return the most appropriate value for the target field.';
+    }
+
+    return 'You are an expert AI assistant for a BS 7671:2018+A2:2022 EICR app. ' +
+      'You have FULL control. You can modify circuits, board header, inspection schedule, add observations, and answer questions. ' +
+      'Understand natural speech and return structured JSON.\n\n' +
+      'ACTIONS (include only keys that apply):\n' +
+      '1. "updates" — Circuit data [{number, ...fields}]\n' +
+      '2. "delete" — Remove circuits ["15","16"]\n' +
+      '3. "renumber" — true to renumber after deletion\n' +
+      '4. "board_updates" — Board header {ze, ipf, dist_type, dist_bsen, dist_rating, ocpd_bsen, ocpd_type, ocpd_rating, ' +
+        'instruments_multi, instruments_ir, instruments_cont, instruments_earth, instruments_loop, instruments_rcd, supplied_from, location}\n' +
+      '5. "inspection_updates" — [{item_ref:"7.1", outcome:"C2"}]\n' +
+      '   Outcomes: "Sat" (satisfactory/pass), "C1", "C2", "C3", "FI", "N/A", "LIM", "N/V"\n' +
+      '   "pass" = "Sat". "not applicable"/"not present"/"not required" = "N/A"\n' +
+      '6. "observations" — [{code:"C2", description:"technical desc", location:"where"}]\n' +
+      '   ALWAYS rewrite descriptions in proper technical EICR report language\n' +
+      '7. "message" — Text response to questions\n\n' +
+      'CIRCUIT FIELDS: number, description, ocpd_bsen (60898=MCB, 61009=RCBO, 61008=RCD, 60947-2=MCCB), ' +
+      'ocpd_type (B/C/D), ocpd_rating, live_mm, cpc_mm, wiring_type (A=T+E, B=conduit metal, C=conduit plastic, F=SWA, H=MICC), ref_method, points, ' +
+      'r1, rn, r2, r1r2, r2_measured, r2_ring, ir_test_v (250/500/1000), ir_ll, ir_le, ' +
+      'polarity (boolean), zs_measured, max_zs, rcd_bsen, rcd_type, rcd_idn, ' +
+      'rcd_time_x1, rcd_time_x5, rcd_test_btn (boolean), remarks.\n\n' +
+      'INSPECTION SCHEDULE:\n' + itemList + '\n\n' +
+      'COMPOUND INSTRUCTIONS:\n' +
+      '- "16mm water bonding, no other bonding required" → inspection_updates: 3.1.1→Sat (note size), 3.1.2→Sat, 3.1.3→N/A, 3.1.4→N/A, 3.1.5→N/A, 3.1.6→N/A, 3.1.7→N/A\n' +
+      '- "cracked socket kitchen C2" → observation (reworded technically) + inspection_updates [7.13→C2]\n' +
+      '- "set Ze 0.35" → board_updates {ze:"0.35"}\n' +
+      '- "all pass section 4" → inspection_updates: 4.1→Sat, 4.2→Sat, 4.3→N/A, 4.4→N/A, 4.5→N/A (use N/A for items typically not applicable)\n' +
+      '- "circuit 3 Zs 0.45" → updates [{number:"3", zs_measured:"0.45"}]\n' +
+      '- "insulation all greater than 200" → updates for all existing circuits with ir_ll:">200", ir_le:">200"\n\n' +
+      'RULES:\n' +
+      '- "greater than 200" or "infinity" for insulation = ">200"\n' +
+      '- Only include fields the user mentioned\n' +
+      '- When adding observations, ALWAYS also add inspection_updates for the related items\n' +
+      '- Rewrite observation descriptions professionally\n\n' +
+      'RETURN FORMAT (valid JSON only):\n' +
+      '{"updates":[...], "delete":[...], "renumber":true, "board_updates":{...}, "inspection_updates":[...], "observations":[...], "message":"..."}';
+  }
+
+  function buildAIContext() {
+    var ctx = '';
+
+    if (state.currentBoard) {
+      var b = state.currentBoard;
+      ctx += 'BOARD: ' + (b.ref || '') + ' at ' + (b.location || '');
+      ctx += ' | Supplied from: ' + (b.supplied_from || '-') + ' | Phases: ' + (b.num_phases || '1');
+      ctx += ' | Ze: ' + (b.ze || '-') + ' | Ipf: ' + (b.ipf || '-');
+      ctx += ' | Dist: ' + (b.dist_type || '-') + ' | OCPD: ' + (b.ocpd_type || '-') + (b.ocpd_rating || '') + 'A';
+      ctx += ' | Instruments — Multi: ' + (b.instruments_multi || '-') + ' IR: ' + (b.instruments_ir || '-') +
+        ' Cont: ' + (b.instruments_cont || '-') + ' Loop: ' + (b.instruments_loop || '-') +
+        ' RCD: ' + (b.instruments_rcd || '-') + ' Earth: ' + (b.instruments_earth || '-');
+    }
+
+    if (state.circuits && state.circuits.length > 0) {
+      ctx += '\nCIRCUITS (' + state.circuits.length + '):\n' + state.circuits.map(function(c) {
+        var parts = ['#' + (c.number || '?') + ' ' + (c.description || '?')];
+        if (c.ocpd_type || c.ocpd_rating) parts.push((c.ocpd_type || '') + (c.ocpd_rating || '') + 'A');
+        if (c.zs_measured) parts.push('Zs=' + c.zs_measured);
+        if (c.ir_ll || c.ir_le) parts.push('IR=' + (c.ir_ll || '-') + '/' + (c.ir_le || '-'));
+        return parts.join(' | ');
+      }).join('\n');
+    }
+
+    if (state.observations && state.observations.length > 0) {
+      ctx += '\nOBSERVATIONS: ' + state.observations.map(function(o) {
+        return o.code + ': ' + (o.description || '').substring(0, 60);
+      }).join(' | ');
+    }
+
+    if (state.inspections && state.inspections.length > 0) {
+      ctx += '\nINSPECTION SET: ' + state.inspections.map(function(i) {
+        return i.item_ref + '=' + i.outcome;
+      }).join(', ');
+    }
+
+    if (state.currentSite) {
+      ctx += '\nSITE: ' + (state.currentSite.name || '') + ' | ' + (state.currentSite.address || '');
+    }
+
+    return ctx;
+  }
+
+  /* Process ALL AI action types from a parsed JSON response */
+  function processAIActions(parsed, opts) {
+    opts = opts || {};
+    var actions = [];
+
+    /* Circuit deletions */
+    if (parsed.delete && parsed.delete.length > 0) {
+      var deleteNums = parsed.delete.map(String);
+      var before = state.circuits.length;
+      state.circuits = state.circuits.filter(function(c) {
+        return deleteNums.indexOf(String(c.number)) === -1;
+      });
+      actions.push('Removed ' + (before - state.circuits.length) + ' circuit(s)');
+    }
+
+    /* Renumber */
+    if (parsed.renumber) {
+      state.circuits.forEach(function(c, i) { c.number = String(i + 1); });
+      actions.push('Renumbered 1-' + state.circuits.length);
+    }
+
+    /* Circuit updates */
+    if (parsed.updates && parsed.updates.length > 0) {
+      parsed.updates.forEach(function(u) {
+        var existing = state.circuits.findIndex(function(c) { return String(c.number) === String(u.number); });
+        if (existing !== -1) {
+          Object.assign(state.circuits[existing], u);
+        } else {
+          state.circuits.push(u);
+        }
+      });
+      actions.push('Updated ' + parsed.updates.length + ' circuit(s)');
+    }
+
+    /* Save circuits if any circuit changes were made */
+    if (parsed.updates || parsed.delete || parsed.renumber) {
+      saveAllCircuits(true);
+    }
+
+    /* Board header updates */
+    if (parsed.board_updates && state.currentBoard) {
+      api('PUT', '/boards/' + state.currentBoard.id, parsed.board_updates).then(function(updated) {
+        Object.assign(state.currentBoard, updated);
+      }).catch(function() {});
+      actions.push('Board: ' + Object.keys(parsed.board_updates).join(', '));
+    }
+
+    /* Inspection schedule updates */
+    if (parsed.inspection_updates && parsed.inspection_updates.length > 0 && state.currentSite) {
+      api('PUT', '/sites/' + state.currentSite.id + '/inspections', parsed.inspection_updates).then(function(data) {
+        state.inspections = data;
+      }).catch(function() {});
+      var inspItems = parsed.inspection_updates.map(function(i) { return i.item_ref + '→' + i.outcome; });
+      actions.push('Inspection: ' + inspItems.join(', '));
+    }
+
+    /* Observations */
+    if (parsed.observations && parsed.observations.length > 0 && state.currentSite) {
+      parsed.observations.forEach(function(o) {
+        api('POST', '/sites/' + state.currentSite.id + '/observations', {
+          code: o.code || 'C2', description: o.description || '', location: o.location || ''
+        }).then(function(saved) { state.observations.push(saved); }).catch(function() {});
+      });
+      actions.push(parsed.observations.length + ' observation(s)');
+    }
+
+    return { actions: actions, message: parsed.message || '' };
+  }
+
+  /* Show AI result banner (observations view or board detail) */
+  function showAIBanner(result, transcript, parsed) {
+    setTimeout(function() {
+      var container = document.getElementById('observations-container') || document.getElementById('board-detail-container');
+      if (!container) return;
+      var html = '<div class="p-3 bg-blue-50 border border-blue-200 rounded-xl mb-3" style="cursor:pointer" onclick="this.remove()">' +
+        '<h4 class="font-bold text-blue-800 text-xs mb-1">AI Result</h4>';
+      if (transcript) html += '<p class="text-xs text-slate-500"><strong>Input:</strong> ' + esc(transcript) + '</p>';
+      if (result.actions.length > 0) html += '<p class="text-xs text-slate-800 mt-1">' + esc(result.actions.join(' • ')) + '</p>';
+      if (result.message) html += '<p class="text-xs text-blue-700 mt-1">' + esc(result.message) + '</p>';
+      if (parsed.observations) {
+        parsed.observations.forEach(function(o) {
+          html += '<p class="text-xs mt-1"><strong class="text-red-600">' + esc(o.code || 'C2') + ':</strong> ' + esc(o.description) + '</p>';
+        });
+      }
+      if (parsed.inspection_updates && parsed.inspection_updates.length > 0) {
+        html += '<p class="text-xs text-blue-700 mt-1"><strong>Inspection:</strong> ';
+        html += parsed.inspection_updates.map(function(i) {
+          var item = INSPECTION_ITEMS.find(function(x) { return x.ref === i.item_ref; });
+          return i.item_ref + ' (' + (item ? item.desc.substring(0, 35) + '...' : '') + ') → ' + i.outcome;
+        }).join('; ');
+        html += '</p>';
+      }
+      html += '<p class="text-xs text-slate-400 mt-1 italic">tap to dismiss</p></div>';
+      var el = document.createElement('div');
+      el.innerHTML = html;
+      container.insertBefore(el, container.firstChild);
+    }, 200);
+  }
+
+  /* Single entry point: send any instruction to the unified AI */
+  function sendToAI(userInput, opts, callback) {
+    opts = opts || {};
+    var provider = getSelectedProvider();
+    if (!provider) {
+      if (callback) callback(null, 'No AI key configured');
+      return;
+    }
+
+    var mode = opts.fieldMode ? 'field' : 'full';
+    var sysPrompt = buildAISystemPrompt(mode);
+    var context = opts.fieldMode ? '' : buildAIContext();
+
+    var prompt = userInput;
+    if (context) prompt += '\n\n' + context;
+    if (opts.fieldMode) {
+      prompt = 'Target field: ' + (opts.fieldLabel || opts.fieldId || 'unknown') + '\nUser said: "' + userInput + '"\nReturn ONLY the clean value.';
+      if (opts.fieldHint) sysPrompt += '\n\nField hint: ' + opts.fieldHint;
+    } else {
+      prompt += '\n\nReturn ONLY valid JSON.';
+    }
+
+    return api('POST', '/ai/process', {
+      key_id: opts.keyId || provider.id,
+      system_prompt: sysPrompt,
+      prompt: prompt
+    }).then(function(res) {
+      if (callback) callback(res.result);
+      return res.result;
+    }).catch(function(err) {
+      if (callback) callback(null, err.message);
+      throw err;
+    });
+  }
+
+  /* ===== END UNIFIED AI ===== */
+
   var _voiceRec = null;
   var _voiceActive = false;
 
-  /* Raw speech-to-text into any input field */
-  /* Build context hint for AI based on field ID and placeholder */
+  /* Build context hint for AI based on field ID — used for field-mode voice */
   function getFieldContext(fieldId) {
     var field = document.getElementById(fieldId);
     var placeholder = field ? (field.placeholder || '') : '';
@@ -3080,15 +3145,20 @@ input,select,textarea { font-size:16px !important; }
 
       if (btn) { btn.style.background = '#3b82f6'; btn.textContent = '⏳'; }
 
-      var context = getFieldContext(fieldId);
-      ensureAiKeys().then(function() {
-        return api('POST', '/ai/process', {
-          key_id: provider.id,
-          system_prompt: context,
-          prompt: 'The user spoke: "' + transcript + '"\n\nReturn the clean value for this field.'
-        });
-      }).then(function(data) {
-        var cleaned = (data.result || '').replace(/^["']|["']$/g, '').trim();
+      var fieldHint = getFieldContext(fieldId);
+      var fieldLabel = '';
+      var labelEl = document.querySelector('label[for="' + fieldId + '"]');
+      if (labelEl) fieldLabel = labelEl.textContent || '';
+      if (!fieldLabel && field.placeholder) fieldLabel = field.placeholder;
+
+      sendToAI(transcript, {
+        fieldMode: true,
+        fieldId: fieldId,
+        fieldLabel: fieldLabel || fieldId,
+        fieldHint: fieldHint
+      }, function(result, err) {
+        if (err) { if (btn) { btn.style.background = ''; btn.textContent = '🎤'; } return; }
+        var cleaned = (result || '').replace(/^["']|["']$/g, '').replace(/```/g, '').trim();
         if (cleaned && cleaned.length < 500) {
           /* If user had existing text and is appending, handle smartly */
           if (startVal) {
@@ -3107,9 +3177,6 @@ input,select,textarea { font-size:16px !important; }
         /* Trigger autosave */
         field.dispatchEvent(new Event('input', { bubbles: true }));
         field.dispatchEvent(new Event('change', { bubbles: true }));
-      }).catch(function() {
-        /* AI failed — keep raw transcript, that's fine */
-        if (btn) { btn.style.background = ''; btn.textContent = '🎤'; }
       });
     };
     _voiceRec.onerror = function(ev) {
@@ -3190,96 +3257,26 @@ input,select,textarea { font-size:16px !important; }
         return;
       }
 
-      var itemList = INSPECTION_ITEMS.filter(function(i) { return i.ref; }).map(function(i) {
-        return i.ref + ': ' + i.desc;
-      }).join('\n');
-
-      var voiceSysPrompt = 'You are a BS 7671:2018+A2:2022 EICR expert. Parse spoken observations from an electrical inspector.\n\n' +
-        'You must:\n' +
-        '1. Extract observation(s) with code (C1/C2/C3/FI), location, and description\n' +
-        '2. Rewrite each description in proper technical EICR language\n' +
-        '3. Identify which Schedule of Inspection item(s) each relates to\n' +
-        '4. Handle compound statements — e.g. "16mm water bonding, no other bonding required" means:\n' +
-        '   - Note the water bonding conductor size\n' +
-        '   - Set item 3.1.2 (water) to Sat\n' +
-        '   - Set items 3.1.3 (gas), 3.1.4 (oil), 3.1.5 (structural), 3.1.6 (lightning), 3.1.7 (other) to N/A\n' +
-        '5. If no code is spoken, infer: defects=C2, satisfactory statements=Sat, improvements=C3\n\n' +
-        'SCHEDULE OF INSPECTION ITEMS:\n' + itemList + '\n\n' +
-        'RETURN FORMAT (valid JSON):\n' +
-        '{"observations": [{"code":"C2","location":"Kitchen","description":"technical description"}],\n' +
-        ' "inspection_updates": [{"item_ref":"7.13","outcome":"C2"}],\n' +
-        ' "message": "brief summary of what was done"}';
-
-      api('POST', '/ai/process', {
-        key_id: provider.id,
-        system_prompt: voiceSysPrompt,
-        prompt: 'Inspector said: "' + transcript + '"\n\nParse, reword technically, and identify inspection items. Return JSON only.'
-      }).then(function(res) {
-        var jsonMatch = (res.result || '').match(/\{[\s\S]*\}/);
-        if (!jsonMatch) throw new Error('No JSON');
-        var data = JSON.parse(jsonMatch[0]);
-
-        /* Save observations */
-        var obs = data.observations || [data];
-        var promises = obs.map(function(o) {
-          return api('POST', '/sites/' + state.currentSite.id + '/observations', {
-            code: o.code || 'C2',
-            description: o.description || transcript,
-            location: o.location || ''
-          });
-        });
-
-        /* Update inspection schedule items */
-        if (data.inspection_updates && data.inspection_updates.length > 0 && state.currentSite) {
-          promises.push(
-            api('PUT', '/sites/' + state.currentSite.id + '/inspections', data.inspection_updates).then(function(d) {
-              state.inspections = d;
-            })
-          );
-        }
-
-        return Promise.all(promises).then(function(results) {
-          /* Only push observation results (not inspection update result) */
-          results.forEach(function(o) { if (o && o.id) state.observations.push(o); });
+      /* Use unified AI brain */
+      sendToAI('Inspector said: "' + transcript + '"\n\n' + buildAIContext(), {}, function(result, err) {
+        if (err) { manualParseObservation(transcript); return; }
+        try {
+          var jsonMatch = (result || '').match(/\{[\s\S]*\}/);
+          if (!jsonMatch) throw new Error('No JSON');
+          var parsed = JSON.parse(jsonMatch[0]);
+          var aiResult = processAIActions(parsed);
 
           closeSheet();
           navigate('site-detail', {currentSiteTab: 'observations'});
 
-          /* Show what was done */
-          var msg = obs.length + ' observation(s) added';
-          if (data.inspection_updates && data.inspection_updates.length > 0) {
-            var refs = data.inspection_updates.map(function(i) { return i.item_ref + '→' + i.outcome; });
-            msg += ' | Inspection: ' + refs.join(', ');
-          }
-          if (data.message) msg += ' — ' + data.message;
+          var msg = aiResult.actions.length > 0 ? aiResult.actions.join(' • ') : 'Processed';
+          if (aiResult.message) msg += ' — ' + aiResult.message;
           toast(msg, 'success');
-
-          /* Show banner */
-          setTimeout(function() {
-            var obsContainer = document.getElementById('observations-container');
-            if (!obsContainer) return;
-            var bannerHtml = '<div class="p-3 bg-blue-50 border border-blue-200 rounded-xl mb-3" style="cursor:pointer" onclick="this.remove()">' +
-              '<h4 class="font-bold text-blue-800 text-xs mb-1">Voice AI Result</h4>' +
-              '<p class="text-xs text-slate-600"><strong>Heard:</strong> ' + esc(transcript) + '</p>';
-            obs.forEach(function(o) {
-              bannerHtml += '<p class="text-xs text-slate-800 mt-1"><strong>' + esc(o.code || 'C2') + ':</strong> ' + esc(o.description) + '</p>';
-            });
-            if (data.inspection_updates && data.inspection_updates.length > 0) {
-              bannerHtml += '<p class="text-xs text-blue-700 mt-1"><strong>Inspection:</strong> ' +
-                data.inspection_updates.map(function(i) {
-                  var item = INSPECTION_ITEMS.find(function(x) { return x.ref === i.item_ref; });
-                  return i.item_ref + ' ' + (item ? item.desc.substring(0, 40) : '') + ' → ' + i.outcome;
-                }).join('; ') + '</p>';
-            }
-            bannerHtml += '</div>';
-            var el = document.createElement('div');
-            el.innerHTML = bannerHtml;
-            obsContainer.insertBefore(el, obsContainer.firstChild);
-          }, 200);
-        });
-      }).catch(function(err) {
-        console.error('AI parse failed, using manual', err);
-        manualParseObservation(transcript);
+          showAIBanner(aiResult, transcript, parsed);
+        } catch(e) {
+          console.error('AI parse failed:', e);
+          manualParseObservation(transcript);
+        }
       });
     };
 
@@ -3354,30 +3351,38 @@ input,select,textarea { font-size:16px !important; }
       var provider = getSelectedProvider();
       if (!provider) { toast('Add an AI key in Settings', 'error'); return; }
 
-      api('POST', '/ai/process', {
-        key_id: provider.id,
-        system_prompt: 'Parse spoken BS 7671 inspection schedule outcomes. The user speaks item numbers and outcomes. Valid outcomes: Pass, C1, C2, C3, FI, N/A, LIM, N/V. Map spoken words: "pass" → "Pass", "not applicable" or "N A" → "N/A", "limitation" → "LIM", "not verified" → "N/V". Return JSON: {"items": [{"ref": "1.1", "outcome": "Pass"}, {"ref": "5.17", "outcome": "C2"}]}',
-        prompt: 'Parse these inspection outcomes: ' + transcript
-      }).then(function(res) {
-        var data = JSON.parse(res.result.replace(/```json|```/g, '').trim());
-        if (!data.items || !data.items.length) throw new Error('No items parsed');
+      /* Use unified AI brain */
+      sendToAI('Inspector said: "' + transcript + '"\n\n' + buildAIContext(), {}, function(result, err) {
+        if (err) { toast('AI error: ' + err, 'error'); if (viBtn) viBtn.innerHTML = '🎤 SPEAK OUTCOMES'; return; }
+        try {
+          var jsonMatch = (result || '').match(/\{[\s\S]*\}/);
+          if (!jsonMatch) throw new Error('No JSON');
+          var parsed = JSON.parse(jsonMatch[0]);
 
-        /* Update the dropdowns in the UI */
-        data.items.forEach(function(item) {
-          var sel = document.querySelector('select[data-ref="' + item.ref + '"]');
-          if (sel) {
-            sel.value = item.outcome;
-            sel.className = 'outcome-select outcome-' + item.outcome.toLowerCase().replace('/', '');
+          /* Also support old {items} format for backwards compat */
+          if (parsed.items && !parsed.inspection_updates) {
+            parsed.inspection_updates = parsed.items.map(function(i) {
+              return { item_ref: i.ref, outcome: i.outcome };
+            });
           }
-        });
 
-        /* Save to server */
-        return api('PUT', '/sites/' + state.currentSite.id + '/inspections', data.items.map(function(i) {
-          return { item_ref: i.ref, outcome: i.outcome };
-        }));
-      }).then(function() {
-        toast('Inspection outcomes updated', 'success');
-        if (viBtn) viBtn.innerHTML = '🎤 SPEAK OUTCOMES';
+          var aiResult = processAIActions(parsed);
+
+          /* Update inspection dropdowns in the UI */
+          if (parsed.inspection_updates) {
+            parsed.inspection_updates.forEach(function(item) {
+              var sel = document.querySelector('select[data-ref="' + item.item_ref + '"]');
+              if (sel) {
+                sel.value = item.outcome;
+                sel.className = 'outcome-select outcome-' + item.outcome.toLowerCase().replace('/', '');
+              }
+            });
+          }
+
+          var msg = aiResult.actions.length > 0 ? aiResult.actions.join(' • ') : 'Updated';
+          if (aiResult.message) msg += ' — ' + aiResult.message;
+          toast(msg, 'success');
+          if (viBtn) viBtn.innerHTML = '🎤 SPEAK OUTCOMES';
       }).catch(function(err) {
         toast('Parse failed: ' + err.message, 'error');
         if (viBtn) viBtn.innerHTML = '🎤 SPEAK OUTCOMES';
