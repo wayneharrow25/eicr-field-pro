@@ -779,7 +779,7 @@ input,select,textarea { font-size:16px !important; }
       '<div class="card p-4">' +
         '<div class="grid grid-cols-2 gap-3 text-sm">' +
           '<div><span class="text-slate-500">Supplied From:</span><br><strong>' + esc(b.supplied_from || '-') + '</strong></div>' +
-          '<div><span class="text-slate-500">Phase:</span><br><strong>' + esc(b.phase || '-') + '</strong></div>' +
+          '<div><span class="text-slate-500">Phase:</span><br><strong>' + esc(b.num_phases || '-') + '</strong></div>' +
           '<div><span class="text-slate-500">OCPD BS(EN):</span><br><strong>' + esc(b.ocpd_bsen || '-') + '</strong></div>' +
           '<div><span class="text-slate-500">OCPD Rating:</span><br><strong>' + esc(b.ocpd_rating ? b.ocpd_rating + 'A' : '-') + '</strong></div>' +
           '<div><span class="text-slate-500">Ze (ohms):</span><br><strong>' + esc(b.ze || '-') + '</strong></div>' +
@@ -1092,7 +1092,7 @@ input,select,textarea { font-size:16px !important; }
     autoSave('circuits');
   }
 
-  function saveAllCircuits() {
+  function saveAllCircuits(silent) {
     if (!state.currentBoard) return;
     var updates = state.circuits.map(function(c) {
       var obj = {};
@@ -1103,9 +1103,11 @@ input,select,textarea { font-size:16px !important; }
     });
     api('PUT', '/boards/' + state.currentBoard.id + '/circuits/bulk', updates).then(function(data) {
       state.circuits = data.map(mapCircuitFromDB);
-      toast('All circuits saved', 'success');
-      navigate('board-detail');
-    }).catch(function(err) { toast(err.message, 'error'); });
+      if (!silent) {
+        toast('All circuits saved', 'success');
+        navigate('board-detail');
+      }
+    }).catch(function(err) { if (!silent) toast(err.message, 'error'); });
   }
 
   function lookupMaxZs() {
@@ -2853,8 +2855,8 @@ input,select,textarea { font-size:16px !important; }
           inputWithMic('bh-supplied', 'Supplied From', b.supplied_from) + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Phase</label>' +
           '<select id="bh-phase" class="select-field">' +
-            '<option value="single"' + (b.phase === 'single' ? ' selected' : '') + '>Single Phase</option>' +
-            '<option value="three"' + (b.phase === 'three' ? ' selected' : '') + '>Three Phase</option>' +
+            '<option value="single"' + (b.num_phases === 'single' ? ' selected' : '') + '>Single Phase</option>' +
+            '<option value="three"' + (b.num_phases === 'three' ? ' selected' : '') + '>Three Phase</option>' +
           '</select></div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">OCPD BS(EN)</label>' +
           inputWithMic('bh-ocpd-bsen', 'OCPD BS(EN)', b.ocpd_bsen) + '</div>' +
@@ -2890,7 +2892,7 @@ input,select,textarea { font-size:16px !important; }
       ref: (document.getElementById('bh-ref') || {}).value || '',
       location: (document.getElementById('bh-location') || {}).value || '',
       supplied_from: (document.getElementById('bh-supplied') || {}).value || '',
-      phase: (document.getElementById('bh-phase') || {}).value || 'single',
+      num_phases: (document.getElementById('bh-phase') || {}).value || 'single',
       ocpd_bsen: (document.getElementById('bh-ocpd-bsen') || {}).value || '',
       ocpd_type: (document.getElementById('bh-ocpd-type') || {}).value || '',
       ocpd_rating: (document.getElementById('bh-ocpd-rating') || {}).value || '',
@@ -3330,9 +3332,9 @@ input,select,textarea { font-size:16px !important; }
         navigate('sites');
         break;
       case 'back-to-site':
-        /* Auto-save circuits before leaving board */
+        /* Auto-save circuits silently before leaving board */
         if (state.currentBoard && state.circuits && state.circuits.length > 0) {
-          saveAllCircuits();
+          saveAllCircuits(true);
         }
         navigate('site-detail', {currentSiteTab: 'boards'});
         break;
