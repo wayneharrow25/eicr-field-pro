@@ -96,10 +96,25 @@ input,select,textarea { font-size:16px !important; }
 .fade-in { animation:fadeIn .2s ease; }
 @keyframes fadeIn { from{opacity:0} to{opacity:1} }
 .photo-thumb { width:4rem; height:4rem; object-fit:cover; border-radius:.5rem; }
+.input-with-mic { display:flex; gap:.375rem; align-items:flex-start; }
+.input-with-mic .input-field { flex:1; min-width:0; }
+.mic-btn { flex-shrink:0; width:2.75rem; height:3rem; border:1.5px solid #e2e8f0; border-radius:.75rem; background:#fff; font-size:1.125rem; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .15s; }
+.mic-btn:active { background:#eff6ff; border-color:#3b82f6; }
+.mic-btn.recording { background:#ef4444; border-color:#ef4444; animation:pulse-rec 1s infinite; }
+@keyframes pulse-rec { 0%,100%{opacity:1} 50%{opacity:.6} }
+.voice-action-btn { width:100%; padding:.875rem; border-radius:.75rem; font-weight:700; font-size:1rem; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:.5rem; transition:all .15s; }
+.voice-action-btn.obs { background:#7c3aed; color:#fff; }
+.voice-action-btn.obs:active { background:#6d28d9; }
+.voice-action-btn.insp { background:#0d9488; color:#fff; }
+.voice-action-btn.insp:active { background:#0f766e; }
+.voice-action-btn.recording { background:#ef4444 !important; }
+.offline-banner { position:fixed; top:0; left:0; right:0; z-index:300; background:#f59e0b; color:#000; text-align:center; padding:.5rem; font-size:.813rem; font-weight:600; display:none; }
+.offline-banner.show { display:block; }
 </style>
 </head>
 <body>
 
+<div id="offline-banner" class="offline-banner">OFFLINE — changes saved locally, will sync when connected</div>
 <div id="toast-container" class="toast-container"></div>
 
 <div id="app"></div>
@@ -143,6 +158,49 @@ input,select,textarea { font-size:16px !important; }
     sheetOpen: false
   };
 
+  /* ===== OFFLINE QUEUE ===== */
+  var _offlineQueue = JSON.parse(localStorage.getItem('eicr_offline_queue') || '[]');
+  var _isOnline = navigator.onLine !== false;
+
+  function updateOfflineBanner() {
+    var banner = document.getElementById('offline-banner');
+    if (banner) banner.classList.toggle('show', !_isOnline || _offlineQueue.length > 0);
+  }
+
+  window.addEventListener('online', function() {
+    _isOnline = true;
+    updateOfflineBanner();
+    flushOfflineQueue();
+  });
+  window.addEventListener('offline', function() {
+    _isOnline = false;
+    updateOfflineBanner();
+  });
+
+  function saveOfflineQueue() {
+    try { localStorage.setItem('eicr_offline_queue', JSON.stringify(_offlineQueue)); } catch(e) {}
+  }
+
+  function flushOfflineQueue() {
+    if (_offlineQueue.length === 0) return;
+    var item = _offlineQueue[0];
+    var opts = {
+      method: item.method,
+      headers: { 'Content-Type': 'application/json' }
+    };
+    if (state.token) opts.headers['Authorization'] = 'Bearer ' + state.token;
+    if (item.body !== undefined) opts.body = JSON.stringify(item.body);
+    fetch('/api' + item.path, opts).then(function(res) {
+      if (res.ok) {
+        _offlineQueue.shift();
+        saveOfflineQueue();
+        updateOfflineBanner();
+        if (_offlineQueue.length > 0) flushOfflineQueue();
+        else toast('All offline changes synced', 'success');
+      }
+    }).catch(function() { /* Still offline, try later */ });
+  }
+
   /* ===== API HELPERS ===== */
   function api(method, path, body) {
     var opts = {
@@ -172,6 +230,17 @@ input,select,textarea { font-size:16px !important; }
       var ct = res.headers.get('content-type') || '';
       if (ct.indexOf('json') !== -1) return res.json();
       return res.text();
+    }).catch(function(err) {
+      /* If network error on a write, queue it for later */
+      if (!navigator.onLine && method !== 'GET') {
+        _offlineQueue.push({method: method, path: path, body: body, ts: Date.now()});
+        saveOfflineQueue();
+        _isOnline = false;
+        updateOfflineBanner();
+        toast('Saved offline — will sync when connected', 'info');
+        return {_offline: true};
+      }
+      throw err;
     });
   }
 
@@ -278,6 +347,8 @@ input,select,textarea { font-size:16px !important; }
         localStorage.setItem('eicr_token', data.token);
         toast('Welcome back, ' + (data.user.name || username), 'success');
         navigate('sites');
+        loadAiKeys();
+        flushOfflineQueue();
       })
       .catch(function(err) {
         toast(err.message || 'Login failed', 'error');
@@ -343,13 +414,13 @@ input,select,textarea { font-size:16px !important; }
       '<h3 class="text-lg font-bold text-slate-800 mb-4">New Site</h3>' +
       '<div class="space-y-3">' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Site Name *</label>' +
-          '<input type="text" id="new-site-name" class="input-field" placeholder="e.g. St Mary\'s Primary School"></div>' +
+          inputWithMic('new-site-name', "e.g. St Mary's Primary School", '') + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Address</label>' +
-          '<input type="text" id="new-site-address" class="input-field" placeholder="Full address"></div>' +
+          inputWithMic('new-site-address', 'Full address', '') + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Client Name</label>' +
-          '<input type="text" id="new-site-client" class="input-field" placeholder="Client / contact name"></div>' +
+          inputWithMic('new-site-client', 'Client / contact name', '') + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Client Phone</label>' +
-          '<input type="tel" id="new-site-phone" class="input-field" placeholder="Phone number"></div>' +
+          inputWithMic('new-site-phone', 'Phone number', '', 'tel') + '</div>' +
         '<button class="btn btn-primary w-full mt-4" data-action="save-new-site">Create Site</button>' +
       '</div>'
     );
@@ -486,7 +557,7 @@ input,select,textarea { font-size:16px !important; }
     fields.forEach(function(f) {
       html += '<div><label class="block text-sm font-medium text-slate-600 mb-1" for="' + f.id + '">' + f.label + '</label>';
       if (f.textarea) {
-        html += '<textarea id="' + f.id + '" class="input-field" rows="3" placeholder="' + f.label + '">' + esc(f.val || '') + '</textarea>';
+        html += textareaWithMic(f.id, f.label, f.val, 3);
       } else if (f.options) {
         html += '<select id="' + f.id + '" class="select-field">' +
           '<option value="">-- Select --</option>' +
@@ -495,7 +566,7 @@ input,select,textarea { font-size:16px !important; }
           }).join('') +
         '</select>';
       } else {
-        html += '<input type="' + (f.type || 'text') + '" id="' + f.id + '" class="input-field" value="' + esc(f.val || '') + '" placeholder="' + f.label + '">';
+        html += inputWithMic(f.id, f.label, f.val, f.type);
       }
       html += '</div>';
     });
@@ -574,11 +645,11 @@ input,select,textarea { font-size:16px !important; }
       '<h3 class="text-lg font-bold text-slate-800 mb-4">New Distribution Board</h3>' +
       '<div class="space-y-3">' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Board Reference *</label>' +
-          '<input type="text" id="new-board-ref" class="input-field" placeholder="e.g. DB1, MSDB, Sub-DB-A"></div>' +
+          inputWithMic('new-board-ref', 'e.g. DB1, MSDB, Sub-DB-A', '') + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Location</label>' +
-          '<input type="text" id="new-board-location" class="input-field" placeholder="e.g. Plant Room, Ground Floor Corridor"></div>' +
+          inputWithMic('new-board-location', 'e.g. Plant Room, Ground Floor Corridor', '') + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Supplied From</label>' +
-          '<input type="text" id="new-board-supplied" class="input-field" placeholder="e.g. MSDB Way 3"></div>' +
+          inputWithMic('new-board-supplied', 'e.g. MSDB Way 3', '') + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Phase</label>' +
           '<select id="new-board-phase" class="select-field"><option value="single">Single Phase</option><option value="three">Three Phase</option></select></div>' +
         '<button class="btn btn-primary w-full mt-4" data-action="save-new-board">Create Board</button>' +
@@ -806,14 +877,14 @@ input,select,textarea { font-size:16px !important; }
     fields.forEach(function(f) {
       html += '<div><label class="block text-sm font-medium text-slate-600 mb-1">' + f.label + '</label>';
       if (f.textarea) {
-        html += '<textarea id="' + f.id + '" class="input-field" rows="2">' + esc(f.val || '') + '</textarea>';
+        html += textareaWithMic(f.id, f.label, f.val, 2);
       } else if (f.options) {
         html += '<select id="' + f.id + '" class="select-field">' +
           f.options.map(function(o) {
             return '<option value="' + esc(o) + '"' + (f.val === o ? ' selected' : '') + '>' + (o || '-- Select --') + '</option>';
           }).join('') + '</select>';
       } else {
-        html += '<input type="' + (f.type || 'text') + '" id="' + f.id + '" class="input-field" value="' + esc(f.val || '') + '" placeholder="' + (f.placeholder || f.label) + '">';
+        html += inputWithMic(f.id, f.placeholder || f.label, f.val, f.type);
       }
       html += '</div>';
     });
@@ -1195,7 +1266,11 @@ input,select,textarea { font-size:16px !important; }
   ];
 
   function renderInspection() {
-    var html = '<div id="inspection-container">';
+    var html = '<div id="inspection-container">' +
+      '<div class="p-3 bg-white border-b border-slate-100">' +
+        '<button class="voice-action-btn insp w-full" id="voice-insp-btn" data-action="voice-inspection">' +
+          '&#127908; SPEAK OUTCOMES <span class="text-xs opacity-75">(e.g. "1.1 pass, 5.17 C2")</span></button>' +
+      '</div>';
     var currentSection = '';
 
     INSPECTION_ITEMS.forEach(function(item) {
@@ -1261,9 +1336,13 @@ input,select,textarea { font-size:16px !important; }
   /* ===== OBSERVATIONS TAB ===== */
   function renderObservations() {
     var html = '<div class="p-4 space-y-3">' +
-      '<button class="btn btn-primary w-full" data-action="new-observation">' +
-        '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
-        'Add Observation</button>' +
+      '<div class="flex gap-2">' +
+        '<button class="btn btn-primary flex-1" data-action="new-observation">' +
+          '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+          'Add</button>' +
+        '<button class="voice-action-btn obs flex-1" id="voice-obs-btn" data-action="voice-observation">' +
+          '&#127908; SPEAK OBSERVATION</button>' +
+      '</div>' +
       '<div id="observations-container" class="space-y-3">';
 
     if (state.observations.length === 0) {
@@ -1313,9 +1392,9 @@ input,select,textarea { font-size:16px !important; }
           '<div id="obs-code-label" class="text-xs text-slate-500 mt-1 min-h-[1rem]"></div>' +
         '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Description *</label>' +
-          '<textarea id="obs-description" class="input-field" rows="3" placeholder="Describe the observation/defect..."></textarea></div>' +
+          textareaWithMic('obs-description', 'Describe the observation/defect...', '', 3) + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Location</label>' +
-          '<input type="text" id="obs-location" class="input-field" placeholder="e.g. Kitchen DB, Way 3"></div>' +
+          inputWithMic('obs-location', 'e.g. Kitchen DB, Way 3', '') + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Photo (optional)</label>' +
           '<input type="file" id="obs-photo" accept="image/*" capture="environment" class="input-field" style="padding:.5rem"></div>' +
         '<button class="btn btn-primary w-full mt-4" data-action="save-observation">Save Observation</button>' +
@@ -1367,7 +1446,7 @@ input,select,textarea { font-size:16px !important; }
   }
 
   function deleteObservation(id) {
-    api('DELETE', '/sites/' + state.currentSite.id + '/observations', {id: id}).then(function() {
+    api('DELETE', '/observations/' + id).then(function() {
       state.observations = state.observations.filter(function(o) { return o.id !== id; });
       toast('Observation deleted', 'success');
       navigate('site-detail', {currentSiteTab: 'observations'});
@@ -1494,14 +1573,14 @@ input,select,textarea { font-size:16px !important; }
   }
 
   function loadAiKeys() {
-    api('GET', '/ai/providers').then(function(data) {
+    return api('GET', '/ai/providers').then(function(data) {
       state.aiKeys = data || [];
-      /* Re-render just the keys list, not the whole view */
+      /* Re-render just the keys list if visible */
       var list = document.getElementById('ai-keys-list');
-      if (!list) return;
+      if (!list) return state.aiKeys;
       if (!state.aiKeys.length) {
         list.innerHTML = '<p class="text-sm text-slate-400">No AI keys configured. Server keys will appear automatically if set by admin.</p>';
-        return;
+        return state.aiKeys;
       }
       list.innerHTML = state.aiKeys.map(function(k) {
         var isServer = String(k.id).indexOf('env_') === 0;
@@ -1515,7 +1594,14 @@ input,select,textarea { font-size:16px !important; }
           '</button>') +
         '</div>';
       }).join('');
-    }).catch(function() { /* Ignore if not available */ });
+      return state.aiKeys;
+    }).catch(function() { return []; });
+  }
+
+  /* Ensure AI keys are loaded before using them */
+  function ensureAiKeys() {
+    if (state.aiKeys.length > 0) return Promise.resolve(state.aiKeys);
+    return loadAiKeys();
   }
 
   function openNewAiKeySheet() {
@@ -1561,7 +1647,7 @@ input,select,textarea { font-size:16px !important; }
   }
 
   function deleteAiKey(id) {
-    api('DELETE', '/ai-keys', {id: id}).then(function() {
+    api('DELETE', '/ai-keys/' + id).then(function() {
       state.aiKeys = state.aiKeys.filter(function(k) { return k.id !== id; });
       toast('AI key removed', 'success');
       navigate('settings');
@@ -1575,34 +1661,34 @@ input,select,textarea { font-size:16px !important; }
       '<h3 class="text-lg font-bold text-slate-800 mb-4">Edit Board Details</h3>' +
       '<div class="space-y-3" style="max-height:60vh;overflow-y:auto">' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Board Reference</label>' +
-          '<input type="text" id="bh-ref" class="input-field" value="' + esc(b.ref || '') + '"></div>' +
+          inputWithMic('bh-ref', 'Board Reference', b.ref) + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Location</label>' +
-          '<input type="text" id="bh-location" class="input-field" value="' + esc(b.location || '') + '"></div>' +
+          inputWithMic('bh-location', 'Location', b.location) + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Supplied From</label>' +
-          '<input type="text" id="bh-supplied" class="input-field" value="' + esc(b.supplied_from || '') + '"></div>' +
+          inputWithMic('bh-supplied', 'Supplied From', b.supplied_from) + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Phase</label>' +
           '<select id="bh-phase" class="select-field">' +
             '<option value="single"' + (b.phase === 'single' ? ' selected' : '') + '>Single Phase</option>' +
             '<option value="three"' + (b.phase === 'three' ? ' selected' : '') + '>Three Phase</option>' +
           '</select></div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">OCPD BS(EN)</label>' +
-          '<input type="text" id="bh-ocpd-bsen" class="input-field" value="' + esc(b.ocpd_bsen || '') + '"></div>' +
+          inputWithMic('bh-ocpd-bsen', 'OCPD BS(EN)', b.ocpd_bsen) + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">OCPD Type/Curve</label>' +
-          '<input type="text" id="bh-ocpd-type" class="input-field" value="' + esc(b.ocpd_type || '') + '"></div>' +
+          inputWithMic('bh-ocpd-type', 'OCPD Type/Curve', b.ocpd_type) + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">OCPD Rating (A)</label>' +
-          '<input type="number" id="bh-ocpd-rating" class="input-field" value="' + esc(b.ocpd_rating || '') + '"></div>' +
+          inputWithMic('bh-ocpd-rating', 'OCPD Rating (A)', b.ocpd_rating, 'number') + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Ze (ohms)</label>' +
-          '<input type="text" id="bh-ze" class="input-field" value="' + esc(b.ze || '') + '"></div>' +
+          inputWithMic('bh-ze', 'Ze (ohms)', b.ze) + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Ipf (kA)</label>' +
-          '<input type="text" id="bh-ipf" class="input-field" value="' + esc(b.ipf || '') + '"></div>' +
+          inputWithMic('bh-ipf', 'Ipf (kA)', b.ipf) + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Test Instrument (Loop)</label>' +
-          '<input type="text" id="bh-instrument-loop" class="input-field" value="' + esc(b.instrument_loop || '') + '" placeholder="Make, model, serial"></div>' +
+          inputWithMic('bh-instrument-loop', 'Make, model, serial', b.instrument_loop) + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Test Instrument (Insulation)</label>' +
-          '<input type="text" id="bh-instrument-ir" class="input-field" value="' + esc(b.instrument_ir || '') + '" placeholder="Make, model, serial"></div>' +
+          inputWithMic('bh-instrument-ir', 'Make, model, serial', b.instrument_ir) + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Test Instrument (RCD)</label>' +
-          '<input type="text" id="bh-instrument-rcd" class="input-field" value="' + esc(b.instrument_rcd || '') + '" placeholder="Make, model, serial"></div>' +
+          inputWithMic('bh-instrument-rcd', 'Make, model, serial', b.instrument_rcd) + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Test Instrument (Continuity)</label>' +
-          '<input type="text" id="bh-instrument-cont" class="input-field" value="' + esc(b.instrument_cont || '') + '" placeholder="Make, model, serial"></div>' +
+          inputWithMic('bh-instrument-cont', 'Make, model, serial', b.instrument_cont) + '</div>' +
       '</div>' +
       '<button class="btn btn-primary w-full mt-4" data-action="save-board-header">Save Board Details</button>'
     );
@@ -1630,6 +1716,248 @@ input,select,textarea { font-size:16px !important; }
       toast('Board details saved', 'success');
       navigate('board-detail');
     }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  /* ===== VOICE HELPERS ===== */
+
+  var _voiceRec = null;
+  var _voiceActive = false;
+
+  /* Raw speech-to-text into any input field */
+  function voiceToField(fieldId) {
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return toast('Speech not supported in this browser', 'error');
+    var field = document.getElementById(fieldId);
+    if (!field) return;
+    var btn = document.querySelector('[data-voice-for="' + fieldId + '"]');
+
+    if (_voiceActive && _voiceRec) {
+      _voiceRec.stop();
+      _voiceActive = false;
+      if (btn) { btn.style.background = ''; btn.textContent = '🎤'; }
+      return;
+    }
+
+    _voiceRec = new SR();
+    _voiceRec.continuous = true;
+    _voiceRec.interimResults = true;
+    _voiceRec.lang = 'en-GB';
+    var startVal = field.value || '';
+
+    _voiceRec.onresult = function(e) {
+      var transcript = '';
+      for (var i = 0; i < e.results.length; i++) transcript += e.results[i][0].transcript;
+      field.value = startVal ? startVal + ' ' + transcript : transcript;
+    };
+    _voiceRec.onerror = function() {
+      _voiceActive = false;
+      if (btn) { btn.style.background = ''; btn.textContent = '🎤'; }
+    };
+    _voiceRec.onend = function() {
+      _voiceActive = false;
+      if (btn) { btn.style.background = ''; btn.textContent = '🎤'; }
+    };
+
+    _voiceRec.start();
+    _voiceActive = true;
+    if (btn) { btn.style.background = '#ef4444'; btn.textContent = '⏹'; }
+  }
+
+  /* Helper to render a mic button for any field */
+  function micBtn(fieldId) {
+    return '<button type="button" class="mic-btn" data-action="voice-field" data-voice-for="' + fieldId + '" title="Voice input">🎤</button>';
+  }
+
+  /* Helper to render input + mic combo */
+  function inputWithMic(id, placeholder, value, type) {
+    type = type || 'text';
+    return '<div class="input-with-mic">' +
+      '<input type="' + type + '" id="' + id + '" class="input-field input-mic-field" placeholder="' + esc(placeholder) + '" value="' + esc(value || '') + '">' +
+      micBtn(id) +
+    '</div>';
+  }
+
+  function textareaWithMic(id, placeholder, value, rows) {
+    rows = rows || 3;
+    return '<div class="input-with-mic">' +
+      '<textarea id="' + id + '" class="input-field input-mic-field" rows="' + rows + '" placeholder="' + esc(placeholder) + '">' + esc(value || '') + '</textarea>' +
+      micBtn(id) +
+    '</div>';
+  }
+
+  /* Smart AI voice for observations — "C3 kitchen broken socket" auto-parsed */
+  function voiceObservation() {
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return toast('Speech not supported', 'error');
+
+    if (_voiceActive && _voiceRec) {
+      _voiceRec.stop();
+      _voiceActive = false;
+      var voBtn = document.getElementById('voice-obs-btn');
+      if (voBtn) { voBtn.style.background = ''; voBtn.innerHTML = '🎤 SPEAK OBSERVATION'; }
+      return;
+    }
+
+    _voiceRec = new SR();
+    _voiceRec.continuous = true;
+    _voiceRec.interimResults = false;
+    _voiceRec.lang = 'en-GB';
+
+    var voBtn = document.getElementById('voice-obs-btn');
+    if (voBtn) { voBtn.style.background = '#ef4444'; voBtn.innerHTML = '⏹ LISTENING... tap to stop'; }
+
+    _voiceRec.onresult = function(e) {
+      var transcript = '';
+      for (var i = 0; i < e.results.length; i++) transcript += e.results[i][0].transcript;
+      _voiceRec.stop();
+      _voiceActive = false;
+      if (voBtn) { voBtn.style.background = '#3b82f6'; voBtn.innerHTML = '⏳ Parsing...'; }
+
+      /* Parse with AI */
+      var provider = getSelectedProvider();
+      if (!provider) {
+        /* Try manual parse as fallback */
+        manualParseObservation(transcript);
+        return;
+      }
+
+      api('POST', '/ai/process', {
+        key_id: provider.id,
+        system_prompt: 'Parse this spoken electrical observation into structured data. Extract: code (C1/C2/C3/FI), location, description. The user is doing a BS 7671 EICR inspection. Return JSON: {"observations": [{"code": "C2", "location": "Kitchen", "description": "No RCD protection on socket outlet"}]}. If multiple observations are spoken, return them all. Always return valid JSON.',
+        prompt: 'Parse this observation: ' + transcript
+      }).then(function(res) {
+        var data = JSON.parse(res.result.replace(/```json|```/g, '').trim());
+        var obs = data.observations || [data];
+        var promises = obs.map(function(o) {
+          return api('POST', '/sites/' + state.currentSite.id + '/observations', {
+            code: o.code || 'C2',
+            description: o.description || transcript,
+            location: o.location || ''
+          });
+        });
+        return Promise.all(promises);
+      }).then(function(results) {
+        results.forEach(function(o) { state.observations.push(o); });
+        closeSheet();
+        toast(results.length + ' observation(s) added', 'success');
+        navigate('site-detail', {currentSiteTab: 'observations'});
+      }).catch(function(err) {
+        console.error('AI parse failed, using manual', err);
+        manualParseObservation(transcript);
+      });
+    };
+
+    _voiceRec.onerror = function() {
+      _voiceActive = false;
+      if (voBtn) { voBtn.style.background = ''; voBtn.innerHTML = '🎤 SPEAK OBSERVATION'; }
+      toast('Voice error — try again', 'error');
+    };
+    _voiceRec.onend = function() {
+      _voiceActive = false;
+      if (voBtn) { voBtn.style.background = ''; voBtn.innerHTML = '🎤 SPEAK OBSERVATION'; }
+    };
+
+    _voiceRec.start();
+    _voiceActive = true;
+  }
+
+  /* Basic fallback parser for observations without AI */
+  function manualParseObservation(text) {
+    var code = 'C2';
+    var match = text.match(/\b(C1|C2|C3|FI)\b/i);
+    if (match) code = match[1].toUpperCase();
+    var desc = text.replace(/\b(C1|C2|C3|FI)\b/i, '').trim();
+
+    /* Put it in the form fields */
+    var codeEl = document.getElementById('obs-code');
+    var descEl = document.getElementById('obs-description');
+    if (codeEl) { codeEl.value = code; selectObsCode(code); }
+    if (descEl) descEl.value = desc;
+    if (!descEl) {
+      /* Sheet not open, save directly */
+      api('POST', '/sites/' + state.currentSite.id + '/observations', {
+        code: code, description: desc, location: ''
+      }).then(function(o) {
+        state.observations.push(o);
+        closeSheet();
+        toast('Observation added', 'success');
+        navigate('site-detail', {currentSiteTab: 'observations'});
+      }).catch(function(err) { toast(err.message, 'error'); });
+    }
+    toast('Parsed: ' + code + ' — ' + desc, 'info');
+  }
+
+  /* Smart AI voice for inspection schedule — "1.1 pass, 1.2 pass, 5.17 C2" */
+  function voiceInspection() {
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return toast('Speech not supported', 'error');
+
+    if (_voiceActive && _voiceRec) {
+      _voiceRec.stop();
+      _voiceActive = false;
+      var viBtn = document.getElementById('voice-insp-btn');
+      if (viBtn) { viBtn.style.background = ''; viBtn.innerHTML = '🎤 SPEAK OUTCOMES'; }
+      return;
+    }
+
+    _voiceRec = new SR();
+    _voiceRec.continuous = true;
+    _voiceRec.interimResults = false;
+    _voiceRec.lang = 'en-GB';
+
+    var viBtn = document.getElementById('voice-insp-btn');
+    if (viBtn) { viBtn.style.background = '#ef4444'; viBtn.innerHTML = '⏹ LISTENING... tap to stop'; }
+
+    _voiceRec.onresult = function(e) {
+      var transcript = '';
+      for (var i = 0; i < e.results.length; i++) transcript += e.results[i][0].transcript;
+      _voiceRec.stop();
+      _voiceActive = false;
+      if (viBtn) { viBtn.style.background = '#3b82f6'; viBtn.innerHTML = '⏳ Parsing...'; }
+
+      var provider = getSelectedProvider();
+      if (!provider) { toast('Add an AI key in Settings', 'error'); return; }
+
+      api('POST', '/ai/process', {
+        key_id: provider.id,
+        system_prompt: 'Parse spoken BS 7671 inspection schedule outcomes. The user speaks item numbers and outcomes. Valid outcomes: Pass, C1, C2, C3, FI, N/A, LIM, N/V. Map spoken words: "pass" → "Pass", "not applicable" or "N A" → "N/A", "limitation" → "LIM", "not verified" → "N/V". Return JSON: {"items": [{"ref": "1.1", "outcome": "Pass"}, {"ref": "5.17", "outcome": "C2"}]}',
+        prompt: 'Parse these inspection outcomes: ' + transcript
+      }).then(function(res) {
+        var data = JSON.parse(res.result.replace(/```json|```/g, '').trim());
+        if (!data.items || !data.items.length) throw new Error('No items parsed');
+
+        /* Update the dropdowns in the UI */
+        data.items.forEach(function(item) {
+          var sel = document.querySelector('select[data-ref="' + item.ref + '"]');
+          if (sel) {
+            sel.value = item.outcome;
+            sel.className = 'outcome-select outcome-' + item.outcome.toLowerCase().replace('/', '');
+          }
+        });
+
+        /* Save to server */
+        return api('PUT', '/sites/' + state.currentSite.id + '/inspections', data.items.map(function(i) {
+          return { item_ref: i.ref, outcome: i.outcome };
+        }));
+      }).then(function() {
+        toast('Inspection outcomes updated', 'success');
+        if (viBtn) viBtn.innerHTML = '🎤 SPEAK OUTCOMES';
+      }).catch(function(err) {
+        toast('Parse failed: ' + err.message, 'error');
+        if (viBtn) viBtn.innerHTML = '🎤 SPEAK OUTCOMES';
+      });
+    };
+
+    _voiceRec.onerror = function() { _voiceActive = false; if (viBtn) viBtn.innerHTML = '🎤 SPEAK OUTCOMES'; };
+    _voiceRec.onend = function() { _voiceActive = false; };
+    _voiceRec.start();
+    _voiceActive = true;
+  }
+
+  /* Get the first available AI provider */
+  function getSelectedProvider() {
+    if (state.aiKeys && state.aiKeys.length) return state.aiKeys[0];
+    return null;
   }
 
   /* ===== UTILITY ===== */
@@ -1754,14 +2082,19 @@ input,select,textarea { font-size:16px !important; }
         saveAllCircuits();
         break;
       case 'ai-photo-scan':
-        loadAiKeys().catch ? openPhotoScan() : (function() {
-          api('GET', '/ai-keys').then(function(d) { state.aiKeys = d; openPhotoScan(); }).catch(function() { openPhotoScan(); });
-        })();
+        ensureAiKeys().then(function() { openPhotoScan(); });
         break;
       case 'ai-voice-input':
-        (function() {
-          api('GET', '/ai-keys').then(function(d) { state.aiKeys = d; openVoiceInput(); }).catch(function() { openVoiceInput(); });
-        })();
+        ensureAiKeys().then(function() { openVoiceInput(); });
+        break;
+      case 'voice-field':
+        voiceToField(target.getAttribute('data-voice-for'));
+        break;
+      case 'voice-observation':
+        ensureAiKeys().then(function() { voiceObservation(); });
+        break;
+      case 'voice-inspection':
+        ensureAiKeys().then(function() { voiceInspection(); });
         break;
       case 'run-photo-scan':
         runPhotoScan();
@@ -1853,10 +2186,15 @@ input,select,textarea { font-size:16px !important; }
 
   /* ===== INIT ===== */
   function init() {
+    updateOfflineBanner();
     if (state.token) {
       api('GET', '/auth/me').then(function(user) {
         state.user = user;
         navigate('sites');
+        /* Preload AI keys so they're ready for photo/voice features */
+        loadAiKeys();
+        /* Flush any offline queue */
+        flushOfflineQueue();
       }).catch(function() {
         state.token = null;
         localStorage.removeItem('eicr_token');
