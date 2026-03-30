@@ -754,10 +754,14 @@ KEY KNOWLEDGE:
 - Classification codes: C1 (danger present), C2 (potentially dangerous), C3 (improvement recommended), FI (further investigation required)
 - Test readings: Ze (external earth fault loop impedance), Zs (earth fault loop impedance), R1+R2 (continuity), Insulation resistance (IR in MΩ), RCD trip times (ms)
 - Max Zs values use 80% rule for on-site measurements
-- Wiring types: Flat T+E (twin & earth), SWA (steel wire armoured), MICC (mineral insulated), Singles in conduit/trunking
+- Wiring types (ALWAYS use short BS 7671 codes): T+E (twin & earth), SWA (steel wire armoured), MICC (mineral insulated), Singles (in conduit/trunking), Flex, FP200, SY, XLPE
+- Installation reference methods (BS 7671 Table 4A2): A (insulating wall), B (conduit/trunking on wall), C (clipped direct), D (underground duct), E (tray touching), F (tray spaced), G (free air/ladder)
 - Common CSA sizes: 1.0, 1.5, 2.5, 4.0, 6.0, 10.0, 16.0, 25.0mm²
+- Circuit numbering: SP boards = 1,2,3,4...; TP boards = L1:1,4,7... L2:2,5,8... L3:3,6,9...
+- "CCT" = circuit. "CCT 5" = circuit number 5.
+- Spare ways: description="Spare", all other fields="--"
 
-Always use correct UK electrical terminology and BS 7671 conventions.`;
+CRITICAL: Always use SHORT codes for wiring types (T+E not "Flat twin and earth") and reference methods (C not "Clipped direct"). All work is to BS 7671:2018+A2:2022.`;
 
 app.post('/api/ai/process', authMiddleware, async (req, res) => {
   const { key_id, prompt, image_base64, images_base64, system_prompt } = req.body;

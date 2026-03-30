@@ -4295,13 +4295,47 @@ input,select,textarea { font-size:16px !important; }
       '6. "observations" — [{code:"C2", description:"technical desc", location:"where"}]\n' +
       '   ALWAYS rewrite descriptions in proper technical EICR report language\n' +
       '7. "message" — Text response to questions\n\n' +
-      'CIRCUIT FIELDS: number, description, ocpd_bsen (60898=MCB, 61009=RCBO, 61008=RCD, 60947-2=MCCB), ' +
-      'ocpd_type (B/C/D), ocpd_rating, breaking_cap (kA — breaking capacity of the OCPD, e.g. "6", "10", "16"), ' +
-      'live_mm, cpc_mm, wiring_type (A=T+E, B=conduit metal, C=conduit plastic, F=SWA, H=MICC), ref_method, points, ' +
-      'r1, rn, r2, r1r2, r2_measured, r2_ring, ir_test_v (250/500/1000), ir_ll, ir_le, ' +
+      'CIRCUIT FIELDS: number, description, ocpd_bsen, ocpd_type, ocpd_rating, breaking_cap, ' +
+      'live_mm, cpc_mm, wiring_type, ref_method, points, ' +
+      'r1, rn, r2, r1r2, r2_measured, r2_ring, ir_test_v, ir_ll, ir_le, ' +
       'polarity (boolean), zs_measured, max_zs, rcd_bsen, rcd_type, rcd_idn, ' +
-      'rcd_time_x1, rcd_time_x5, rcd_test_btn (boolean), afdd, max_disconnect (0.4 or 5), remarks.\n' +
-      'NOTE: "kA" = breaking_cap. "set kA to 6" or "MCB kA 6" = breaking_cap:"6". Standard MCB kA: 6kA (domestic), 10kA (commercial), 16kA (industrial).\n\n' +
+      'rcd_time_x1, rcd_test_btn (boolean), afdd_test, remarks.\n\n' +
+      'BS 7671:2018+A2:2022 — CRITICAL FIELD VALUES (use EXACTLY these codes):\n' +
+      'ocpd_bsen: "60898" (MCB), "61009" (RCBO), "61008" (RCD), "60947-2" (MCCB), "88-2" (HRC fuse), "3036" (rewireable fuse)\n' +
+      'ocpd_type: "B" (general 3-5x), "C" (motors 5-10x), "D" (transformers 10-20x), "gG" (fuse general purpose)\n' +
+      'breaking_cap: "6" (domestic), "10" (commercial standard), "16" (industrial). "kA" = breaking_cap.\n' +
+      'ir_test_v: "250", "500" (standard), "1000"\n\n' +
+      'WIRING TYPES — use SHORT BS 7671 codes ONLY, never full English names:\n' +
+      '  "T+E" = flat twin & earth (most common domestic/commercial)\n' +
+      '  "SWA" = steel wire armoured cable\n' +
+      '  "MICC" = mineral insulated copper clad\n' +
+      '  "Singles" = single core cables in conduit/trunking\n' +
+      '  "Flex" = flexible cord/cable\n' +
+      '  "SY" = screened flexible cable\n' +
+      '  "FP200" = fire performance cable\n' +
+      '  "XLPE" = cross-linked polyethylene\n' +
+      '  "Cat5" / "Cat6" = data cable (if applicable)\n' +
+      '  NEVER output "Flat twin and earth" — output "T+E". NEVER "Steel wire armoured" — output "SWA".\n\n' +
+      'INSTALLATION REFERENCE METHODS — use BS 7671 Table 4A2 letter codes:\n' +
+      '  "A" = enclosed in thermally insulating wall\n' +
+      '  "B" = in conduit or trunking on a wall\n' +
+      '  "C" = clipped direct to surface\n' +
+      '  "D" = in underground ducts\n' +
+      '  "E" = on cable tray (unenclosed, touching)\n' +
+      '  "F" = on cable tray (unenclosed, spaced)\n' +
+      '  "G" = in free air / cable ladder, spaced\n' +
+      '  "100" = Ref 100 (embedded in thermal insulation — old method B)\n' +
+      '  ALWAYS use the single letter code. NEVER output full descriptions.\n\n' +
+      'RCD: rcd_bsen="61008" (standalone RCD) or "61009" (RCBO). rcd_type: "A", "AC", "B", "S". rcd_idn: "30", "100", "300" (in mA).\n' +
+      'For non-RCD circuits (MCB only, fuse only): rcd_bsen="--", rcd_idn="--", rcd_type="--".\n\n' +
+      'CIRCUIT NUMBERING:\n' +
+      '- Single-phase (SP): numbered 1, 2, 3, 4... sequentially\n' +
+      '- Three-phase (TP): numbered by phase — L1=1,4,7,10... L2=2,5,8,11... L3=3,6,9,12...\n' +
+      '  Example TP board: CCT 1 (L1), 2 (L2), 3 (L3), 4 (L1), 5 (L2), 6 (L3)...\n' +
+      '  TP circuits can be single-pole (1 way) or 3-pole (spanning 3 ways)\n' +
+      '- "CCT" or "cct" = circuit number. "CCT 5" = circuit with number "5"\n' +
+      '- When user says "circuit 5" or "CCT 5", match by the number field, not array index\n' +
+      '- Spare/unused ways: description="Spare", all other fields="--"\n\n' +
       'INSPECTION SCHEDULE:\n' + itemList + '\n\n' +
       'COMPOUND INSTRUCTIONS:\n' +
       '- "16mm water bonding, no other bonding required" → inspection_updates: 3.1.1→Sat (note size), 3.1.2→Sat, 3.1.3→N/A, 3.1.4→N/A, 3.1.5→N/A, 3.1.6→N/A, 3.1.7→N/A\n' +
@@ -4314,9 +4348,13 @@ input,select,textarea { font-size:16px !important; }
       '- "all MCBs are 6kA" → updates for all circuits that have ocpd_bsen:"60898" with breaking_cap:"6"\n\n' +
       'RULES:\n' +
       '- "greater than 200" or "infinity" for insulation = ">200"\n' +
-      '- Only include fields the user mentioned\n' +
+      '- Only include fields the user mentioned — do NOT invent or guess values\n' +
+      '- NEVER fabricate circuit data. If a circuit is "Spare", "N/A", or "Blank", leave it as-is with "--" in all fields. Do NOT replace spare ways with made-up circuits.\n' +
+      '- NEVER add circuits that the user did not describe. Only update circuits the user specifically refers to.\n' +
       '- When adding observations, ALWAYS also add inspection_updates for the related items\n' +
-      '- Rewrite observation descriptions professionally\n\n' +
+      '- Rewrite observation descriptions professionally\n' +
+      '- Use ONLY BS 7671 short codes for wiring types (T+E, SWA, MICC, Singles, Flex) — NEVER full English\n' +
+      '- Use ONLY BS 7671 letter codes for ref methods (A, B, C, D, E, F, G) — NEVER full descriptions\n\n' +
       'RETURN FORMAT (valid JSON only):\n' +
       '{"updates":[...], "delete":[...], "renumber":true, "board_updates":{...}, "inspection_updates":[...], "observations":[...], "message":"..."}';
   }
