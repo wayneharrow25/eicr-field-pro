@@ -76,14 +76,27 @@ input,select,textarea { font-size:16px !important; }
 @keyframes toastIn { from{opacity:0;transform:translateY(-1rem)} to{opacity:1;transform:translateY(0)} }
 .loading-spinner { width:2rem; height:2rem; border:3px solid #e2e8f0; border-top-color:#3b82f6; border-radius:50%; animation:spin .6s linear infinite; }
 @keyframes spin { to{transform:rotate(360deg)} }
-.test-table { font-size:.75rem; border-collapse:separate; border-spacing:0; }
-.test-table th { background:#f1f5f9; position:sticky; top:0; z-index:5; padding:.375rem .5rem; white-space:nowrap; font-weight:600; color:#475569; border-bottom:2px solid #e2e8f0; text-align:left; }
-.test-table td { padding:.375rem .5rem; border-bottom:1px solid #f1f5f9; white-space:nowrap; cursor:pointer; min-width:3rem; }
+.test-table { font-size:.7rem; border-collapse:separate; border-spacing:0; }
+.test-table th { background:#f1f5f9; position:sticky; top:0; z-index:5; padding:.25rem .375rem; white-space:nowrap; font-weight:600; color:#475569; border-bottom:2px solid #e2e8f0; text-align:left; cursor:pointer; user-select:none; }
+.test-table th:hover { background:#dbeafe; }
+.test-table td { padding:.25rem .375rem; border-bottom:1px solid #f1f5f9; white-space:nowrap; cursor:pointer; min-width:2rem; }
 .test-table td:hover { background:#eff6ff; }
 .test-table tr:nth-child(even) td { background:#fafbfc; }
 .test-table .zs-fail { background:#fef2f2 !important; color:#ef4444; font-weight:700; }
 .test-table .zs-pass { color:#22c55e; }
+.test-table .rcd-col { display:none; }
+.test-table.show-rcd .rcd-col { display:table-cell; }
 .scroll-wrapper { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.col-fill-popup { position:fixed; z-index:100; background:#fff; border:1px solid #e2e8f0; border-radius:.75rem; box-shadow:0 8px 24px rgba(0,0,0,.15); padding:.5rem; min-width:10rem; }
+.col-fill-popup button { display:block; width:100%; text-align:left; padding:.5rem .75rem; border:none; background:none; font-size:.875rem; cursor:pointer; border-radius:.5rem; }
+.col-fill-popup button:hover { background:#eff6ff; }
+.col-fill-popup .cfp-head { font-size:.7rem; color:#94a3b8; font-weight:600; padding:.25rem .75rem; text-transform:uppercase; }
+.inline-edit { position:fixed; z-index:100; background:#fff; border:2px solid #3b82f6; border-radius:.5rem; box-shadow:0 4px 16px rgba(0,0,0,.15); }
+.inline-edit input, .inline-edit select { border:none; font-size:.875rem; padding:.5rem .75rem; outline:none; min-width:6rem; border-radius:.5rem; }
+.inline-edit .ie-btns { display:flex; border-top:1px solid #e2e8f0; }
+.inline-edit .ie-btns button { flex:1; padding:.375rem; border:none; cursor:pointer; font-size:.75rem; font-weight:600; }
+.inline-edit .ie-btns button:first-child { background:#eff6ff; color:#2563eb; border-radius:0 0 0 .5rem; }
+.inline-edit .ie-btns button:last-child { background:#f0fdf4; color:#16a34a; border-radius:0 0 .5rem 0; }
 .section-header { position:sticky; top:0; z-index:10; background:#f1f5f9; padding:.75rem 1rem; font-weight:700; font-size:.875rem; color:#334155; border-bottom:1px solid #e2e8f0; }
 .outcome-select { padding:.375rem .5rem; border:1.5px solid #e2e8f0; border-radius:.5rem; font-size:.813rem; font-weight:600; min-width:4rem; background:#fff; }
 .outcome-pass { border-color:#22c55e; color:#22c55e; background:#f0fdf4; }
@@ -912,26 +925,45 @@ input,select,textarea { font-size:16px !important; }
         '<span class="flex-1 text-xs text-slate-600" id="bulk-select-count">0 selected</span>' +
         '<button class="btn btn-sm" style="background:#fef3c7;color:#92400e" data-action="bulk-clear-selected">Clear</button>' +
         '<button class="btn btn-danger btn-sm" data-action="bulk-delete-selected">Delete</button>' +
-      '</div>' +
+      '</div>';
+
+    /* Check if any circuit has RCD data — show RCD columns only when needed */
+    var hasRcd = state.circuits.some(function(c) {
+      return c.ocpd_bsen === '61009' || c.ocpd_bsen === '61008' || (c.rcd_bsen && c.rcd_bsen !== 'N/A');
+    });
+
+    html +=
       '<div class="scroll-wrapper">' +
-        '<table class="test-table w-full">' +
+        '<table class="test-table w-full' + (hasRcd ? ' show-rcd' : '') + '" id="circuit-table">' +
           '<thead><tr>' +
-            '<th>#</th><th>Description</th><th>Type</th><th>Ref</th><th>Pts</th>' +
-            '<th>L mm\u00b2</th><th>CPC mm\u00b2</th>' +
-            '<th>BS(EN)</th><th>Curve</th><th>Rating</th><th>kA</th><th>Max Zs</th>' +
-            '<th>RCD BS</th><th>RCD Type</th><th>I\u0394n</th><th>RCD A</th>' +
-            '<th>r1</th><th>rn</th><th>r2</th><th>R1+R2</th><th>R2</th><th>R2 ring</th>' +
-            '<th>Test V</th><th>L-L M\u03a9</th><th>L-E M\u03a9</th>' +
-            '<th>Pol</th>' +
-            '<th>Zs</th>' +
-            '<th>x1 ms</th><th>x5 ms</th><th>Test \u2713</th>' +
-            '<th>AFDD</th>' +
-            '<th>Remarks</th>' +
+            '<th data-col="number">#</th>' +
+            '<th data-col="description">Desc</th>' +
+            '<th data-col="wiring_type">WT</th>' +
+            '<th data-col="ref_method">Ref</th>' +
+            '<th data-col="ocpd_bsen">BS</th>' +
+            '<th data-col="ocpd_type">Crv</th>' +
+            '<th data-col="ocpd_rating">A</th>' +
+            '<th data-col="breaking_cap">kA</th>' +
+            '<th data-col="max_zs">Zs\u2098</th>' +
+            '<th data-col="rcd_bsen" class="rcd-col">RCD</th>' +
+            '<th data-col="rcd_type" class="rcd-col">Typ</th>' +
+            '<th data-col="rcd_idn" class="rcd-col">mA</th>' +
+            '<th data-col="live_mm">L</th>' +
+            '<th data-col="cpc_mm">E</th>' +
+            '<th data-col="r1">r1</th>' +
+            '<th data-col="rn">rn</th>' +
+            '<th data-col="r1r2">R1R2</th>' +
+            '<th data-col="ir_ll">L-L</th>' +
+            '<th data-col="ir_le">L-E</th>' +
+            '<th data-col="zs_measured">Zs</th>' +
+            '<th data-col="polarity">Pol</th>' +
+            '<th data-col="rcd_time_x1" class="rcd-col">x1</th>' +
+            '<th data-col="rcd_test_btn" class="rcd-col">Btn</th>' +
           '</tr></thead>' +
           '<tbody id="circuit-tbody">';
 
     if (state.circuits.length === 0) {
-      html += '<tr><td colspan="32" class="text-center py-6 text-slate-400">No circuits — add one or use AI scan</td></tr>';
+      html += '<tr><td colspan="23" class="text-center py-6 text-slate-400">No circuits — add one or use AI scan</td></tr>';
     } else {
       state.circuits.forEach(function(c, idx) {
         var zsClass = '';
@@ -942,39 +974,30 @@ input,select,textarea { font-size:16px !important; }
             zsClass = measured <= maxZs ? 'zs-pass' : 'zs-fail';
           }
         }
-        html += '<tr data-action="edit-circuit" data-idx="' + idx + '">' +
-          '<td class="font-semibold">' + esc(c.number || '') + '</td>' +
-          '<td style="max-width:8rem;overflow:hidden;text-overflow:ellipsis">' + esc(c.description || '') + '</td>' +
-          '<td>' + esc(c.wiring_type || '') + '</td>' +
-          '<td>' + esc(c.ref_method || '') + '</td>' +
-          '<td>' + esc(c.points || '') + '</td>' +
-          '<td>' + esc(c.live_mm || '') + '</td>' +
-          '<td>' + esc(c.cpc_mm || '') + '</td>' +
-          '<td>' + esc(c.ocpd_bsen || '') + '</td>' +
-          '<td>' + esc(c.ocpd_type || '') + '</td>' +
-          '<td>' + esc(c.ocpd_rating || '') + '</td>' +
-          '<td>' + esc(c.breaking_cap || '') + '</td>' +
-          '<td>' + esc(c.max_zs || '') + '</td>' +
-          '<td>' + esc(c.rcd_bsen || '') + '</td>' +
-          '<td>' + esc(c.rcd_type || '') + '</td>' +
-          '<td>' + esc(c.rcd_idn || '') + '</td>' +
-          '<td>' + esc(c.rcd_rating || '') + '</td>' +
-          '<td>' + esc(c.r1 || '') + '</td>' +
-          '<td>' + esc(c.rn || '') + '</td>' +
-          '<td>' + esc(c.r2 || '') + '</td>' +
-          '<td>' + esc(c.r1r2 || '') + '</td>' +
-          '<td>' + esc(c.r2_measured || '') + '</td>' +
-          '<td>' + esc(c.r2_ring || '') + '</td>' +
-          '<td>' + esc(c.ir_test_v || '') + '</td>' +
-          '<td>' + esc(c.ir_ll || '') + '</td>' +
-          '<td>' + esc(c.ir_le || '') + '</td>' +
-          '<td>' + (c.polarity ? '\u2713' : '') + '</td>' +
-          '<td class="' + zsClass + '">' + esc(c.zs_measured || '') + '</td>' +
-          '<td>' + esc(c.rcd_time_x1 || '') + '</td>' +
-          '<td>' + esc(c.rcd_time_x5 || '') + '</td>' +
-          '<td>' + (c.rcd_test_btn ? '\u2713' : '') + '</td>' +
-          '<td>' + (c.afdd_test ? '\u2713' : '') + '</td>' +
-          '<td style="max-width:6rem;overflow:hidden;text-overflow:ellipsis">' + esc(c.remarks || '') + '</td>' +
+        html += '<tr data-idx="' + idx + '">' +
+          '<td class="font-semibold" data-col="number">' + esc(c.number || '') + '</td>' +
+          '<td data-col="description" style="max-width:6rem;overflow:hidden;text-overflow:ellipsis">' + esc(c.description || '') + '</td>' +
+          '<td data-col="wiring_type">' + esc(c.wiring_type || '') + '</td>' +
+          '<td data-col="ref_method">' + esc(c.ref_method || '') + '</td>' +
+          '<td data-col="ocpd_bsen">' + esc(c.ocpd_bsen || '') + '</td>' +
+          '<td data-col="ocpd_type">' + esc(c.ocpd_type || '') + '</td>' +
+          '<td data-col="ocpd_rating">' + esc(c.ocpd_rating || '') + '</td>' +
+          '<td data-col="breaking_cap">' + esc(c.breaking_cap || '') + '</td>' +
+          '<td data-col="max_zs">' + esc(c.max_zs || '') + '</td>' +
+          '<td data-col="rcd_bsen" class="rcd-col">' + esc(c.rcd_bsen || '') + '</td>' +
+          '<td data-col="rcd_type" class="rcd-col">' + esc(c.rcd_type || '') + '</td>' +
+          '<td data-col="rcd_idn" class="rcd-col">' + esc(c.rcd_idn || '') + '</td>' +
+          '<td data-col="live_mm">' + esc(c.live_mm || '') + '</td>' +
+          '<td data-col="cpc_mm">' + esc(c.cpc_mm || '') + '</td>' +
+          '<td data-col="r1">' + esc(c.r1 || '') + '</td>' +
+          '<td data-col="rn">' + esc(c.rn || '') + '</td>' +
+          '<td data-col="r1r2">' + esc(c.r1r2 || '') + '</td>' +
+          '<td data-col="ir_ll">' + esc(c.ir_ll || '') + '</td>' +
+          '<td data-col="ir_le">' + esc(c.ir_le || '') + '</td>' +
+          '<td data-col="zs_measured" class="' + zsClass + '">' + esc(c.zs_measured || '') + '</td>' +
+          '<td data-col="polarity">' + (c.polarity ? '\u2713' : '') + '</td>' +
+          '<td data-col="rcd_time_x1" class="rcd-col">' + esc(c.rcd_time_x1 || '') + '</td>' +
+          '<td data-col="rcd_test_btn" class="rcd-col">' + (c.rcd_test_btn ? '\u2713' : '') + '</td>' +
         '</tr>';
       });
     }
@@ -1097,7 +1120,7 @@ input,select,textarea { font-size:16px !important; }
     var c = state.circuits[idx] || {};
     var isNew = idx === -1;
     if (isNew) {
-      c = {number: String(state.circuits.length + 1)};
+      c = {number: String(state.circuits.length + 1), breaking_cap: '10', afdd_test: 'N/A'};
     }
 
     var fields = [
@@ -1217,6 +1240,7 @@ input,select,textarea { font-size:16px !important; }
       }
     });
 
+    applyCircuitDefaults(c);
     if (idx === -1) {
       state.circuits.push(c);
     } else {
@@ -1256,6 +1280,211 @@ input,select,textarea { font-size:16px !important; }
     autoSave('circuits');
   }
 
+  /* ===== CLIENT-SIDE MAX ZS TABLE (BS 7671) ===== */
+  var MAX_ZS = {
+    '60898': {
+      'B': {6:7.28,10:4.37,16:2.73,20:2.19,25:1.75,32:1.37,40:1.09,50:0.87,63:0.69,80:0.55,100:0.44,125:0.35},
+      'C': {6:3.64,10:2.19,16:1.37,20:1.09,25:0.87,32:0.68,40:0.55,50:0.44,63:0.35,80:0.27,100:0.22,125:0.17},
+      'D': {6:1.82,10:1.09,16:0.68,20:0.55,25:0.44,32:0.34,40:0.27,50:0.22,63:0.17,80:0.14,100:0.11,125:0.09}
+    },
+    '3036': {'gG': {5:9.58,15:3.20,20:2.30,30:1.44,45:0.96}},
+    '88-2': {'gG': {6:7.67,10:4.60,16:2.87,20:2.30,25:1.77,32:1.37,40:1.04,50:0.82,63:0.57,80:0.43,100:0.32,125:0.25}},
+    '60947-2': {
+      'C': {16:1.37,20:1.09,25:0.87,32:0.68,40:0.55,50:0.44,63:0.35,80:0.27,100:0.22,125:0.17,160:0.14,200:0.11,250:0.09},
+      'D': {16:0.68,20:0.55,25:0.44,32:0.34,40:0.27,50:0.22,63:0.17,80:0.14,100:0.11,125:0.09,160:0.07,200:0.05,250:0.04}
+    }
+  };
+  MAX_ZS['61009'] = MAX_ZS['60898'];
+  MAX_ZS['60269'] = MAX_ZS['88-2'];
+
+  function lookupMaxZsLocal(bsen, type, rating) {
+    var table = MAX_ZS[bsen];
+    if (!table) return null;
+    var curve = table[type];
+    if (!curve) return null;
+    return curve[parseInt(rating)] || null;
+  }
+
+  /* Auto-populate smart defaults on a circuit object */
+  function applyCircuitDefaults(c) {
+    /* Breaking cap default 10kA */
+    if (!c.breaking_cap) c.breaking_cap = '10';
+    /* AFDD default N/A */
+    if (!c.afdd_test && c.afdd_test !== false) c.afdd_test = 'N/A';
+    /* 61009 auto-sets RCD fields */
+    if (c.ocpd_bsen === '61009') {
+      if (!c.rcd_bsen) c.rcd_bsen = '61009';
+      if (!c.rcd_idn) c.rcd_idn = '30';
+      if (!c.rcd_type) c.rcd_type = 'A';
+    }
+    /* Auto-lookup Max Zs */
+    if (c.ocpd_bsen && c.ocpd_type && c.ocpd_rating) {
+      var zs = lookupMaxZsLocal(c.ocpd_bsen, c.ocpd_type, c.ocpd_rating);
+      if (zs !== null) c.max_zs = String(zs);
+    }
+  }
+
+  /* ===== COLUMN QUICK-FILL CONFIG ===== */
+  var COLUMN_FILLS = {
+    ir_ll:        [{v:'>200',l:'>200 MΩ'},{v:'LIM',l:'LIM'},{v:'N/A',l:'N/A'}],
+    ir_le:        [{v:'>200',l:'>200 MΩ'},{v:'LIM',l:'LIM'},{v:'N/A',l:'N/A'}],
+    breaking_cap: [{v:'10',l:'10 kA'},{v:'6',l:'6 kA'},{v:'15',l:'15 kA'}],
+    rcd_idn:      [{v:'30',l:'30 mA'},{v:'100',l:'100 mA'},{v:'300',l:'300 mA'},{v:'N/A',l:'N/A'}],
+    rcd_type:     [{v:'A',l:'A'},{v:'AC',l:'AC'},{v:'B',l:'B'},{v:'S',l:'S (delay)'},{v:'N/A',l:'N/A'}],
+    polarity:     [{v:true,l:'Yes ✓'},{v:false,l:'No'}],
+    rcd_test_btn: [{v:true,l:'Yes ✓'},{v:false,l:'No'}],
+    afdd_test:    [{v:'N/A',l:'N/A'},{v:true,l:'Yes ✓'},{v:false,l:'No'}],
+    ocpd_type:    [{v:'B',l:'B'},{v:'C',l:'C'},{v:'D',l:'D'}],
+    ocpd_bsen:    [{v:'60898',l:'60898 MCB'},{v:'61009',l:'61009 RCBO'},{v:'88-2',l:'88-2 Fuse'}],
+    ir_test_v:    [{v:'500',l:'500V'},{v:'250',l:'250V'},{v:'1000',l:'1000V'}],
+    wiring_type:  [{v:'T+E',l:'T+E'},{v:'SWA',l:'SWA'},{v:'Singles/Con',l:'Singles/Con'},{v:'FP',l:'FP200'}],
+    live_mm:      [{v:'1.5',l:'1.5'},{v:'2.5',l:'2.5'},{v:'4',l:'4'},{v:'6',l:'6'},{v:'10',l:'10'}],
+    cpc_mm:       [{v:'1.0',l:'1.0'},{v:'1.5',l:'1.5'},{v:'2.5',l:'2.5'},{v:'4',l:'4'}],
+    r1:           [{v:'N/A',l:'N/A'}],
+    rn:           [{v:'N/A',l:'N/A'}],
+    r1r2:         [{v:'N/A',l:'N/A'}],
+    zs_measured:  [{v:'N/A',l:'N/A'}],
+    rcd_time_x1:  [{v:'N/A',l:'N/A'}]
+  };
+
+  /* ===== INLINE CELL EDIT CONFIG ===== */
+  var CELL_OPTIONS = {
+    wiring_type:  ['','T+E','T+3E','Singles/Con','Singles/Trk','SWA','MICC','FP','LSF','XLPE/SWA','Flex','Busbar'],
+    ref_method:   ['','A','B','C','D','E','F','G','100','101','102','103'],
+    ocpd_bsen:    ['','60898','61009','61008','88-2','88-3','60947-2','3036'],
+    ocpd_type:    ['','B','C','D','gG','aM'],
+    rcd_bsen:     ['','61008','61009','62423','N/A'],
+    rcd_type:     ['','AC','A','B','F','S','N/A'],
+    rcd_idn:      ['','10','30','100','300','500','N/A'],
+    polarity:     [{v:true,l:'Yes'},{v:false,l:''},{v:'',l:'--'}],
+    rcd_test_btn: [{v:true,l:'Yes'},{v:false,l:''},{v:'',l:'--'}],
+    afdd_test:    [{v:'N/A',l:'N/A'},{v:true,l:'Yes'},{v:false,l:'No'},{v:'',l:'--'}],
+    ir_test_v:    ['','250','500','1000'],
+    breaking_cap: ['','6','10','15','25'],
+    live_mm:      ['','1.0','1.5','2.5','4','6','10','16','25','35'],
+    cpc_mm:       ['','1.0','1.5','2.5','4','6','10','16']
+  };
+
+  function closePopups() {
+    var p = document.querySelector('.col-fill-popup');
+    if (p) p.remove();
+    var ie = document.querySelector('.inline-edit');
+    if (ie) ie.remove();
+  }
+
+  /* Column header tap → quick-fill popup */
+  function openColumnFill(col, thEl) {
+    closePopups();
+    var fills = COLUMN_FILLS[col];
+    if (!fills || !fills.length) return;
+    var rect = thEl.getBoundingClientRect();
+    var div = document.createElement('div');
+    div.className = 'col-fill-popup fade-in';
+    div.style.left = Math.min(rect.left, window.innerWidth - 180) + 'px';
+    div.style.top = (rect.bottom + 4) + 'px';
+
+    var h = '<div class="cfp-head">Fill all circuits</div>';
+    fills.forEach(function(f) {
+      h += '<button data-action="cfp-fill" data-col="' + col + '" data-val="' + esc(String(f.v)) + '">' + esc(f.l) + '</button>';
+    });
+    h += '<div class="cfp-head" style="margin-top:.25rem">Custom</div>';
+    h += '<div style="display:flex;gap:.25rem;padding:0 .5rem .25rem"><input type="text" class="input-field" id="cfp-custom" placeholder="Value" style="flex:1;font-size:.8rem;padding:.375rem"><button data-action="cfp-custom" data-col="' + col + '" class="btn btn-primary btn-sm" style="font-size:.7rem">Set</button></div>';
+    div.innerHTML = h;
+    document.body.appendChild(div);
+    setTimeout(function() { document.addEventListener('click', closeCfpOutside, true); }, 10);
+  }
+
+  function closeCfpOutside(e) {
+    var p = document.querySelector('.col-fill-popup');
+    if (p && !p.contains(e.target) && !e.target.closest('th[data-col]')) {
+      closePopups();
+      document.removeEventListener('click', closeCfpOutside, true);
+    }
+  }
+
+  function applyColumnFill(col, val) {
+    snapshotCircuits();
+    var checks = document.querySelectorAll('.bulk-check:checked');
+    var indices = [];
+    if (_bulkSelectMode && checks.length > 0) {
+      checks.forEach(function(c) { indices.push(parseInt(c.getAttribute('data-idx'))); });
+    }
+    var count = 0;
+    state.circuits.forEach(function(c, i) {
+      if (indices.length > 0 && indices.indexOf(i) === -1) return;
+      if (col === 'polarity' || col === 'rcd_test_btn') {
+        c[col] = (val === 'true');
+      } else if (col === 'afdd_test') {
+        c[col] = val === 'true' ? true : val === 'false' ? false : val;
+      } else {
+        c[col] = val;
+      }
+      count++;
+    });
+    closePopups();
+    document.removeEventListener('click', closeCfpOutside, true);
+    toast(count + ' circuits → ' + col + ' = ' + val, 'success');
+    navigate('board-detail');
+    autoSave('circuits');
+  }
+
+  /* Inline cell edit — tap a cell to edit directly */
+  function openInlineEdit(td, idx, col) {
+    closePopups();
+    var c = state.circuits[idx];
+    if (!c) return;
+    var rect = td.getBoundingClientRect();
+    var div = document.createElement('div');
+    div.className = 'inline-edit fade-in';
+    div.style.left = Math.max(0, Math.min(rect.left - 4, window.innerWidth - 180)) + 'px';
+    div.style.top = Math.max(0, rect.top - 4) + 'px';
+
+    var opts = CELL_OPTIONS[col];
+    var curVal = c[col];
+    if (col === 'polarity' || col === 'rcd_test_btn' || col === 'afdd_test') curVal = c[col];
+
+    var h = '';
+    if (opts) {
+      h += '<select id="ie-val" style="min-width:8rem">';
+      opts.forEach(function(o) {
+        var ov = typeof o === 'object' ? o.v : o;
+        var ol = typeof o === 'object' ? o.l : (o || '--');
+        var sel = (String(curVal) === String(ov)) ? ' selected' : '';
+        h += '<option value="' + esc(String(ov)) + '"' + sel + '>' + esc(ol) + '</option>';
+      });
+      h += '</select>';
+    } else {
+      h += '<input id="ie-val" type="text" value="' + esc(curVal || '') + '" placeholder="' + col + '">';
+    }
+    h += '<div class="ie-btns"><button data-action="ie-cancel">Cancel</button><button data-action="ie-save" data-idx="' + idx + '" data-col="' + col + '">Save</button></div>';
+    div.innerHTML = h;
+    document.body.appendChild(div);
+    var input = document.getElementById('ie-val');
+    if (input) { input.focus(); if (input.select) input.select(); }
+  }
+
+  function saveInlineEdit(idx, col) {
+    var el = document.getElementById('ie-val');
+    if (!el) return;
+    var val = el.value;
+    var c = state.circuits[idx];
+    if (!c) { closePopups(); return; }
+
+    if (col === 'polarity' || col === 'rcd_test_btn') {
+      c[col] = (val === 'true');
+    } else if (col === 'afdd_test') {
+      c[col] = val === 'true' ? true : val === 'false' ? false : val;
+    } else {
+      c[col] = val;
+    }
+
+    /* Trigger auto-defaults (max Zs, RCD from 61009, etc.) */
+    applyCircuitDefaults(c);
+    closePopups();
+    navigate('board-detail');
+    autoSave('circuits');
+  }
+
   /* Fill empty test result fields with N/A (or LIM) across all circuits */
   function fillEmptyFields(fillValue) {
     if (!state.circuits || state.circuits.length === 0) {
@@ -1266,9 +1495,9 @@ input,select,textarea { font-size:16px !important; }
        Skip: number, description, wiring_type, ref_method, ocpd_bsen, ocpd_type, ocpd_rating,
              rcd_bsen, rcd_type, rcd_idn, rcd_rating — these are design data, not test results */
     var testFields = [
-      'r1', 'rn', 'r2', 'r1r2', 'r2_measured', 'r2_ring',
+      'r1', 'rn', 'r1r2',
       'ir_test_v', 'ir_ll', 'ir_le',
-      'zs_measured', 'rcd_time_x1', 'rcd_time_x5', 'remarks'
+      'zs_measured', 'rcd_time_x1'
     ];
     var count = 0;
     var spareCount = 0;
@@ -4130,10 +4359,19 @@ input,select,textarea { font-size:16px !important; }
 
     var circuitData = targetCircuits.map(buildCircuitSummary).join('\n');
 
-    var prompt = 'User instruction: "' + userText + '"\n\n' +
+    var prompt = 'You are an EICR Form 4 circuit schedule assistant.\n' +
+      'User said: "' + userText + '"\n\n' +
       'Applies to ' + selLabel + ':\n' + circuitData + '\n\n' +
-      buildAIContext() + '\n\n' +
-      'Apply the instruction to the specified circuits. Return ONLY valid JSON:\n' +
+      'FIELD NAMES: description, wiring_type (T+E/SWA/MICC/FP/Singles/Con), ref_method (A-G, 100-103), ' +
+      'points, live_mm, cpc_mm, ocpd_bsen (60898/61009/88-2), ocpd_type (B/C/D), ocpd_rating, ' +
+      'breaking_cap (kA), max_zs, rcd_bsen, rcd_type (AC/A/B/S), rcd_idn (mA), ' +
+      'r1, rn, r1r2, ir_test_v (250/500/1000), ir_ll (insulation L-L MΩ, use ">200"), ' +
+      'ir_le (insulation L-E MΩ, use ">200"), polarity (true/false), ' +
+      'zs_measured, rcd_time_x1 (ms), rcd_test_btn (true/false), afdd_test (N/A/true/false).\n' +
+      'Users may say: "IR >200 for all", "all MCBs 10kA", "circuit 3 rating 32", ' +
+      '"all lighting T+E 1.5", "RCD type AC for all 61009s", "Zs 0.45 circuit 1".\n' +
+      'Match circuits by number, range (1-5), description pattern ("all lighting/sockets"), or "all".\n' +
+      'Return ONLY valid JSON:\n' +
       '{"updates":[{"number":"...","field":"value",...}], "message":"summary of changes"}';
 
     /* Show loading in response area */
@@ -5067,14 +5305,56 @@ input,select,textarea { font-size:16px !important; }
     closeSheet();
   });
 
-  /* Table row click delegation for circuit editing */
+  /* Table cell click → inline edit or column fill */
   document.addEventListener('click', function(e) {
-    if (_bulkSelectMode) return; /* Don't open edit when in select mode */
-    if (e.target.classList && e.target.classList.contains('bulk-check')) return; /* Ignore checkbox clicks */
-    var row = e.target.closest('tr[data-action="edit-circuit"]');
-    if (row) {
+    if (e.target.classList && e.target.classList.contains('bulk-check')) return;
+
+    /* Column header click → quick-fill popup */
+    var th = e.target.closest('th[data-col]');
+    if (th && th.closest('.test-table')) {
+      openColumnFill(th.getAttribute('data-col'), th);
+      return;
+    }
+
+    /* Data cell click → inline edit */
+    if (_bulkSelectMode) return;
+    var td = e.target.closest('td[data-col]');
+    if (td) {
+      var row = td.closest('tr[data-idx]');
+      if (!row) return;
       var idx = parseInt(row.getAttribute('data-idx'));
-      if (!isNaN(idx)) openEditCircuitSheet(idx);
+      var col = td.getAttribute('data-col');
+      if (!isNaN(idx) && col) {
+        /* Number and description open full edit sheet */
+        if (col === 'number' || col === 'description') {
+          openEditCircuitSheet(idx);
+        } else {
+          openInlineEdit(td, idx, col);
+        }
+      }
+      return;
+    }
+
+    /* Clicking outside table — close popups */
+    if (!e.target.closest('.col-fill-popup') && !e.target.closest('.inline-edit')) {
+      closePopups();
+    }
+  });
+
+  /* Handle inline edit and column fill button actions */
+  document.addEventListener('click', function(e) {
+    var target = e.target.closest('[data-action]');
+    if (!target) return;
+    var action = target.getAttribute('data-action');
+    if (action === 'cfp-fill') {
+      applyColumnFill(target.getAttribute('data-col'), target.getAttribute('data-val'));
+    } else if (action === 'cfp-custom') {
+      var customVal = document.getElementById('cfp-custom');
+      if (customVal && customVal.value) applyColumnFill(target.getAttribute('data-col'), customVal.value);
+    } else if (action === 'ie-save') {
+      saveInlineEdit(parseInt(target.getAttribute('data-idx')), target.getAttribute('data-col'));
+    } else if (action === 'ie-cancel') {
+      closePopups();
     }
   });
 
