@@ -18,7 +18,7 @@ const ENV_KEYS = {
   anthropic: process.env.ANTHROPIC_API_KEY || ''
 };
 const DEFAULT_MODELS = {
-  gemini: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+  gemini: process.env.GEMINI_MODEL || 'gemini-3-flash-preview',
   anthropic: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514'
 };
 
@@ -726,14 +726,13 @@ app.delete('/api/observations/:id', authMiddleware, async (req, res) => {
 // Endpoint to list available AI providers (including env var ones)
 app.get('/api/ai/providers', authMiddleware, async (req, res) => {
   const providers = [];
-  // Gemini key works for ALL models — offer Flash, Pro and legacy
+  // Gemini key works for ALL models — Gemini 3 series first, then legacy
   if (ENV_KEYS.gemini) {
-    providers.push({ id: 'env_gemini_flash', label: 'Gemini 2.5 Flash (fast)', provider: 'gemini', model: 'gemini-2.5-flash' });
-    providers.push({ id: 'env_gemini_pro', label: 'Gemini 2.5 Pro (smart)', provider: 'gemini', model: 'gemini-2.5-pro' });
-    providers.push({ id: 'env_gemini_31_pro', label: 'Gemini 3.1 Pro (latest)', provider: 'gemini', model: 'gemini-3.1-pro' });
-    providers.push({ id: 'env_gemini_3_pro', label: 'Gemini 3.0 Pro', provider: 'gemini', model: 'gemini-3.0-pro' });
-    providers.push({ id: 'env_gemini_flash_2', label: 'Gemini 2.0 Flash', provider: 'gemini', model: 'gemini-2.0-flash' });
-    providers.push({ id: 'env_gemini_pro_15', label: 'Gemini 1.5 Pro', provider: 'gemini', model: 'gemini-1.5-pro' });
+    providers.push({ id: 'env_gemini_3_flash', label: 'Gemini 3 Flash (best)', provider: 'gemini', model: 'gemini-3-flash-preview' });
+    providers.push({ id: 'env_gemini_31_pro', label: 'Gemini 3.1 Pro (smartest)', provider: 'gemini', model: 'gemini-3.1-pro-preview' });
+    providers.push({ id: 'env_gemini_31_lite', label: 'Gemini 3.1 Flash Lite (cheap)', provider: 'gemini', model: 'gemini-3.1-flash-lite-preview' });
+    providers.push({ id: 'env_gemini_25_flash', label: 'Gemini 2.5 Flash', provider: 'gemini', model: 'gemini-2.5-flash' });
+    providers.push({ id: 'env_gemini_25_pro', label: 'Gemini 2.5 Pro', provider: 'gemini', model: 'gemini-2.5-pro' });
   }
   if (ENV_KEYS.anthropic) providers.push({ id: 'env_anthropic', label: 'Claude Sonnet', provider: 'anthropic', model: DEFAULT_MODELS.anthropic });
   // Also include user's own keys
@@ -772,20 +771,17 @@ app.post('/api/ai/process', authMiddleware, async (req, res) => {
 
   // Resolve the API key — either from env vars or user's saved keys
   var keyRow;
-  if (key_id === 'env_gemini_flash' && ENV_KEYS.gemini) {
-    keyRow = { provider: 'gemini', model: 'gemini-2.5-flash', api_key: ENV_KEYS.gemini };
-  } else if (key_id === 'env_gemini_pro' && ENV_KEYS.gemini) {
-    keyRow = { provider: 'gemini', model: 'gemini-2.5-pro', api_key: ENV_KEYS.gemini };
-  } else if (key_id === 'env_gemini_31_pro' && ENV_KEYS.gemini) {
-    keyRow = { provider: 'gemini', model: 'gemini-3.1-pro', api_key: ENV_KEYS.gemini };
-  } else if (key_id === 'env_gemini_3_pro' && ENV_KEYS.gemini) {
-    keyRow = { provider: 'gemini', model: 'gemini-3.0-pro', api_key: ENV_KEYS.gemini };
-  } else if (key_id === 'env_gemini_flash_2' && ENV_KEYS.gemini) {
-    keyRow = { provider: 'gemini', model: 'gemini-2.0-flash', api_key: ENV_KEYS.gemini };
-  } else if (key_id === 'env_gemini_pro_15' && ENV_KEYS.gemini) {
-    keyRow = { provider: 'gemini', model: 'gemini-1.5-pro', api_key: ENV_KEYS.gemini };
-  } else if (key_id === 'env_gemini' && ENV_KEYS.gemini) {
-    keyRow = { provider: 'gemini', model: DEFAULT_MODELS.gemini, api_key: ENV_KEYS.gemini };
+  // Resolve env-based Gemini model keys dynamically
+  const geminiEnvModels = {
+    'env_gemini_3_flash': 'gemini-3-flash-preview',
+    'env_gemini_31_pro': 'gemini-3.1-pro-preview',
+    'env_gemini_31_lite': 'gemini-3.1-flash-lite-preview',
+    'env_gemini_25_flash': 'gemini-2.5-flash',
+    'env_gemini_25_pro': 'gemini-2.5-pro',
+    'env_gemini': DEFAULT_MODELS.gemini,
+  };
+  if (geminiEnvModels[key_id] && ENV_KEYS.gemini) {
+    keyRow = { provider: 'gemini', model: geminiEnvModels[key_id], api_key: ENV_KEYS.gemini };
   } else if (key_id === 'env_anthropic' && ENV_KEYS.anthropic) {
     keyRow = { provider: 'anthropic', model: DEFAULT_MODELS.anthropic, api_key: ENV_KEYS.anthropic };
   } else {
