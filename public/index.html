@@ -1530,7 +1530,8 @@ input,select,textarea { font-size:16px !important; }
     }
 
     updateScanStatus('Compressing ' + _scanPhotos.length + ' photo' + (_scanPhotos.length > 1 ? 's' : '') + '...');
-    Promise.all(_scanPhotos.map(function(p) { return compressImage(p.file); })).then(function(allBase64) {
+    var maxW = _scanPhotos.length > 1 ? 1200 : 1600; /* smaller for multi-photo to reduce payload */
+    Promise.all(_scanPhotos.map(function(p) { return compressImage(p.file, maxW, 0.7); })).then(function(allBase64) {
       if (_scanAbort && _scanAbort.signal.aborted) throw new Error('Cancelled');
       _scanState = { base64: allBase64[0], images: allBase64, keyId: keyEl.value, history: [], updates: null, systemPrompt: systemPrompt };
       updateScanStatus('Sending ' + allBase64.length + ' photo' + (allBase64.length > 1 ? 's' : '') + ' to AI — waiting for response...');

@@ -6,7 +6,7 @@ const fetch = require('node-fetch');
 const path = require('path');
 
 const app = express();
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const JWT_SECRET = process.env.JWT_SECRET || 'eicr-field-pro-secret-key-change-me';
@@ -757,7 +757,7 @@ app.post('/api/ai/process', authMiddleware, async (req, res) => {
         payload.contents = req.body.history.concat(payload.contents);
       }
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 120000); // 2 min timeout
+      const timeout = setTimeout(() => controller.abort(), 240000); // 4 min timeout for multi-photo
       const r = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: controller.signal });
       clearTimeout(timeout);
       const data = await r.json();
@@ -1900,7 +1900,9 @@ app.get('/api/sites/:id/report', (req, res, next) => {
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 initDB().then(() => {
-  app.listen(PORT, () => console.log(`EICR Field Pro running on port ${PORT}`));
+  const server = app.listen(PORT, () => console.log(`EICR Field Pro running on port ${PORT}`));
+  server.timeout = 300000; // 5 min — needed for multi-photo AI scans
+  server.keepAliveTimeout = 65000;
 }).catch(err => {
   console.error('DB init failed:', err);
   process.exit(1);
