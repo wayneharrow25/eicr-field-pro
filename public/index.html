@@ -918,7 +918,8 @@ input,select,textarea { font-size:16px !important; }
         '<button class="btn btn-sm" style="background:#dbeafe;color:#2563eb" data-action="bulk-select-all">All</button>' +
         '<button class="btn btn-sm" style="background:#dbeafe;color:#2563eb" data-action="bulk-select-none">None</button>' +
         '<span class="flex-1 text-xs text-slate-600" id="bulk-select-count">0 selected</span>' +
-        '<button class="btn btn-danger btn-sm" data-action="bulk-delete-selected">Delete Selected</button>' +
+        '<button class="btn btn-sm" style="background:#fef3c7;color:#92400e" data-action="bulk-clear-selected">Clear</button>' +
+        '<button class="btn btn-danger btn-sm" data-action="bulk-delete-selected">Delete</button>' +
       '</div>' +
       '<div class="scroll-wrapper">' +
         '<table class="test-table w-full">' +
@@ -2832,6 +2833,23 @@ input,select,textarea { font-size:16px !important; }
     updateBulkCount();
   }
 
+  function bulkClearSelected() {
+    var checks = document.querySelectorAll('.bulk-check:checked');
+    if (!checks.length) { toast('Select circuits first', 'error'); return; }
+    var keepFields = ['id','board_id','number','sort_order','created_at'];
+    checks.forEach(function(c) {
+      var idx = parseInt(c.getAttribute('data-idx'));
+      var circ = state.circuits[idx];
+      if (!circ) return;
+      Object.keys(circ).forEach(function(k) {
+        if (keepFields.indexOf(k) === -1) circ[k] = '';
+      });
+    });
+    saveAllCircuits(true);
+    toast(checks.length + ' circuits cleared', 'success');
+    navigate('board-detail');
+  }
+
   function bulkDeleteSelected() {
     var checks = document.querySelectorAll('.bulk-check:checked');
     if (!checks.length) { toast('Select circuits first', 'error'); return; }
@@ -4414,6 +4432,9 @@ input,select,textarea { font-size:16px !important; }
         break;
       case 'bulk-select-none':
         bulkSelectAll(false);
+        break;
+      case 'bulk-clear-selected':
+        bulkClearSelected();
         break;
       case 'bulk-delete-selected':
         bulkDeleteSelected();
