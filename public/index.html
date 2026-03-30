@@ -1266,6 +1266,9 @@ input,select,textarea { font-size:16px !important; }
 
   /* ===== AI PHOTO SCAN ===== */
   function openPhotoScan() {
+    /* Reset photo accumulator */
+    _scanPhotos.forEach(function(p) { URL.revokeObjectURL(p.url); });
+    _scanPhotos = [];
     if (state.aiKeys.length === 0) {
       toast('Add an AI key in Settings first', 'error');
       return;
@@ -1279,14 +1282,14 @@ input,select,textarea { font-size:16px !important; }
       '<div class="space-y-3">' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">AI Provider</label>' +
           '<select id="ai-scan-key" class="select-field">' + keyOpts + '</select></div>' +
-        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Board Photo</label>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Board Photos <span class="text-slate-400 font-normal">(add board + schedule)</span></label>' +
           '<div class="flex gap-2 mb-2">' +
             '<button class="btn btn-primary btn-sm flex-1" data-action="scan-take-photo">&#128247; Take Photo</button>' +
             '<button class="btn btn-ghost btn-sm flex-1" data-action="scan-choose-gallery">&#128193; Gallery</button>' +
           '</div>' +
-          '<input type="file" id="ai-scan-file" accept="image/*" class="input-field" style="padding:.5rem;display:none">' +
+          '<input type="file" id="ai-scan-file" accept="image/*" multiple class="input-field" style="padding:.5rem;display:none">' +
           '<input type="file" id="ai-scan-file-cam" accept="image/*" capture="environment" style="display:none">' +
-          '<div id="ai-scan-preview" class="mt-2"></div>' +
+          '<div id="ai-scan-preview" class="flex flex-wrap gap-2 mt-2"></div>' +
           '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Notes for AI <span class="text-slate-400 font-normal">(optional)</span></label>' +
           '<input type="text" id="ai-scan-hint" class="input-field" placeholder="e.g. 3-phase board, ways 5-8 are spares, schedule is for DB3">' +
@@ -1350,10 +1353,41 @@ input,select,textarea { font-size:16px !important; }
   }
 
   /* Scan state for multi-turn conversation with AI about the photo */
-  var _scanState = { base64: null, keyId: null, history: [], updates: null, boardUpdates: null, systemPrompt: '' };
+  var _scanState = { base64: null, images: [], keyId: null, history: [], updates: null, boardUpdates: null, systemPrompt: '' };
   var _scanAbort = null; /* AbortController for cancellable scans */
   var _bulkAbort = false; /* flag for cancelling bulk scan */
   var _bulkSelectMode = false; /* flag for circuit bulk select/delete */
+
+  /* Track accumulated scan photos (file objects) */
+  var _scanPhotos = []; /* array of { file, url } */
+
+  function addScanPhoto(file) {
+    var url = URL.createObjectURL(file);
+    _scanPhotos.push({ file: file, url: url });
+    renderScanThumbnails();
+  }
+
+  function removeScanPhoto(idx) {
+    if (_scanPhotos[idx]) URL.revokeObjectURL(_scanPhotos[idx].url);
+    _scanPhotos.splice(idx, 1);
+    renderScanThumbnails();
+  }
+
+  function renderScanThumbnails() {
+    var preview = document.getElementById('ai-scan-preview');
+    if (!preview) return;
+    if (!_scanPhotos.length) { preview.innerHTML = ''; return; }
+    var html = _scanPhotos.map(function(p, i) {
+      return '<div style="position:relative;display:inline-block">' +
+        '<img src="' + p.url + '" style="height:80px;border-radius:.375rem;border:2px solid #e2e8f0">' +
+        '<button data-action="remove-scan-photo" data-photo-idx="' + i + '" ' +
+          'style="position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;cursor:pointer;line-height:20px;text-align:center">&times;</button>' +
+        '<div style="text-align:center;font-size:10px;color:#64748b">Photo ' + (i + 1) + '</div>' +
+      '</div>';
+    }).join('');
+    html += '<div style="font-size:11px;color:#64748b;width:100%;margin-top:4px">' + _scanPhotos.length + ' photo' + (_scanPhotos.length > 1 ? 's' : '') + ' — add more or scan</div>';
+    preview.innerHTML = html;
+  }
 
   function cancelPhotoScan() {
     if (_scanAbort) { _scanAbort.abort(); _scanAbort = null; }
@@ -1377,9 +1411,7 @@ input,select,textarea { font-size:16px !important; }
     var fileEl = document.getElementById('ai-scan-file');
     var fileElCam = document.getElementById('ai-scan-file-cam');
     var resultEl = document.getElementById('ai-scan-result');
-    /* Check both gallery and camera inputs */
-    if (fileElCam && fileElCam.files && fileElCam.files[0]) fileEl = fileElCam;
-    if (!keyEl || !fileEl || !fileEl.files || !fileEl.files[0]) {
+    if (!keyEl || !_scanPhotos.length) {
       toast('Take a photo or select from gallery first', 'error');
       return;
     }
@@ -1416,21 +1448,25 @@ input,select,textarea { font-size:16px !important; }
       '- If this is a circuit schedule/chart (printed paper), extract all circuit data from it — these are more accurate than reading device labels.\n' +
       '- If you see BOTH a board photo AND a schedule, prefer the schedule data for descriptions/ratings.';
 
-    var prompt = 'Analyse this UK distribution board photo for a BS 7671 EICR (Electrical Installation Condition Report).\n\n' +
+    var prompt = 'Analyse ' + (_scanPhotos.length > 1 ? 'these ' + _scanPhotos.length + ' photos of a' : 'this photo of a') + ' UK distribution board for a BS 7671 EICR (Electrical Installation Condition Report).\n' +
+      (_scanPhotos.length > 1 ? 'Multiple photos provided — there may be a board photo AND a circuit schedule/chart. Cross-reference both to get the most accurate data. Prefer schedule data for descriptions, cable sizes, and ratings.\n' : '') + '\n' +
       'CRITICAL RULES:\n' +
       '1. DO NOT include the main switch/isolator/incomer as a numbered circuit. The main switch is recorded in the board header, NOT in the circuit schedule. It does not get tested on the Form 4 test schedule.\n' +
       '2. Number OUTGOING circuits only, sequentially starting from 1, top of the board going down (after the main switch).\n' +
       '3. Include EVERY outgoing way/position — if a way is blank/spare, include it as {"number":"X","description":"Spare","ocpd_bsen":"","ocpd_type":"","ocpd_rating":""}\n' +
-      '4. For three-phase boards, number as L1/1, L2/1, L3/1, L1/2, L2/2 etc (phase/row).\n' +
+      '4. For three-phase boards, number circuits as 1L1, 1L2, 1L3, 2L1, 2L2, 2L3 etc. The number prefix is the way, L1/L2/L3 is the phase. This is the standard UK TP&N format.\n' +
       '5. MCBs = BS(EN) 60898. RCBOs = BS(EN) 61009. MCCBs = BS(EN) 60947-2. HRC Fuses = BS(EN) 88-2. RCDs = BS(EN) 61008.\n' +
       '6. If devices are grouped under an RCD (e.g. 4-way RCBO block or RCD header), note the RCD details: rcd_bsen, rcd_type, rcd_idn on each circuit in that group.\n' +
       '7. Curve types: B (domestic/commercial), C (motors/fluorescent), D (high inrush). Read from the device label.\n' +
       '8. If a label/schedule is visible, use the descriptions shown. Common: Lighting, Sockets, Ring Main, Radial, FCU, Cooker, Immersion, Boiler, Alarm, Emergency Lighting, Mechanical Extract, Hand Dryer.\n' +
-      '9. Include wiring_type if visible at entries: A=T+E flat, B=T+E in metal conduit, C=T+E in PVC conduit, F=SWA, H=MICC.\n\n' +
+      '9. Include wiring_type if visible at entries: A=T+E flat, B=T+E in metal conduit, C=T+E in PVC conduit, F=SWA, H=MICC.\n' +
+      '10. Extract cable_size if shown (e.g. "1.5", "2.5", "4", "6", "10", "16", "25" — just the mm² number).\n' +
+      '11. Extract reference_method if shown (e.g. "A", "B", "C", "100", "101", "102", "103" — per BS 7671 Table 4A2).\n' +
+      '12. Extract num_points if shown — the number of points or outlets served by the circuit.\n\n' +
       'Return ONLY valid JSON:\n' +
       '{"main_switch": {"description":"Main Switch","ocpd_bsen":"60947-3","ocpd_type":"Isolator","ocpd_rating":"100","poles":"TP&N"}, ' +
       '"board_updates": {"ref":"DB1","location":"Plant Room","dist_type":"Schneider Isobar","dist_bsen":"61439","num_phases":"3","supplied_from":"MSDB Way 3"}, ' +
-      '"updates": [{"number":"1","description":"Lighting","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","wiring_type":"A","rcd_bsen":"","rcd_type":"","rcd_idn":""}]}';
+      '"updates": [{"number":"1","description":"Lighting","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","cable_size":"1.5","reference_method":"C","num_points":"8","wiring_type":"A","rcd_bsen":"","rcd_type":"","rcd_idn":""}]}';
 
     /* Append user hint if provided */
     var hintEl = document.getElementById('ai-scan-hint');
@@ -1439,16 +1475,16 @@ input,select,textarea { font-size:16px !important; }
       prompt += '\n\nADDITIONAL INFO FROM INSPECTOR: ' + hint;
     }
 
-    updateScanStatus('Compressing image...');
-    compressImage(fileEl.files[0]).then(function(base64) {
+    updateScanStatus('Compressing ' + _scanPhotos.length + ' photo' + (_scanPhotos.length > 1 ? 's' : '') + '...');
+    Promise.all(_scanPhotos.map(function(p) { return compressImage(p.file); })).then(function(allBase64) {
       if (_scanAbort && _scanAbort.signal.aborted) throw new Error('Cancelled');
-      _scanState = { base64: base64, keyId: keyEl.value, history: [], updates: null, systemPrompt: systemPrompt };
-      updateScanStatus('Sending to AI — waiting for response...');
+      _scanState = { base64: allBase64[0], images: allBase64, keyId: keyEl.value, history: [], updates: null, systemPrompt: systemPrompt };
+      updateScanStatus('Sending ' + allBase64.length + ' photo' + (allBase64.length > 1 ? 's' : '') + ' to AI — waiting for response...');
 
       return api('POST', '/ai/process', {
         key_id: keyEl.value,
         prompt: prompt,
-        image_base64: base64,
+        images_base64: allBase64,
         system_prompt: systemPrompt
       });
     }).then(function(data) {
@@ -1456,8 +1492,10 @@ input,select,textarea { font-size:16px !important; }
       _scanAbort = null;
       var result = data.result || '';
       /* Store conversation history for follow-ups */
+      var userParts = [{ text: prompt }];
+      _scanState.images.forEach(function(img) { userParts.push({ inlineData: { mimeType: 'image/jpeg', data: img } }); });
       _scanState.history = [
-        { role: 'user', parts: [{ text: prompt }, { inlineData: { mimeType: 'image/jpeg', data: _scanState.base64 } }] },
+        { role: 'user', parts: userParts },
         { role: 'model', parts: [{ text: result }] }
       ];
 
@@ -1538,10 +1576,15 @@ input,select,textarea { font-size:16px !important; }
       var prot = (u.ocpd_type || '') + (u.ocpd_rating ? u.ocpd_rating + 'A' : '');
       var bsen = u.ocpd_bsen ? 'BS(EN) ' + u.ocpd_bsen : '';
       var rcd = u.rcd_idn ? ' | RCD ' + u.rcd_idn + 'mA' : '';
+      var extra = [];
+      if (u.cable_size) extra.push(u.cable_size + 'mm²');
+      if (u.reference_method) extra.push('Ref ' + u.reference_method);
+      if (u.num_points) extra.push(u.num_points + 'pts');
+      var extraStr = extra.length ? ' | ' + extra.join(', ') : '';
       html += '<div class="flex items-center gap-2 p-2 bg-slate-50 rounded text-sm">' +
         '<span class="font-mono font-bold text-slate-600 w-8 shrink-0">' + esc(u.number) + '</span>' +
         '<span class="flex-1 text-slate-800">' + esc(desc) + '</span>' +
-        '<span class="text-xs text-slate-500">' + esc(prot) + ' ' + esc(bsen) + esc(rcd) + '</span>' +
+        '<span class="text-xs text-slate-500">' + esc(prot) + ' ' + esc(bsen) + esc(rcd) + esc(extraStr) + '</span>' +
       '</div>';
     });
     html += '</div>';
@@ -4300,6 +4343,10 @@ input,select,textarea { font-size:16px !important; }
         var galInput = document.getElementById('ai-scan-file');
         if (galInput) galInput.click();
         break;
+      case 'remove-scan-photo':
+        var photoIdx = parseInt(target.getAttribute('data-photo-idx'));
+        if (!isNaN(photoIdx)) removeScanPhoto(photoIdx);
+        break;
       case 'run-photo-scan':
         runPhotoScan();
         break;
@@ -4353,7 +4400,9 @@ input,select,textarea { font-size:16px !important; }
         applyScanResults();
         break;
       case 'discard-scan-results':
-        _scanState = { base64: null, keyId: null, history: [], updates: null, boardUpdates: null, systemPrompt: '' };
+        _scanState = { base64: null, images: [], keyId: null, history: [], updates: null, boardUpdates: null, systemPrompt: '' };
+        _scanPhotos.forEach(function(p) { URL.revokeObjectURL(p.url); });
+        _scanPhotos = [];
         closeSheet();
         toast('Scan discarded', 'info');
         break;
@@ -4571,18 +4620,13 @@ input,select,textarea { font-size:16px !important; }
         }
       }
     }
-    /* Show preview when photo selected (camera or gallery) */
+    /* Accumulate photos when selected (camera or gallery) */
     if (target.id === 'ai-scan-file' || target.id === 'ai-scan-file-cam') {
-      if (target.files && target.files[0]) {
-        var preview = document.getElementById('ai-scan-preview');
-        if (preview) {
-          var url = URL.createObjectURL(target.files[0]);
-          preview.innerHTML = '<img src="' + url + '" style="max-height:150px;border-radius:.5rem;margin-top:.5rem">';
+      if (target.files && target.files.length) {
+        for (var fi = 0; fi < target.files.length; fi++) {
+          addScanPhoto(target.files[fi]);
         }
-        /* Copy to the main file input if from camera */
-        if (target.id === 'ai-scan-file-cam') {
-          /* Can't copy FileList, so we just use whichever has the file in runPhotoScan */
-        }
+        target.value = ''; /* reset so same file can be re-selected */
       }
     }
   });

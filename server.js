@@ -710,7 +710,9 @@ KEY KNOWLEDGE:
 Always use correct UK electrical terminology and BS 7671 conventions.`;
 
 app.post('/api/ai/process', authMiddleware, async (req, res) => {
-  const { key_id, prompt, image_base64, system_prompt } = req.body;
+  const { key_id, prompt, image_base64, images_base64, system_prompt } = req.body;
+  // Support both single image (legacy) and multiple images
+  const allImages = images_base64 && images_base64.length ? images_base64 : (image_base64 ? [image_base64] : []);
 
   // Combine base EICR context with any specific system prompt
   const fullSystemPrompt = system_prompt
@@ -745,9 +747,9 @@ app.post('/api/ai/process', authMiddleware, async (req, res) => {
     if (keyRow.provider === 'gemini') {
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${keyRow.model}:generateContent?key=${keyRow.api_key}`;
       const parts = [{ text: prompt }];
-      if (image_base64) {
-        parts.push({ inlineData: { mimeType: 'image/jpeg', data: image_base64 } });
-      }
+      allImages.forEach(img => {
+        parts.push({ inlineData: { mimeType: 'image/jpeg', data: img } });
+      });
       const payload = { contents: [{ parts }] };
       payload.systemInstruction = { parts: [{ text: fullSystemPrompt }] };
       // Support multi-turn conversation
@@ -765,9 +767,9 @@ app.post('/api/ai/process', authMiddleware, async (req, res) => {
 
     } else if (keyRow.provider === 'anthropic') {
       const messages = [{ role: 'user', content: [] }];
-      if (image_base64) {
-        messages[0].content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: image_base64 } });
-      }
+      allImages.forEach(img => {
+        messages[0].content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: img } });
+      });
       messages[0].content.push({ type: 'text', text: prompt });
 
       const payload = { model: keyRow.model, max_tokens: 4096, messages };
