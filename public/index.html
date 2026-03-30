@@ -6117,7 +6117,7 @@ input,select,textarea { font-size:16px !important; }
       uploadBoardPhotos(target.files);
       target.value = '';
     }
-    /* Observation photo — read with FileReader immediately (simplest, most reliable) */
+    /* Observation photo — upload to server immediately via FormData (bypasses all client-side file reading issues) */
     if (target.id === 'obs-photo' || target.id === 'obs-photo-cam') {
       if (target.files && target.files[0]) {
         var obsFile = target.files[0];
@@ -6126,50 +6126,37 @@ input,select,textarea { font-size:16px !important; }
         if (obsPreview) {
           try {
             var obsUrl = URL.createObjectURL(obsFile);
-            obsPreview.innerHTML = '<img src="' + obsUrl + '" style="max-height:120px;border-radius:.5rem;margin-top:.5rem">';
+            obsPreview.innerHTML = '<img src="' + obsUrl + '" style="max-height:120px;border-radius:.5rem;margin-top:.5rem">' +
+              '<div style="font-size:11px;color:#666;margin-top:4px">Uploading photo...</div>';
           } catch(e) { /* ignore preview error */ }
         }
-        /* Read raw with FileReader immediately — most reliable method */
+        /* Upload to server via multipart FormData — most reliable on mobile */
         window._obsPhotoData = null;
-        console.log('[obs-photo] Reading file:', obsFile.name, obsFile.size, 'bytes, type:', obsFile.type);
-        var obsReader = new FileReader();
-        obsReader.onload = function() {
-          var rawData = obsReader.result;
-          console.log('[obs-photo] FileReader OK:', rawData.length, 'chars');
-          /* Try to compress via canvas to reduce size */
-          var img = new Image();
-          img.onload = function() {
-            try {
-              var maxW = 1600;
-              var scale = Math.min(1, maxW / img.width);
-              var canvas = document.createElement('canvas');
-              canvas.width = img.width * scale;
-              canvas.height = img.height * scale;
-              canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-              var compressed = canvas.toDataURL('image/jpeg', 0.8);
-              if (compressed && compressed.length > 50) {
-                window._obsPhotoData = compressed;
-                console.log('[obs-photo] Compressed:', compressed.length, 'chars (from', rawData.length, ')');
-              } else {
-                window._obsPhotoData = rawData;
-              }
-            } catch(e) {
-              console.warn('[obs-photo] Canvas compress failed, using raw:', e);
-              window._obsPhotoData = rawData;
-            }
-          };
-          img.onerror = function() {
-            /* Can't decode as image — just store raw data URI */
-            console.warn('[obs-photo] Image decode failed, storing raw data');
-            window._obsPhotoData = rawData;
-          };
-          img.src = rawData;
-        };
-        obsReader.onerror = function() {
-          console.error('[obs-photo] FileReader failed:', obsReader.error);
-          toast('Could not read photo — please try again', 'error');
-        };
-        obsReader.readAsDataURL(obsFile);
+        console.log('[obs-photo] Uploading file:', obsFile.name, obsFile.size, 'bytes');
+        var fd = new FormData();
+        fd.append('photo', obsFile);
+        var token = sessionStorage.getItem('token') || localStorage.getItem('token');
+        fetch('/api/upload-photo', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token },
+          body: fd
+        }).then(function(resp) {
+          if (!resp.ok) throw new Error('Upload failed: ' + resp.status);
+          return resp.json();
+        }).then(function(data) {
+          window._obsPhotoData = data.photo;
+          console.log('[obs-photo] Upload OK:', data.size, 'chars');
+          if (obsPreview) {
+            obsPreview.innerHTML = '<img src="' + data.photo + '" style="max-height:120px;border-radius:.5rem;margin-top:.5rem">' +
+              '<div style="font-size:11px;color:#22c55e;margin-top:4px">\u2713 Photo ready</div>';
+          }
+        }).catch(function(err) {
+          console.error('[obs-photo] Upload failed:', err);
+          toast('Photo upload failed — try again', 'error');
+          if (obsPreview) {
+            obsPreview.innerHTML = '<div style="color:red;font-size:11px">\u2717 Photo failed to upload</div>';
+          }
+        });
       }
     }
     /* Accumulate photos when selected (camera or gallery) */

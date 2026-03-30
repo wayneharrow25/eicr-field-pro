@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const fetch = require('node-fetch');
 const path = require('path');
+const multer = require('multer');
 
 const app = express();
 app.use(express.json({ limit: '50mb' }));
@@ -1064,6 +1065,16 @@ app.get('/api/max-zs', (req, res) => {
   if (!curve) return res.json({ max_zs: null });
   const zs = curve[parseInt(rating)];
   res.json({ max_zs: zs || null, max_zs_80: zs ? Math.round(zs * 0.8 * 100) / 100 : null });
+});
+
+// ---- PHOTO UPLOAD (multipart — for mobile camera reliability) ----
+const photoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } });
+app.post('/api/upload-photo', authMiddleware, photoUpload.single('photo'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const mime = req.file.mimetype || 'image/jpeg';
+  const b64 = req.file.buffer.toString('base64');
+  const dataUri = `data:${mime};base64,${b64}`;
+  res.json({ photo: dataUri, size: dataUri.length });
 });
 
 // ---- REPORT GENERATION ----
