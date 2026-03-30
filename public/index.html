@@ -903,7 +903,11 @@ input,select,textarea { font-size:16px !important; }
         '<div style="display:flex;flex-wrap:wrap;gap:.375rem .75rem">' +
           bfi('bh-ref','Ref',b.ref,'DB/001','30%') +
           bfi('bh-location','Location',b.location,'Kitchen','35%') +
-          bfi('bh-supplied','Supplied From',b.supplied_from,'Main Switch','35%') +
+          '<div style="flex:0 0 35%;min-width:0;position:relative">' +
+            '<label class="text-xs text-slate-400 block" for="bh-supplied">Supplied From <a href="#" data-action="pick-supply-source" style="color:#3b82f6;font-weight:600">Pick</a></label>' +
+            '<input id="bh-supplied" class="desk-board-input" value="' + esc(b.supplied_from || '') + '" placeholder="Main Switch" data-board-field="1">' +
+            '<strong class="desk-board-static text-xs">' + esc(b.supplied_from || '-') + '</strong>' +
+          '</div>' +
           bfi('bh-phase','Phase',b.num_phases,'single','16%') +
           bfi('bh-ocpd-bsen','BS(EN)',b.ocpd_bsen,'60898','16%') +
           bfi('bh-ocpd-type','Type',b.ocpd_type,'B','12%') +
@@ -1328,6 +1332,108 @@ input,select,textarea { font-size:16px !important; }
   }
 
   /* ===== BOARD SIZE SETUP ===== */
+  /* ===== SUPPLY SOURCE PICKER ===== */
+  function openSupplyPicker() {
+    if (!state.currentSite || !state.currentBoard) return;
+    var boards = state.boards || [];
+    var currentId = state.currentBoard.id;
+    var h = '<h3 class="text-lg font-bold text-slate-800 mb-1">Select Supply Source</h3>' +
+      '<p class="text-xs text-slate-500 mb-3">Pick the board and circuit that supplies this DB</p>' +
+      '<div id="supply-picker-list">';
+    var otherBoards = boards.filter(function(b) { return b.id !== currentId; });
+    if (otherBoards.length === 0) {
+      h += '<p class="text-sm text-slate-400 py-4">No other boards on this site. Add more boards first.</p>';
+    } else {
+      otherBoards.forEach(function(b) {
+        h += '<div class="border border-slate-200 rounded-lg mb-2 overflow-hidden">' +
+          '<button class="w-full text-left p-3 flex justify-between items-center hover:bg-slate-50" data-action="expand-supply-board" data-board-id="' + b.id + '">' +
+            '<div><strong class="text-sm">' + esc(b.ref || 'Unnamed') + '</strong>' +
+              '<span class="text-xs text-slate-400 ml-2">' + esc(b.location || '') + '</span></div>' +
+            '<span class="text-slate-400 text-lg" id="supply-arrow-' + b.id + '">&#9654;</span>' +
+          '</button>' +
+          '<div id="supply-circuits-' + b.id + '" style="display:none" class="border-t border-slate-100"></div>' +
+        '</div>';
+      });
+    }
+    /* Manual entry option */
+    h += '<div class="border-t border-slate-200 pt-3 mt-2">' +
+      '<label class="text-xs text-slate-500 block mb-1">Or type manually</label>' +
+      '<div class="flex gap-2"><input type="text" id="supply-manual" class="input-field" placeholder="e.g. Main Switch, MSDB Cct 3" style="flex:1;min-height:2.25rem;padding:.5rem .625rem;font-size:.9rem">' +
+      '<button class="btn btn-primary btn-sm" data-action="apply-supply-manual">Set</button></div>' +
+    '</div>';
+    h += '</div>';
+    openSheet(h);
+  }
+
+  function expandSupplyBoard(boardId) {
+    var container = document.getElementById('supply-circuits-' + boardId);
+    var arrow = document.getElementById('supply-arrow-' + boardId);
+    if (!container) return;
+    if (container.style.display !== 'none') {
+      container.style.display = 'none';
+      if (arrow) arrow.innerHTML = '&#9654;';
+      return;
+    }
+    container.style.display = 'block';
+    if (arrow) arrow.innerHTML = '&#9660;';
+    container.innerHTML = '<p class="text-xs text-slate-400 p-3">Loading circuits...</p>';
+    api('GET', '/boards/' + boardId + '/circuits').then(function(circuits) {
+      if (!circuits || !circuits.length) {
+        container.innerHTML = '<p class="text-xs text-slate-400 p-3">No circuits on this board</p>';
+        return;
+      }
+      circuits.sort(function(a, b) {
+        var ka = circuitSortKey(a.number), kb = circuitSortKey(b.number);
+        return ka[0] !== kb[0] ? ka[0] - kb[0] : ka[1] - kb[1];
+      });
+      var board = state.boards.find(function(b) { return b.id === boardId; }) || {};
+      var ch = '';
+      circuits.forEach(function(c) {
+        var isSpare = isSpareDescription(c.description);
+        var label = esc(c.number || '?') + ' — ' + esc(c.description || '?');
+        var detail = '';
+        if (!isSpare) {
+          detail = [c.ocpd_bsen, c.ocpd_type, c.ocpd_rating ? c.ocpd_rating + 'A' : ''].filter(Boolean).join(' ');
+          if (c.zs_measured && c.zs_measured !== '--') detail += ' | Zs: ' + c.zs_measured + 'Ω';
+        }
+        ch += '<button class="w-full text-left px-3 py-2 hover:bg-blue-50 flex justify-between items-center border-b border-slate-50' + (isSpare ? ' opacity-40' : '') + '"' +
+          (isSpare ? ' disabled' : ' data-action="select-supply-circuit" data-board-id="' + boardId + '" data-circuit-num="' + esc(c.number || '') + '"' +
+            ' data-bsen="' + esc(c.ocpd_bsen || '') + '" data-type="' + esc(c.ocpd_type || '') + '" data-rating="' + esc(c.ocpd_rating || '') + '"' +
+            ' data-zs="' + esc(c.zs_measured || '') + '" data-board-ref="' + esc(board.ref || '') + '"' +
+            ' data-phase="' + esc(c.number && /\d+[Ll]\d/.test(c.number) ? 'three' : 'single') + '"') +
+          '>' +
+          '<span class="text-sm">' + label + '</span>' +
+          (detail ? '<span class="text-xs text-slate-400">' + esc(detail) + '</span>' : '') +
+        '</button>';
+      });
+      container.innerHTML = ch;
+    }).catch(function(err) {
+      container.innerHTML = '<p class="text-xs text-red-400 p-3">Error: ' + esc(err.message) + '</p>';
+    });
+  }
+
+  function applySupplySource(boardRef, circuitNum, bsen, type, rating, zs, phase) {
+    var supplied = boardRef ? (boardRef + ' Cct ' + circuitNum) : circuitNum;
+    state.currentBoard.supplied_from = supplied;
+    if (bsen && bsen !== '--') { state.currentBoard.ocpd_bsen = bsen; }
+    if (type && type !== '--') { state.currentBoard.ocpd_type = type; }
+    if (rating && rating !== '--') { state.currentBoard.ocpd_rating = rating; }
+    if (phase) { state.currentBoard.num_phases = phase; }
+    /* Ze = supply circuit Zs */
+    if (zs && zs !== '--') {
+      state.currentBoard.ze = zs;
+      /* IPF = Uo / Ze (kA). Uo = 230V for single phase, 400V for TP line-line but EICR uses 230V */
+      var zeNum = parseFloat(zs);
+      if (zeNum > 0) {
+        state.currentBoard.ipf = (230 / zeNum / 1000).toFixed(2);
+      }
+    }
+    api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
+    closeSheet();
+    navigate('board-detail');
+    toast('Supply set: ' + supplied, 'success');
+  }
+
   function openBoardSetupSheet() {
     var currentWays = state.circuits.length;
     openSheet(
@@ -5509,6 +5615,34 @@ input,select,textarea { font-size:16px !important; }
         break;
       case 'setup-board-size':
         openBoardSetupSheet();
+        break;
+      case 'pick-supply-source':
+        e.preventDefault();
+        openSupplyPicker();
+        break;
+      case 'expand-supply-board':
+        expandSupplyBoard(parseInt(target.getAttribute('data-board-id')));
+        break;
+      case 'select-supply-circuit':
+        applySupplySource(
+          target.getAttribute('data-board-ref'),
+          target.getAttribute('data-circuit-num'),
+          target.getAttribute('data-bsen'),
+          target.getAttribute('data-type'),
+          target.getAttribute('data-rating'),
+          target.getAttribute('data-zs'),
+          target.getAttribute('data-phase')
+        );
+        break;
+      case 'apply-supply-manual':
+        var manualEl = document.getElementById('supply-manual');
+        if (manualEl && manualEl.value.trim()) {
+          state.currentBoard.supplied_from = manualEl.value.trim();
+          api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
+          closeSheet();
+          navigate('board-detail');
+          toast('Supply set: ' + manualEl.value.trim(), 'success');
+        }
         break;
       case 'refresh-circuits':
         refreshCircuitDefaults();
