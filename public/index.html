@@ -3684,28 +3684,39 @@ input,select,textarea { font-size:16px !important; }
     fd.append('materials', fields.materials || '');
     fd.append('qty', fields.qty || '');
 
-    /* Attach photo: prefer raw file (sent as multipart), fall back to pre-uploaded data URI */
+    /* Debug: show what we're sending */
+    var debugInfo = 'Save: ';
     if (rawFile) {
       fd.append('photo', rawFile);
-      console.log('[obs-save] Sending raw file:', rawFile.name, rawFile.size, 'bytes');
+      debugInfo += 'file=' + rawFile.name + ' (' + Math.round(rawFile.size/1024) + 'KB)';
     } else if (window._obsPhotoData) {
       fd.append('photo_data', window._obsPhotoData);
-      console.log('[obs-save] Sending pre-uploaded data URI:', window._obsPhotoData.length, 'chars');
+      debugInfo += 'preloaded=' + Math.round(window._obsPhotoData.length/1024) + 'KB';
+    } else {
+      debugInfo += 'no photo';
     }
 
     var url = editId
       ? '/api/observations/' + editId + '/upload'
       : '/api/sites/' + state.currentSite.id + '/observations/upload';
     var method = editId ? 'PUT' : 'POST';
+    debugInfo += ' → ' + method + ' ' + url;
+    toast(debugInfo, 'info');
 
     fetch(url, {
       method: method,
       headers: { 'Authorization': 'Bearer ' + token },
       body: fd
     }).then(function(resp) {
-      if (!resp.ok) throw new Error('Save failed: ' + resp.status);
+      if (!resp.ok) {
+        return resp.text().then(function(txt) {
+          throw new Error('Server ' + resp.status + ': ' + txt.substring(0, 200));
+        });
+      }
       return resp.json();
     }).then(function(result) {
+      var hasPhoto = result.photo ? 'with photo' : 'no photo in result';
+      toast('Saved OK — ' + hasPhoto, 'success');
       if (editId) {
         var idx = state.observations.findIndex(function(o) { return String(o.id) === String(editId); });
         if (idx !== -1) Object.assign(state.observations[idx], fields, result);
@@ -6135,46 +6146,21 @@ input,select,textarea { font-size:16px !important; }
       uploadBoardPhotos(target.files);
       target.value = '';
     }
-    /* Observation photo — upload to server immediately via FormData (bypasses all client-side file reading issues) */
+    /* Observation photo — just show preview. Actual upload happens at save time via FormData */
     if (target.id === 'obs-photo' || target.id === 'obs-photo-cam') {
       if (target.files && target.files[0]) {
         var obsFile = target.files[0];
-        /* Show preview */
         var obsPreview = document.getElementById('obs-photo-preview');
         if (obsPreview) {
           try {
             var obsUrl = URL.createObjectURL(obsFile);
             obsPreview.innerHTML = '<img src="' + obsUrl + '" style="max-height:120px;border-radius:.5rem;margin-top:.5rem">' +
-              '<div style="font-size:11px;color:#666;margin-top:4px">Uploading photo...</div>';
-          } catch(e) { /* ignore preview error */ }
+              '<div style="font-size:11px;color:#22c55e;margin-top:4px">' + obsFile.name + ' (' + Math.round(obsFile.size/1024) + 'KB) — will upload on save</div>';
+          } catch(e) {
+            obsPreview.innerHTML = '<div style="font-size:11px;color:#22c55e;margin-top:4px">Photo selected: ' + obsFile.name + ' (' + Math.round(obsFile.size/1024) + 'KB)</div>';
+          }
         }
-        /* Upload to server via multipart FormData — most reliable on mobile */
         window._obsPhotoData = null;
-        console.log('[obs-photo] Uploading file:', obsFile.name, obsFile.size, 'bytes');
-        var fd = new FormData();
-        fd.append('photo', obsFile);
-        var token = sessionStorage.getItem('token') || localStorage.getItem('token');
-        fetch('/api/upload-photo', {
-          method: 'POST',
-          headers: { 'Authorization': 'Bearer ' + token },
-          body: fd
-        }).then(function(resp) {
-          if (!resp.ok) throw new Error('Upload failed: ' + resp.status);
-          return resp.json();
-        }).then(function(data) {
-          window._obsPhotoData = data.photo;
-          console.log('[obs-photo] Upload OK:', data.size, 'chars');
-          if (obsPreview) {
-            obsPreview.innerHTML = '<img src="' + data.photo + '" style="max-height:120px;border-radius:.5rem;margin-top:.5rem">' +
-              '<div style="font-size:11px;color:#22c55e;margin-top:4px">\u2713 Photo ready</div>';
-          }
-        }).catch(function(err) {
-          console.error('[obs-photo] Upload failed:', err);
-          toast('Photo upload failed — try again', 'error');
-          if (obsPreview) {
-            obsPreview.innerHTML = '<div style="color:red;font-size:11px">\u2717 Photo failed to upload</div>';
-          }
-        });
       }
     }
     /* Accumulate photos when selected (camera or gallery) */
