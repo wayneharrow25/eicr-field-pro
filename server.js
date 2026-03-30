@@ -8,7 +8,7 @@ const multer = require('multer');
 
 const app = express();
 app.use(express.json({ limit: '50mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), { maxAge: 0, etag: false }));
 
 const JWT_SECRET = process.env.JWT_SECRET || 'eicr-field-pro-secret-key-change-me';
 const PORT = process.env.PORT || 3000;
@@ -2034,7 +2034,12 @@ app.get('/api/sites/:id/report', (req, res, next) => {
 });
 
 // ---- BOOT ----
-app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('*', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 initDB().then(() => {
   const server = app.listen(PORT, () => console.log(`EICR Field Pro running on port ${PORT}`));
