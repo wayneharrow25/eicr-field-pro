@@ -562,46 +562,82 @@ function mapCircuitFields(obj) {
 }
 
 app.put('/api/boards/:id/circuits/bulk', authMiddleware, async (req, res) => {
-  const updates = req.body; // [{id or number, ...fields}] or with ?replace=1 to delete-all-then-insert
+  const updates = req.body;
   const boardId = req.params.id;
   const replaceMode = req.query.replace === '1';
 
-  if (replaceMode) {
-    // Delete all existing circuits and insert fresh — used by renumber to avoid duplication
-    await pool.query('DELETE FROM circuits WHERE board_id = $1', [boardId]);
-    for (const raw of updates) {
-      const u = mapCircuitFields(raw);
-      const fields = Object.keys(u).filter(k => k !== 'id' && k !== 'board_id');
-      const cols = ['board_id', ...fields];
-      const placeholders = cols.map((_, i) => `$${i + 1}`);
-      const vals = [boardId, ...fields.map(f => u[f])];
-      await pool.query(`INSERT INTO circuits (${cols.join(',')}) VALUES (${placeholders.join(',')})`, vals);
-    }
-  } else {
-    for (const raw of updates) {
-      const u = mapCircuitFields(raw);
-      if (u.id) {
-        const fields = Object.keys(u).filter(k => k !== 'id' && k !== 'board_id');
-        const sets = fields.map((f, i) => `${f} = $${i + 2}`);
-        const vals = fields.map(f => u[f]);
-        await pool.query(`UPDATE circuits SET ${sets.join(', ')} WHERE id = $1`, [u.id, ...vals]);
-      } else {
-        // Match by number or create new
-        const { rows: existing } = await pool.query('SELECT id FROM circuits WHERE board_id = $1 AND number = $2', [boardId, u.number]);
-        if (existing[0]) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    if (replaceMode) {
+      await client.query('DELETE FROM circuits WHERE board_id = $1', [boardId]);
+      // Batch insert all circuits
+      if (updates.length) {
+        const mapped = updates.map(r => mapCircuitFields(r));
+        // Collect all unique field names across all circuits
+        const allFields = new Set();
+        mapped.forEach(u => Object.keys(u).filter(k => k !== 'id' && k !== 'board_id').forEach(f => allFields.add(f)));
+        const fields = [...allFields];
+        const cols = ['board_id', ...fields];
+        // Build multi-row VALUES clause
+        const valRows = []; const allVals = [];
+        mapped.forEach((u, ri) => {
+          const offset = ri * cols.length;
+          const ph = cols.map((_, ci) => `$${offset + ci + 1}`);
+          valRows.push(`(${ph.join(',')})`);
+          allVals.push(boardId);
+          fields.forEach(f => allVals.push(u[f] !== undefined ? u[f] : null));
+        });
+        await client.query(`INSERT INTO circuits (${cols.join(',')}) VALUES ${valRows.join(',')}`, allVals);
+      }
+    } else {
+      // Get existing circuits for matching
+      const { rows: existingCircuits } = await client.query('SELECT id, number FROM circuits WHERE board_id = $1', [boardId]);
+      const existingByNum = {};
+      existingCircuits.forEach(c => { existingByNum[c.number] = c.id; });
+
+      const toInsert = [];
+      for (const raw of updates) {
+        const u = mapCircuitFields(raw);
+        if (u.id) {
+          const fields = Object.keys(u).filter(k => k !== 'id' && k !== 'board_id');
+          const sets = fields.map((f, i) => `${f} = $${i + 2}`);
+          const vals = fields.map(f => u[f]);
+          await client.query(`UPDATE circuits SET ${sets.join(', ')} WHERE id = $1`, [u.id, ...vals]);
+        } else if (existingByNum[u.number]) {
           const fields = Object.keys(u).filter(k => k !== 'id' && k !== 'board_id' && k !== 'number');
           const sets = fields.map((f, i) => `${f} = $${i + 2}`);
           const vals = fields.map(f => u[f]);
-          if (sets.length) await pool.query(`UPDATE circuits SET ${sets.join(', ')} WHERE id = $1`, [existing[0].id, ...vals]);
+          if (sets.length) await client.query(`UPDATE circuits SET ${sets.join(', ')} WHERE id = $1`, [existingByNum[u.number], ...vals]);
         } else {
-          const fields = Object.keys(u).filter(k => k !== 'id');
-          const cols = ['board_id', ...fields];
-          const placeholders = cols.map((_, i) => `$${i + 1}`);
-          const vals = [boardId, ...fields.map(f => u[f])];
-          await pool.query(`INSERT INTO circuits (${cols.join(',')}) VALUES (${placeholders.join(',')})`, vals);
+          toInsert.push(u);
         }
       }
+      // Batch insert new circuits
+      if (toInsert.length) {
+        const allFields = new Set();
+        toInsert.forEach(u => Object.keys(u).filter(k => k !== 'id').forEach(f => allFields.add(f)));
+        const fields = [...allFields];
+        const cols = ['board_id', ...fields];
+        const valRows = []; const allVals = [];
+        toInsert.forEach((u, ri) => {
+          const offset = ri * cols.length;
+          const ph = cols.map((_, ci) => `$${offset + ci + 1}`);
+          valRows.push(`(${ph.join(',')})`);
+          allVals.push(boardId);
+          fields.forEach(f => allVals.push(u[f] !== undefined ? u[f] : null));
+        });
+        await client.query(`INSERT INTO circuits (${cols.join(',')}) VALUES ${valRows.join(',')}`, allVals);
+      }
     }
+
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
   }
   const { rows } = await pool.query('SELECT * FROM circuits WHERE board_id = $1 ORDER BY sort_order, id', [boardId]);
   res.json(rows);
