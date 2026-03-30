@@ -2274,6 +2274,11 @@ input,select,textarea { font-size:16px !important; }
   }
 
   var _dictationRec = null;
+  var _dictationActive = false;
+  var _dictationText = '';
+
+  var _micSvg = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>';
+  var _stopSvg = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
 
   function startDictation() {
     var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -2282,54 +2287,69 @@ input,select,textarea { font-size:16px !important; }
     var btn = document.querySelector('[data-action="start-dictation"]');
 
     /* Toggle off if already running */
-    if (_dictationRec) {
-      try { _dictationRec.stop(); } catch(ex) {}
+    if (_dictationActive) {
+      _dictationActive = false;
+      if (_dictationRec) { try { _dictationRec.stop(); } catch(ex) {} }
       _dictationRec = null;
-      if (btn) { btn.style.background = ''; btn.innerHTML = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>Tap to Speak'; }
+      if (btn) { btn.style.background = ''; btn.innerHTML = _micSvg + 'Tap to Speak'; }
       return;
     }
-
-    var recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-GB';
-    _dictationRec = recognition;
 
     var textArea = document.getElementById('ai-voice-text');
     if (!textArea) return;
 
-    /* Keep existing text so we append to it */
-    var baseText = textArea.value ? textArea.value.trimEnd() : '';
+    /* Start fresh — accumulate text across auto-restarts */
+    _dictationText = textArea.value ? textArea.value.trimEnd() : '';
+    _dictationActive = true;
 
-    recognition.onresult = function(event) {
-      var finalText = '';
-      var interimText = '';
-      for (var i = 0; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          finalText += event.results[i][0].transcript;
-        } else {
-          interimText += event.results[i][0].transcript;
+    function startSession() {
+      if (!_dictationActive) return;
+      var rec = new SpeechRecognition();
+      rec.continuous = false;
+      rec.interimResults = false;
+      rec.lang = 'en-GB';
+      _dictationRec = rec;
+
+      rec.onresult = function(event) {
+        for (var i = 0; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            var t = event.results[i][0].transcript.trim();
+            if (t) _dictationText = _dictationText ? _dictationText + ' ' + t : t;
+          }
         }
+        if (textArea) textArea.value = _dictationText;
+      };
+
+      rec.onerror = function(e) {
+        if (e.error === 'aborted' || e.error === 'no-speech') return;
+        _dictationActive = false;
+        _dictationRec = null;
+        if (btn) { btn.style.background = ''; btn.innerHTML = _micSvg + 'Tap to Speak'; }
+        toast('Speech: ' + e.error, 'error');
+      };
+
+      rec.onend = function() {
+        /* Auto-restart if user hasn't stopped */
+        if (_dictationActive) {
+          setTimeout(startSession, 100);
+        } else {
+          _dictationRec = null;
+          if (btn) { btn.style.background = ''; btn.innerHTML = _micSvg + 'Tap to Speak'; }
+        }
+      };
+
+      try { rec.start(); }
+      catch(ex) {
+        _dictationActive = false;
+        _dictationRec = null;
+        if (btn) { btn.style.background = ''; btn.innerHTML = _micSvg + 'Tap to Speak'; }
+        toast('Mic busy — try again', 'error');
       }
-      var combined = finalText + interimText;
-      textArea.value = baseText ? baseText + ' ' + combined.trim() : combined.trim();
-    };
-    recognition.onerror = function(e) {
-      _dictationRec = null;
-      if (btn) { btn.style.background = ''; btn.innerHTML = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>Tap to Speak'; }
-      if (e.error === 'aborted' || e.error === 'no-speech') return;
-      toast('Speech: ' + e.error, 'error');
-    };
-    recognition.onend = function() {
-      _dictationRec = null;
-      if (btn) { btn.style.background = ''; btn.innerHTML = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>Tap to Speak'; }
-      toast('Dictation ended — tap Send to AI', 'info');
-    };
-    try {
-      recognition.start();
-      if (btn) { btn.style.background = '#ef4444'; btn.innerHTML = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Tap to Stop'; }
-      toast('Listening...', 'info');
-    } catch(ex) { _dictationRec = null; toast('Mic busy — try again', 'error'); }
+    }
+
+    if (btn) { btn.style.background = '#ef4444'; btn.innerHTML = _stopSvg + 'Tap to Stop'; }
+    toast('Listening...', 'info');
+    startSession();
   }
 
   function runVoiceParse() {
@@ -4196,57 +4216,85 @@ input,select,textarea { font-size:16px !important; }
     return ctx;
   }
 
+  var _vfAccum = ''; /* accumulated text for chat bar voice */
+
   function voiceToField(fieldId) {
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return toast('Speech not supported in this browser', 'error');
     var field = document.getElementById(fieldId);
     if (!field) return;
     var btn = document.querySelector('[data-voice-for="' + fieldId + '"]');
-
-    /* AI chat input gets continuous mode — speak until you stop */
     var isChatInput = (fieldId === 'ai-chat-input');
 
-    /* Stop any existing recognition first */
+    /* Stop any existing recognition */
     if (_voiceActive && _voiceRec) {
-      try { _voiceRec.stop(); } catch(ex) {}
       _voiceActive = false;
+      try { _voiceRec.stop(); } catch(ex) {}
+      _voiceRec = null;
       if (btn) { btn.style.background = ''; btn.textContent = '🎤'; }
       return;
     }
 
+    if (isChatInput) {
+      /* Chat bar: auto-restart approach — no duplication on Android */
+      _vfAccum = field.value ? field.value.trimEnd() : '';
+      _voiceActive = true;
+      if (btn) { btn.style.background = '#ef4444'; btn.textContent = '⏹'; }
+
+      function startChatSession() {
+        if (!_voiceActive) return;
+        var rec = new SR();
+        rec.continuous = false;
+        rec.interimResults = false;
+        rec.lang = 'en-GB';
+        _voiceRec = rec;
+
+        rec.onresult = function(e) {
+          for (var i = 0; i < e.results.length; i++) {
+            if (e.results[i].isFinal) {
+              var t = e.results[i][0].transcript.trim();
+              if (t) _vfAccum = _vfAccum ? _vfAccum + ' ' + t : t;
+            }
+          }
+          if (field) field.value = _vfAccum;
+        };
+        rec.onerror = function(ev) {
+          if (ev.error === 'aborted' || ev.error === 'no-speech') return;
+          _voiceActive = false;
+          _voiceRec = null;
+          if (btn) { btn.style.background = ''; btn.textContent = '🎤'; }
+          toast('Voice: ' + ev.error, 'error');
+        };
+        rec.onend = function() {
+          if (_voiceActive) { setTimeout(startChatSession, 100); }
+          else { _voiceRec = null; if (btn) { btn.style.background = ''; btn.textContent = '🎤'; } }
+        };
+        try { rec.start(); } catch(ex) {
+          _voiceActive = false; _voiceRec = null;
+          if (btn) { btn.style.background = ''; btn.textContent = '🎤'; }
+          toast('Mic busy', 'error');
+        }
+      }
+      startChatSession();
+      return;
+    }
+
+    /* Regular fields: single-shot with AI cleanup */
     _voiceRec = new SR();
-    _voiceRec.continuous = isChatInput;
-    _voiceRec.interimResults = isChatInput;
+    _voiceRec.continuous = false;
+    _voiceRec.interimResults = false;
     _voiceRec.lang = 'en-GB';
+    _voiceActive = true;
     var startVal = field.value || '';
 
     _voiceRec.onresult = function(e) {
-      if (isChatInput) {
-        /* Continuous mode — separate final vs interim to avoid duplication */
-        var finalText = '';
-        var interimText = '';
-        for (var i = 0; i < e.results.length; i++) {
-          if (e.results[i].isFinal) {
-            finalText += e.results[i][0].transcript;
-          } else {
-            interimText += e.results[i][0].transcript;
-          }
-        }
-        var combined = (finalText + interimText).trim();
-        field.value = startVal ? startVal + ' ' + combined : combined;
-        return; /* No AI processing during dictation — user sends when ready */
-      }
-
-      /* Single-shot mode for regular fields */
       var transcript = '';
       for (var i = 0; i < e.results.length; i++) transcript += e.results[i][0].transcript;
 
-      /* Show raw transcript immediately as fallback */
       field.value = startVal ? startVal + ' ' + transcript : transcript;
 
-      /* Now pipe through AI for context-aware interpretation */
       var provider = getSelectedProvider();
-      if (!provider) return; /* No AI — keep raw transcript */
+      if (!provider) return;
 
       if (btn) { btn.style.background = '#3b82f6'; btn.textContent = '⏳'; }
 
@@ -4286,14 +4334,10 @@ input,select,textarea { font-size:16px !important; }
       if (ev.error === 'aborted' || ev.error === 'no-speech') return;
       toast('Voice: ' + ev.error, 'error');
     };
-    _voiceRec.onend = function() {
-      _voiceActive = false;
-      if (isChatInput && btn) { btn.style.background = ''; btn.textContent = '🎤'; }
-    };
+    _voiceRec.onend = function() { _voiceActive = false; };
 
     try {
       _voiceRec.start();
-      _voiceActive = true;
       if (btn) { btn.style.background = '#ef4444'; btn.textContent = '⏹'; }
     } catch(ex) {
       toast('Mic busy — try again', 'error');
