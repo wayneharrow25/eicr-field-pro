@@ -197,13 +197,23 @@ input,select,textarea { font-size:16px !important; }
     sheetOpen: false
   };
 
-  /* ===== OFFLINE QUEUE ===== */
+  /* ===== OFFLINE QUEUE + LOCAL CACHE ===== */
   var _offlineQueue = JSON.parse(localStorage.getItem('eicr_offline_queue') || '[]');
   var _isOnline = navigator.onLine !== false;
+  var _syncInterval = null;
 
   function updateOfflineBanner() {
     var banner = document.getElementById('offline-banner');
-    if (banner) banner.classList.toggle('show', !_isOnline || _offlineQueue.length > 0);
+    var qLen = _offlineQueue.length;
+    if (banner) {
+      var show = !_isOnline || qLen > 0;
+      banner.classList.toggle('show', show);
+      if (show) {
+        banner.textContent = !_isOnline
+          ? 'OFFLINE — ' + (qLen > 0 ? qLen + ' change(s) queued, ' : '') + 'will sync when connected'
+          : 'Syncing ' + qLen + ' offline change(s)...';
+      }
+    }
   }
 
   window.addEventListener('online', function() {
@@ -216,8 +226,21 @@ input,select,textarea { font-size:16px !important; }
     updateOfflineBanner();
   });
 
+  /* Periodic sync attempt — catches cases where online event doesn't fire */
+  _syncInterval = setInterval(function() {
+    if (_offlineQueue.length > 0 && navigator.onLine) flushOfflineQueue();
+  }, 30000); /* every 30s */
+
   function saveOfflineQueue() {
     try { localStorage.setItem('eicr_offline_queue', JSON.stringify(_offlineQueue)); } catch(e) {}
+  }
+
+  /* Local data cache — stores last-known-good data for offline access */
+  function cacheData(key, data) {
+    try { localStorage.setItem('eicr_cache_' + key, JSON.stringify(data)); } catch(e) {}
+  }
+  function getCachedData(key) {
+    try { var d = localStorage.getItem('eicr_cache_' + key); return d ? JSON.parse(d) : null; } catch(e) { return null; }
   }
 
   function flushOfflineQueue() {
@@ -234,13 +257,21 @@ input,select,textarea { font-size:16px !important; }
         _offlineQueue.shift();
         saveOfflineQueue();
         updateOfflineBanner();
-        if (_offlineQueue.length > 0) flushOfflineQueue();
-        else toast('All offline changes synced', 'success');
+        if (_offlineQueue.length > 0) {
+          setTimeout(flushOfflineQueue, 500); /* small delay between flushes */
+        } else {
+          toast('All offline changes synced (' + new Date().toLocaleTimeString() + ')', 'success');
+        }
       }
     }).catch(function() { /* Still offline, try later */ });
   }
 
   /* ===== API HELPERS ===== */
+  function isNetworkError(err) {
+    return err && (err.message === 'Failed to fetch' || err.message === 'NetworkError when attempting to fetch resource.' ||
+      err.message === 'Load failed' || err.name === 'TypeError');
+  }
+
   function api(method, path, body) {
     var opts = {
       method: method,
@@ -253,6 +284,12 @@ input,select,textarea { font-size:16px !important; }
       opts.body = JSON.stringify(body);
     }
     return fetch('/api' + path, opts).then(function(res) {
+      /* We got a response — we're online */
+      if (!_isOnline) {
+        _isOnline = true;
+        updateOfflineBanner();
+        if (_offlineQueue.length > 0) setTimeout(flushOfflineQueue, 1000);
+      }
       if (res.status === 401) {
         state.token = null;
         localStorage.removeItem('eicr_token');
@@ -270,14 +307,27 @@ input,select,textarea { font-size:16px !important; }
       if (ct.indexOf('json') !== -1) return res.json();
       return res.text();
     }).catch(function(err) {
-      /* If network error on a write, queue it for later */
-      if (!navigator.onLine && method !== 'GET') {
-        _offlineQueue.push({method: method, path: path, body: body, ts: Date.now()});
-        saveOfflineQueue();
+      /* Network error (no signal, server down, etc.) — queue writes, serve cached reads */
+      if (isNetworkError(err)) {
         _isOnline = false;
         updateOfflineBanner();
-        toast('Saved offline — will sync when connected', 'info');
-        return {_offline: true};
+
+        if (method !== 'GET') {
+          /* Queue the write for later */
+          _offlineQueue.push({method: method, path: path, body: body, ts: Date.now()});
+          saveOfflineQueue();
+          updateOfflineBanner();
+          toast('Saved offline — will sync when connected', 'info');
+          return {_offline: true};
+        } else {
+          /* Try to serve from cache for GET requests */
+          var cached = getCachedData(path);
+          if (cached) {
+            toast('Loaded from cache (offline)', 'info');
+            return cached;
+          }
+          throw new Error('Offline — no cached data available');
+        }
       }
       throw err;
     });
@@ -434,6 +484,7 @@ input,select,textarea { font-size:16px !important; }
   function loadSites() {
     api('GET', '/sites').then(function(data) {
       state.sites = data;
+      cacheData('/sites', data);
       var list = document.getElementById('sites-list');
       if (list) {
         var tmp = document.createElement('div');
@@ -749,6 +800,7 @@ input,select,textarea { font-size:16px !important; }
     if (!state.currentSite) return;
     api('GET', '/sites/' + state.currentSite.id + '/boards').then(function(data) {
       state.boards = data;
+      cacheData('/sites/' + state.currentSite.id + '/boards', data);
       var container = document.getElementById('boards-container');
       if (container) {
         navigate('site-detail', {currentSiteTab: 'boards'});
@@ -1018,6 +1070,7 @@ input,select,textarea { font-size:16px !important; }
     api('GET', '/boards/' + boardId + '/circuits').then(function(data) {
       state.circuits = data.map(mapCircuitFromDB);
       _lastKnownCircuitCount = state.circuits.length;
+      cacheData('/boards/' + boardId + '/circuits', data);
       navigate('board-detail');
       loadBoardPhotos(boardId);
     }).catch(function(err) { toast(err.message, 'error'); });
@@ -1707,9 +1760,15 @@ input,select,textarea { font-size:16px !important; }
       return obj;
     });
     /* Use replace mode — delete all + batch insert is fastest and avoids match-by-number overhead */
+    /* Always cache locally so data survives offline */
+    cacheData('/boards/' + state.currentBoard.id + '/circuits', updates);
+
     api('PUT', '/boards/' + state.currentBoard.id + '/circuits/bulk?replace=1', updates).then(function(data) {
-      state.circuits = data.map(mapCircuitFromDB);
-      _lastKnownCircuitCount = state.circuits.length;
+      if (data && !data._offline) {
+        state.circuits = data.map(mapCircuitFromDB);
+        _lastKnownCircuitCount = state.circuits.length;
+        cacheData('/boards/' + state.currentBoard.id + '/circuits', data);
+      }
       if (!silent) {
         toast('All circuits saved', 'success');
         navigate('board-detail');
@@ -1720,11 +1779,13 @@ input,select,textarea { font-size:16px !important; }
       setTimeout(function() {
         if (!state.currentBoard) return;
         api('PUT', '/boards/' + state.currentBoard.id + '/circuits/bulk?replace=1', updates).then(function(data) {
-          state.circuits = data.map(mapCircuitFromDB);
-          _lastKnownCircuitCount = state.circuits.length;
+          if (data && !data._offline) {
+            state.circuits = data.map(mapCircuitFromDB);
+            _lastKnownCircuitCount = state.circuits.length;
+          }
           toast('Circuits saved (retry succeeded)', 'success');
         }).catch(function() {
-          toast('Save failed again — check connection and tap Save manually', 'error');
+          toast('Save failed again — data cached locally', 'error');
         });
       }, 3000);
     });
@@ -3057,6 +3118,7 @@ input,select,textarea { font-size:16px !important; }
     if (!state.currentSite) return;
     api('GET', '/sites/' + state.currentSite.id + '/inspections').then(function(data) {
       state.inspections = data;
+      cacheData('/sites/' + state.currentSite.id + '/inspections', data);
       if (state.currentSiteTab === 'inspection') {
         navigate('site-detail', {currentSiteTab: 'inspection'});
       }
@@ -3132,6 +3194,7 @@ input,select,textarea { font-size:16px !important; }
     if (!state.currentSite) return;
     api('GET', '/sites/' + state.currentSite.id + '/observations').then(function(data) {
       state.observations = data;
+      cacheData('/sites/' + state.currentSite.id + '/observations', data);
       if (state.currentSiteTab === 'observations') {
         navigate('site-detail', {currentSiteTab: 'observations'});
       }
