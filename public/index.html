@@ -2281,71 +2281,43 @@ input,select,textarea { font-size:16px !important; }
   var _micSvg = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>';
   var _stopSvg = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
 
-  /* Shared helper: continuous voice that stays open through pauses.
-     Uses continuous:true + index tracking to avoid duplication.
-     If the browser kills the session (Android), auto-restarts seamlessly. */
-  function startContinuousVoice(opts) {
+  /* Simple single-shot voice — tap to speak, result appends to field.
+     No continuous mode, no interim results, no auto-restart.
+     Works reliably on Android Chrome. Tap again to add more. */
+  function simpleVoiceCapture(field, btn, startIcon, stopIcon, onDone) {
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { toast('Speech not supported', 'error'); return null; }
 
-    var accum = opts.initial || '';
-    var active = true;
-    var rec = null;
+    var rec = new SR();
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.lang = 'en-GB';
 
-    function buildRec() {
-      var r = new SR();
-      r.continuous = true;
-      r.interimResults = true;
-      r.lang = 'en-GB';
+    var base = field.value ? field.value.trimEnd() : '';
 
-      /* Track which result indices we already consumed as final */
-      var consumed = 0;
-
-      r.onresult = function(event) {
-        /* Build text: already-consumed finals are in accum.
-           Process new finals + show current interim. */
-        for (var i = consumed; i < event.results.length; i++) {
-          if (event.results[i].isFinal) {
-            var t = event.results[i][0].transcript.trim();
-            if (t) accum = accum ? accum + ' ' + t : t;
-            consumed = i + 1;
-          }
-        }
-        /* Show accumulated + any trailing interim */
-        var interim = '';
-        for (var j = consumed; j < event.results.length; j++) {
-          interim += event.results[j][0].transcript;
-        }
-        var display = interim ? (accum ? accum + ' ' + interim.trim() : interim.trim()) : accum;
-        if (opts.onText) opts.onText(display);
-      };
-
-      r.onerror = function(e) {
-        /* no-speech and aborted are normal during pauses — silently restart */
-        if (e.error === 'aborted' || e.error === 'no-speech') return;
-        active = false;
-        if (opts.onStop) opts.onStop();
-        toast('Speech: ' + e.error, 'error');
-      };
-
-      r.onend = function() {
-        /* Session ended — don't auto-restart (causes Android mic permission spam) */
-        active = false;
-        if (opts.onStop) opts.onStop();
-      };
-
-      return r;
-    }
-
-    rec = buildRec();
-    try { rec.start(); } catch(ex) { toast('Mic busy', 'error'); return null; }
-
-    /* Return control handle */
-    return {
-      stop: function() { active = false; try { rec.stop(); } catch(ex) {} },
-      isActive: function() { return active; },
-      getRec: function() { return rec; }
+    rec.onresult = function(event) {
+      var transcript = '';
+      for (var i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      var t = transcript.trim();
+      if (t) field.value = base ? base + ' ' + t : t;
     };
+    rec.onerror = function(e) {
+      if (btn) { btn.style.background = ''; btn.innerHTML = startIcon; }
+      if (e.error === 'aborted' || e.error === 'no-speech') return;
+      toast('Speech: ' + e.error, 'error');
+    };
+    rec.onend = function() {
+      if (btn) { btn.style.background = ''; btn.innerHTML = startIcon; }
+      if (onDone) onDone();
+    };
+
+    try {
+      rec.start();
+      if (btn) { btn.style.background = '#ef4444'; btn.innerHTML = stopIcon; }
+      return rec;
+    } catch(ex) { toast('Mic busy', 'error'); return null; }
   }
 
   function startDictation() {
@@ -2353,7 +2325,7 @@ input,select,textarea { font-size:16px !important; }
 
     /* Toggle off if already running */
     if (_dictationActive && _dictationRec) {
-      _dictationRec.stop();
+      try { _dictationRec.stop(); } catch(ex) {}
       _dictationActive = false;
       _dictationRec = null;
       if (btn) { btn.style.background = ''; btn.innerHTML = _micSvg + 'Tap to Speak'; }
@@ -2363,21 +2335,15 @@ input,select,textarea { font-size:16px !important; }
     var textArea = document.getElementById('ai-voice-text');
     if (!textArea) return;
 
-    var handle = startContinuousVoice({
-      initial: textArea.value ? textArea.value.trimEnd() : '',
-      onText: function(text) { textArea.value = text; },
-      onStop: function() {
-        _dictationActive = false;
-        _dictationRec = null;
-        if (btn) { btn.style.background = ''; btn.innerHTML = _micSvg + 'Tap to Speak'; }
-      }
+    var rec = simpleVoiceCapture(textArea, btn, _micSvg + 'Tap to Speak', _stopSvg + 'Listening...', function() {
+      _dictationActive = false;
+      _dictationRec = null;
     });
 
-    if (handle) {
+    if (rec) {
       _dictationActive = true;
-      _dictationRec = handle;
-      if (btn) { btn.style.background = '#ef4444'; btn.innerHTML = _stopSvg + 'Tap to Stop'; }
-      toast('Listening — tap stop when done', 'info');
+      _dictationRec = rec;
+      toast('Speak now — tap again to add more', 'info');
     }
   }
 
@@ -4264,21 +4230,12 @@ input,select,textarea { font-size:16px !important; }
     }
 
     if (isChatInput) {
-      /* Chat bar: continuous voice, stays open through pauses */
-      var handle = startContinuousVoice({
-        initial: field.value ? field.value.trimEnd() : '',
-        onText: function(text) { field.value = text; },
-        onStop: function() {
-          _voiceActive = false;
-          _voiceRec = null;
-          if (btn) { btn.style.background = ''; btn.textContent = '🎤'; }
-        }
+      /* Chat bar: simple single-shot, tap again to add more */
+      var chatRec = simpleVoiceCapture(field, btn, '🎤', '⏹', function() {
+        _voiceActive = false;
+        _voiceRec = null;
       });
-      if (handle) {
-        _voiceActive = true;
-        _voiceRec = handle;
-        if (btn) { btn.style.background = '#ef4444'; btn.textContent = '⏹'; }
-      }
+      if (chatRec) { _voiceActive = true; _voiceRec = chatRec; }
       return;
     }
 
