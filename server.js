@@ -295,7 +295,7 @@ async function initDB() {
     }
 
     // Add missing columns to observations table
-    const obsColumns = ['materials TEXT'];
+    const obsColumns = ['materials TEXT', 'qty TEXT'];
     for (const col of obsColumns) {
       await client.query(`ALTER TABLE observations ADD COLUMN IF NOT EXISTS ${col}`).catch(() => {});
     }
@@ -683,8 +683,8 @@ app.post('/api/sites/:id/observations', authMiddleware, async (req, res) => {
   const d = req.body;
   const { rows: maxRow } = await pool.query('SELECT COALESCE(MAX(item_no), 0) + 1 as next FROM observations WHERE site_id = $1', [req.params.id]);
   const { rows } = await pool.query(
-    `INSERT INTO observations (site_id, board_id, item_no, description, code, location, photo, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-    [req.params.id, d.board_id, d.item_no || maxRow[0].next, d.description, d.code || 'C2', d.location, d.photo, req.user.id]
+    `INSERT INTO observations (site_id, board_id, item_no, description, code, location, photo, materials, qty, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+    [req.params.id, d.board_id, d.item_no || maxRow[0].next, d.description, d.code || 'C2', d.location, d.photo, d.materials || null, d.qty || null, req.user.id]
   );
   res.json(rows[0]);
 });

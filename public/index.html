@@ -144,6 +144,9 @@ input,select,textarea { font-size:16px !important; }
   .board-photos-grid { grid-template-columns: repeat(6, 1fr) !important; }
 }
 .desk-col { display: none; }
+@media (min-width: 1024px) {
+  .desk-grid { grid-template-columns: 1fr 1fr !important; }
+}
 </style>
 </head>
 <body>
@@ -822,99 +825,51 @@ input,select,textarea { font-size:16px !important; }
         '</div>' +
       '</header>';
 
-    /* Board header info */
+    /* Board header + photos + tools — compact 2-col on desktop */
     html += '<div class="p-4 space-y-3">' +
-      '<div class="card p-4">' +
-        '<div class="grid grid-cols-2 gap-3 text-sm">' +
-          '<div><span class="text-slate-500">Supplied From:</span><br><strong>' + esc(b.supplied_from || '-') + '</strong></div>' +
-          '<div><span class="text-slate-500">Phase:</span><br><strong>' + esc(b.num_phases || '-') + '</strong></div>' +
-          '<div><span class="text-slate-500">OCPD BS(EN):</span><br><strong>' + esc(b.ocpd_bsen || '-') + '</strong></div>' +
-          '<div><span class="text-slate-500">OCPD Rating:</span><br><strong>' + esc(b.ocpd_rating ? b.ocpd_rating + 'A' : '-') + '</strong></div>' +
-          '<div><span class="text-slate-500">Ze (ohms):</span><br><strong>' + esc(b.ze || '-') + '</strong></div>' +
-          '<div><span class="text-slate-500">Ipf (kA):</span><br><strong>' + esc(b.ipf || '-') + '</strong></div>' +
-        '</div>' +
-        '<button class="btn btn-ghost btn-sm mt-3" data-action="edit-board-header">Edit Board Details</button>' +
-      '</div>';
+      '<div style="display:grid;grid-template-columns:1fr;gap:.75rem" class="desk-grid">' +
 
-    /* Board reference photos */
-    html += '<div class="card p-3">' +
-      '<div class="flex items-center justify-between mb-2">' +
-        '<h4 class="text-xs font-bold text-slate-500 uppercase tracking-wide">Photos</h4>' +
-        '<div class="flex gap-1">' +
+      /* Left: Board info + photos */
+      '<div class="card p-3">' +
+        '<div class="grid grid-cols-3 gap-2 text-xs">' +
+          '<div><span class="text-slate-400">From:</span><br><strong>' + esc(b.supplied_from || '-') + '</strong></div>' +
+          '<div><span class="text-slate-400">Phase:</span><br><strong>' + esc(b.num_phases || '-') + '</strong></div>' +
+          '<div><span class="text-slate-400">BS:</span><br><strong>' + esc(b.ocpd_bsen || '-') + '</strong></div>' +
+          '<div><span class="text-slate-400">Rating:</span><br><strong>' + esc(b.ocpd_rating ? b.ocpd_rating + 'A' : '-') + '</strong></div>' +
+          '<div><span class="text-slate-400">Ze:</span><br><strong>' + esc(b.ze || '-') + '</strong></div>' +
+          '<div><span class="text-slate-400">Ipf:</span><br><strong>' + esc(b.ipf || '-') + '</strong></div>' +
+        '</div>' +
+        '<div class="flex gap-1 mt-2">' +
+          '<button class="btn btn-ghost btn-sm text-xs flex-1" data-action="edit-board-header">Edit Board</button>' +
           '<button class="btn btn-ghost btn-sm text-xs" data-action="board-photo-camera">&#128247;</button>' +
           '<button class="btn btn-ghost btn-sm text-xs" data-action="board-photo-gallery">&#128193;</button>' +
         '</div>' +
         '<input type="file" accept="image/*" id="board-photo-upload" style="display:none" multiple>' +
         '<input type="file" accept="image/*" capture="environment" id="board-photo-cam" style="display:none">' +
+        '<div id="board-photos-grid" class="grid grid-cols-3 gap-1 mt-2">' +
+          '<p class="text-xs text-slate-400 col-span-3">Loading...</p>' +
+        '</div>' +
       '</div>' +
-      '<div id="board-photos-grid" class="grid grid-cols-3 gap-2">' +
-        '<p class="text-xs text-slate-400 col-span-3">Loading...</p>' +
-      '</div>' +
-    '</div>';
 
-    /* AI Tools */
-    html += '<div class="card p-4">' +
-      '<h3 class="font-semibold text-slate-800 mb-3">AI Tools</h3>' +
-      '<div class="grid grid-cols-2 gap-2">' +
-        '<button class="btn btn-primary" data-action="ai-photo-scan">' +
-          '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>' +
-          'New Photo Scan</button>' +
-        '<button class="btn btn-primary" data-action="scan-board-photos" style="background:#7c3aed">' +
-          '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>' +
-          'Scan Board Photos</button>' +
-        '<button class="btn btn-primary" data-action="ai-voice-input">' +
-          '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>' +
-          'AI Assistant</button>' +
-        '<button class="btn btn-ghost" data-action="open-paste-data">' +
-          '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>' +
-          'Paste Data</button>' +
-        '<button class="btn btn-ghost" data-action="open-bulk-scan">' +
-          '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20"/></svg>' +
-          'Bulk Photos</button>' +
-      '</div>' +
-      '<div class="mt-3 pt-3 border-t border-slate-100">' +
-        '<h4 class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Quick Fill</h4>' +
-        '<div class="grid grid-cols-2 gap-2">' +
-          '<button class="btn btn-ghost text-xs" data-action="fill-na-empty">' +
-            '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
-            'Fill N/A</button>' +
-          '<button class="btn btn-ghost text-xs" data-action="fill-lim-empty">' +
-            '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
-            'Fill LIM</button>' +
+      /* Right: AI + tools compact */
+      '<div class="card p-3">' +
+        '<div class="grid grid-cols-2 gap-1">' +
+          '<button class="btn btn-primary btn-sm text-xs" data-action="ai-photo-scan">&#128247; Photo Scan</button>' +
+          '<button class="btn btn-sm text-xs" data-action="scan-board-photos" style="background:#7c3aed;color:#fff">&#128444; Scan Board Photos</button>' +
+          '<button class="btn btn-primary btn-sm text-xs" data-action="ai-voice-input">&#127908; AI Assistant</button>' +
+          '<button class="btn btn-ghost btn-sm text-xs" data-action="open-paste-data">&#128203; Paste</button>' +
+        '</div>' +
+        '<div class="flex flex-wrap gap-1 mt-2 pt-2 border-t border-slate-100">' +
+          '<button class="btn btn-ghost btn-sm text-xs" data-action="fill-na-empty">Fill N/A</button>' +
+          '<button class="btn btn-ghost btn-sm text-xs" data-action="fill-lim-empty">Fill LIM</button>' +
+          '<button class="btn btn-ghost btn-sm text-xs" data-action="renumber-circuits" data-mode="SP">SP 1,2,3</button>' +
+          '<button class="btn btn-ghost btn-sm text-xs" data-action="renumber-circuits" data-mode="TP">TP L1L2L3</button>' +
+          '<button class="btn btn-ghost btn-sm text-xs" data-action="format-board-caps">CAPS</button>' +
+          '<button class="btn btn-ghost btn-sm text-xs" data-action="format-board-proper">Proper</button>' +
         '</div>' +
       '</div>' +
-      '<div class="mt-3 pt-3 border-t border-slate-100">' +
-        '<h4 class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Renumber Circuits</h4>' +
-        '<div class="grid grid-cols-2 gap-2">' +
-          '<button class="btn btn-ghost text-xs" data-action="renumber-circuits" data-mode="SP">1, 2, 3... (SP)</button>' +
-          '<button class="btn btn-ghost text-xs" data-action="renumber-circuits" data-mode="TP">1L1, 1L2, 1L3... (TP)</button>' +
-        '</div>' +
-      '</div>' +
-      '<div class="mt-3 pt-3 border-t border-slate-100">' +
-        '<h4 class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Text Format</h4>' +
-        '<div class="grid grid-cols-3 gap-2">' +
-          '<button class="btn btn-ghost text-xs" data-action="format-board-caps">ABC CAPS</button>' +
-          '<button class="btn btn-ghost text-xs" data-action="format-board-proper">Abc Proper</button>' +
-          '<button class="btn btn-ghost text-xs" data-action="format-board-spellcheck">&#9998; Spell</button>' +
-        '</div>' +
-      '</div>' +
-    '</div>';
 
-    /* Wiring type legend */
-    html += '<div class="card p-3">' +
-      '<h4 class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Wiring Type Codes</h4>' +
-      '<div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600">' +
-        '<span><strong>A</strong>=T+E</span>' +
-        '<span><strong>B</strong>=T+E conduit(m)</span>' +
-        '<span><strong>C</strong>=T+E conduit(p)</span>' +
-        '<span><strong>D</strong>=T+E trunk(m)</span>' +
-        '<span><strong>E</strong>=T+E trunk(p)</span>' +
-        '<span><strong>F</strong>=SWA</span>' +
-        '<span><strong>G</strong>=SWA thermo</span>' +
-        '<span><strong>H</strong>=MICC</span>' +
-        '<span><strong>O</strong>=Other</span>' +
-      '</div>' +
-    '</div>';
+      '</div>';
 
     /* Test schedule table */
     html += '<div class="card overflow-hidden">' +
@@ -1260,7 +1215,11 @@ input,select,textarea { font-size:16px !important; }
       }
     });
 
-    applyCircuitDefaults(c);
+    if (isSpareDescription(c.description)) {
+      clearCircuitAsSpare(c);
+    } else {
+      applyCircuitDefaults(c);
+    }
     if (idx === -1) {
       state.circuits.push(c);
     } else {
@@ -1331,11 +1290,23 @@ input,select,textarea { font-size:16px !important; }
     if (!c.breaking_cap) c.breaking_cap = '10';
     /* AFDD default N/A */
     if (!c.afdd_test && c.afdd_test !== false) c.afdd_test = 'N/A';
-    /* 61009 auto-sets RCD fields */
+    /* 61009 RCBO — auto-populate RCD fields */
     if (c.ocpd_bsen === '61009') {
       if (!c.rcd_bsen) c.rcd_bsen = '61009';
       if (!c.rcd_idn) c.rcd_idn = '30';
       if (!c.rcd_type) c.rcd_type = 'A';
+    }
+    /* 61008 RCD — auto-populate RCD BS */
+    else if (c.ocpd_bsen === '61008') {
+      if (!c.rcd_bsen) c.rcd_bsen = '61008';
+    }
+    /* Non-RCD device (60898, 88-2, 3036, 60947-2 etc) — default RCD fields to -- */
+    else if (c.ocpd_bsen && c.ocpd_bsen !== '61009' && c.ocpd_bsen !== '61008') {
+      if (!c.rcd_bsen) c.rcd_bsen = '--';
+      if (!c.rcd_idn) c.rcd_idn = '--';
+      if (!c.rcd_type) c.rcd_type = '--';
+      if (!c.rcd_op_x1 && c.rcd_op_x1 !== 0) c.rcd_op_x1 = '--';
+      if (c.rcd_test_btn === undefined || c.rcd_test_btn === null || c.rcd_test_btn === '') c.rcd_test_btn = '--';
     }
     /* Auto-lookup Max Zs */
     if (c.ocpd_bsen && c.ocpd_type && c.ocpd_rating) {
@@ -1369,22 +1340,36 @@ input,select,textarea { font-size:16px !important; }
 
   /* ===== INLINE CELL EDIT CONFIG ===== */
   var CELL_OPTIONS = {
-    wiring_type:  ['','T+E','T+3E','Singles/Con','Singles/Trk','SWA','MICC','FP','LSF','XLPE/SWA','Flex','Busbar'],
-    ref_method:   ['','A','B','C','D','E','F','G','100','101','102','103'],
-    ocpd_bsen:    ['','60898','61009','61008','88-2','88-3','60947-2','3036'],
-    ocpd_type:    ['','B','C','D','gG','aM'],
-    rcd_bsen:     ['','61008','61009','62423','N/A'],
-    rcd_type:     ['','AC','A','B','F','S','N/A'],
-    rcd_idn:      ['','10','30','100','300','500','N/A'],
-    polarity:     [{v:true,l:'Yes'},{v:false,l:''},{v:'',l:'--'}],
-    rcd_test_btn: [{v:true,l:'Yes'},{v:false,l:''},{v:'',l:'--'}],
-    afdd_test:    [{v:'N/A',l:'N/A'},{v:true,l:'Yes'},{v:false,l:'No'},{v:'',l:'--'}],
-    ir_test_v:    ['','250','500','1000'],
-    breaking_cap: ['','6','10','15','25'],
-    live_mm:      ['','1.0','1.5','2.5','4','6','10','16','25','35'],
-    cpc_mm:       ['','1.0','1.5','2.5','4','6','10','16'],
-    points:       ['','1','2','3','4','5','6','8','10','12'],
-    ocpd_rating:  ['','6','10','16','20','25','32','40','50','63','80','100']
+    wiring_type: [
+      {v:'',l:'--'},{v:'T+E',l:'T+E — Flat twin & earth'},{v:'T+3E',l:'T+3E — 3 core & earth'},
+      {v:'Singles/Con',l:'Singles/Con — In conduit'},{v:'Singles/Trk',l:'Singles/Trk — In trunking'},
+      {v:'SWA',l:'SWA — Steel wire armoured'},{v:'MICC',l:'MICC — Mineral insulated'},
+      {v:'FP',l:'FP — Fire performance'},{v:'LSF',l:'LSF — Low smoke & fume'},
+      {v:'XLPE/SWA',l:'XLPE/SWA — Cross-linked armoured'},{v:'Flex',l:'Flex — Flexible cord'},
+      {v:'Busbar',l:'Busbar — Busbar trunking'}
+    ],
+    ref_method: [
+      {v:'',l:'--'},{v:'A',l:'A — Enclosed in insulating wall'},
+      {v:'B',l:'B — In conduit/trunking on wall'},{v:'C',l:'C — Clipped direct to surface'},
+      {v:'D',l:'D — In ducts in the ground'},{v:'E',l:'E — Free air (multicore on tray)'},
+      {v:'F',l:'F — Single-core touching on tray'},{v:'G',l:'G — Single-core spaced on tray'},
+      {v:'100',l:'100 — Sheathed in insulating wall'},{v:'101',l:'101 — In conduit in insulating wall'},
+      {v:'102',l:'102 — In conduit on wall'},{v:'103',l:'103 — Clipped direct, non-metallic'}
+    ],
+    ocpd_bsen:    [{v:'',l:'--'},{v:'60898',l:'60898 — MCB'},{v:'61009',l:'61009 — RCBO'},{v:'61008',l:'61008 — RCD'},{v:'88-2',l:'88-2 — HRC Fuse'},{v:'88-3',l:'88-3 — Fuse'},{v:'60947-2',l:'60947-2 — MCCB'},{v:'3036',l:'3036 — Rewireable fuse'}],
+    ocpd_type:    [{v:'',l:'--'},{v:'B',l:'B — General'},{v:'C',l:'C — Motors/inductive'},{v:'D',l:'D — High inrush'},{v:'gG',l:'gG — HRC fuse'},{v:'aM',l:'aM — Motor starter'}],
+    rcd_bsen:     [{v:'',l:'--'},{v:'61008',l:'61008 — RCD'},{v:'61009',l:'61009 — RCBO'},{v:'62423',l:'62423 — Type B RCD'},{v:'N/A',l:'N/A'}],
+    rcd_type:     [{v:'',l:'--'},{v:'AC',l:'AC — AC faults only'},{v:'A',l:'A — AC + pulsating DC'},{v:'B',l:'B — All fault types'},{v:'F',l:'F — High frequency'},{v:'S',l:'S — Time delayed'},{v:'N/A',l:'N/A'}],
+    rcd_idn:      [{v:'',l:'--'},{v:'10',l:'10 mA'},{v:'30',l:'30 mA'},{v:'100',l:'100 mA'},{v:'300',l:'300 mA'},{v:'500',l:'500 mA'},{v:'N/A',l:'N/A'}],
+    polarity:     [{v:true,l:'Yes ✓'},{v:false,l:'No'},{v:'',l:'--'}],
+    rcd_test_btn: [{v:true,l:'Yes ✓'},{v:false,l:'No'},{v:'',l:'--'}],
+    afdd_test:    [{v:'N/A',l:'N/A'},{v:true,l:'Yes ✓'},{v:false,l:'No'},{v:'',l:'--'}],
+    ir_test_v:    [{v:'',l:'--'},{v:'250',l:'250V'},{v:'500',l:'500V'},{v:'1000',l:'1000V'}],
+    breaking_cap: [{v:'',l:'--'},{v:'6',l:'6 kA'},{v:'10',l:'10 kA'},{v:'15',l:'15 kA'},{v:'25',l:'25 kA'}],
+    live_mm:      [{v:'',l:'--'},{v:'1.0',l:'1.0'},{v:'1.5',l:'1.5'},{v:'2.5',l:'2.5'},{v:'4',l:'4'},{v:'6',l:'6'},{v:'10',l:'10'},{v:'16',l:'16'},{v:'25',l:'25'},{v:'35',l:'35'}],
+    cpc_mm:       [{v:'',l:'--'},{v:'1.0',l:'1.0'},{v:'1.5',l:'1.5'},{v:'2.5',l:'2.5'},{v:'4',l:'4'},{v:'6',l:'6'},{v:'10',l:'10'},{v:'16',l:'16'}],
+    points:       [{v:'',l:'--'},{v:'1',l:'1'},{v:'2',l:'2'},{v:'3',l:'3'},{v:'4',l:'4'},{v:'5',l:'5'},{v:'6',l:'6'},{v:'8',l:'8'},{v:'10',l:'10'},{v:'12',l:'12'}],
+    ocpd_rating:  [{v:'',l:'--'},{v:'6',l:'6A'},{v:'10',l:'10A'},{v:'16',l:'16A'},{v:'20',l:'20A'},{v:'25',l:'25A'},{v:'32',l:'32A'},{v:'40',l:'40A'},{v:'50',l:'50A'},{v:'63',l:'63A'},{v:'80',l:'80A'},{v:'100',l:'100A'}]
   };
 
   function closePopups() {
@@ -1434,12 +1419,24 @@ input,select,textarea { font-size:16px !important; }
     var count = 0;
     state.circuits.forEach(function(c, i) {
       if (indices.length > 0 && indices.indexOf(i) === -1) return;
+      if (isSpareDescription(c.description)) return; /* skip spare circuits */
       if (col === 'polarity' || col === 'rcd_test_btn') {
         c[col] = (val === 'true');
       } else if (col === 'afdd_test') {
         c[col] = val === 'true' ? true : val === 'false' ? false : val;
       } else {
         c[col] = val;
+      }
+      /* If changing BS(EN) device, cascade RCD defaults */
+      if (col === 'ocpd_bsen') {
+        if (val === '61009') {
+          c.rcd_bsen = '61009'; c.rcd_idn = '30'; c.rcd_type = 'A';
+        } else if (val === '61008') {
+          c.rcd_bsen = '61008';
+        } else if (val) {
+          c.rcd_bsen = '--'; c.rcd_idn = '--'; c.rcd_type = '--';
+          c.rcd_op_x1 = '--'; c.rcd_test_btn = '--';
+        }
       }
       count++;
     });
@@ -1485,6 +1482,25 @@ input,select,textarea { font-size:16px !important; }
     if (input) { input.focus(); if (input.select) input.select(); }
   }
 
+  /* Clear all data fields on a circuit (for spare/N/A designations) */
+  var SPARE_KEEP = ['number','id','board_id','sort_order','created_at','description'];
+  function clearCircuitAsSpare(c) {
+    Object.keys(c).forEach(function(k) {
+      if (SPARE_KEEP.indexOf(k) !== -1) return;
+      c[k] = '--';
+    });
+    /* Boolean fields */
+    c.polarity = false;
+    c.rcd_test_btn = false;
+    c.afdd_test = '--';
+  }
+
+  function isSpareDescription(desc) {
+    if (!desc) return false;
+    var d = desc.toLowerCase().trim();
+    return d === 'spare' || d === 'spare way' || d === 'n/a' || d === 'na' || d === 'blank';
+  }
+
   function saveInlineEdit(idx, col) {
     var el = document.getElementById('ie-val');
     if (!el) return;
@@ -1500,8 +1516,32 @@ input,select,textarea { font-size:16px !important; }
       c[col] = val;
     }
 
+    /* If description changed to spare/N/A, auto-clear the row */
+    if (col === 'description' && isSpareDescription(val)) {
+      clearCircuitAsSpare(c);
+    }
+
+    /* If BS(EN) device changed, reset RCD fields to match the new device type */
+    if (col === 'ocpd_bsen') {
+      if (val === '61009') {
+        c.rcd_bsen = '61009'; c.rcd_idn = '30'; c.rcd_type = 'A';
+        c.rcd_op_x1 = ''; c.rcd_test_btn = '';
+      } else if (val === '61008') {
+        c.rcd_bsen = '61008';
+        c.rcd_idn = ''; c.rcd_type = ''; c.rcd_op_x1 = ''; c.rcd_test_btn = '';
+      } else if (val) {
+        c.rcd_bsen = '--'; c.rcd_idn = '--'; c.rcd_type = '--';
+        c.rcd_op_x1 = '--'; c.rcd_test_btn = '--';
+      }
+    }
+    /* If RCD BS(EN) set directly, default the test result fields to -- */
+    if (col === 'rcd_bsen' && val && val !== '--' && val !== 'N/A') {
+      if (!c.rcd_op_x1 || c.rcd_op_x1 === '--') c.rcd_op_x1 = '--';
+      if (!c.rcd_test_btn && c.rcd_test_btn !== true && c.rcd_test_btn !== false) c.rcd_test_btn = '--';
+    }
+
     /* Trigger auto-defaults (max Zs, RCD from 61009, etc.) */
-    applyCircuitDefaults(c);
+    if (!isSpareDescription(c.description)) applyCircuitDefaults(c);
     closePopups();
     navigate('board-detail');
     autoSave('circuits');
@@ -2948,6 +2988,8 @@ input,select,textarea { font-size:16px !important; }
         '<button class="voice-action-btn obs flex-1" id="voice-obs-btn" data-action="voice-observation">' +
           '&#127908; SPEAK OBSERVATION</button>' +
       '</div>' +
+      (state.observations.length > 0 ? '<button class="btn btn-ghost btn-sm w-full" data-action="download-quote-report" style="background:#fffbeb;color:#92400e;border:1px solid #fde68a">' +
+        '&#128196; Download Quote Report</button>' : '') +
       '<div id="observations-container" class="space-y-3">';
 
     if (state.observations.length === 0) {
@@ -2968,7 +3010,7 @@ input,select,textarea { font-size:16px !important; }
           '</div>' +
           '<p class="text-sm text-slate-700">' + esc(o.description || '') + '</p>' +
           (o.location ? '<p class="text-xs text-slate-500 mt-1">Location: ' + esc(o.location) + '</p>' : '') +
-          (o.materials ? '<p class="text-xs text-amber-600 mt-1">Materials: ' + esc(o.materials) + '</p>' : '') +
+          (o.materials ? '<p class="text-xs text-amber-600 mt-1">Materials: ' + esc(o.materials) + (o.qty ? ' (Qty: ' + esc(o.qty) + ')' : '') + '</p>' : '') +
           (o.photo ? '<img src="' + o.photo + '" class="photo-thumb mt-2" alt="Photo">' : '') +
           '<div class="flex gap-2 mt-3 pt-2 border-t border-slate-100">' +
             '<button class="btn btn-ghost btn-sm flex-1" data-action="edit-observation" data-id="' + o.id + '">' +
@@ -3021,7 +3063,10 @@ input,select,textarea { font-size:16px !important; }
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Location</label>' +
           inputWithMic('obs-location', 'e.g. Kitchen DB, Way 3', o.location) + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Materials Required</label>' +
-          inputWithMic('obs-materials', 'e.g. 1x DP 40A RCBO, 2.5mm T+E 10m', o.materials) + '</div>' +
+          inputWithMic('obs-materials', 'e.g. DP 40A RCBO, 2.5mm T+E 10m', o.materials) + '</div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Qty</label>' +
+          '<input type="number" id="obs-qty" class="input-field" placeholder="1" min="1" value="' + esc(o.qty || '') + '" style="max-width:6rem">' +
+        '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Photo</label>' +
           (o.photo ? '<div id="obs-existing-photo"><img src="' + o.photo + '" style="max-height:120px;border-radius:.5rem;margin-bottom:.5rem"><br>' +
             '<button class="btn btn-danger btn-sm mb-2" data-action="remove-obs-photo">Remove Photo</button></div>' : '') +
@@ -3074,6 +3119,7 @@ input,select,textarea { font-size:16px !important; }
     var obsCode = code.value;
     var location = (document.getElementById('obs-location') || {}).value || '';
     var materials = (document.getElementById('obs-materials') || {}).value || '';
+    var qty = (document.getElementById('obs-qty') || {}).value || '';
 
     /* Get photo data first — check camera input then gallery */
     var photoInput = document.getElementById('obs-photo');
@@ -3093,7 +3139,7 @@ input,select,textarea { font-size:16px !important; }
     if (!provider) {
       /* No AI key — save raw and skip mapping */
       getPhoto(function(photo) {
-        doSaveObservation(editId, { code: obsCode, description: rawDesc, location: location, materials: materials, photo: photo });
+        doSaveObservation(editId, { code: obsCode, description: rawDesc, location: location, materials: materials, qty: qty, photo: photo });
       });
       return;
     }
@@ -3134,7 +3180,7 @@ input,select,textarea { font-size:16px !important; }
         closeSheet();
 
         getPhoto(function(photo) {
-          var body = { code: obsCode, description: finalDesc, location: location, materials: materials };
+          var body = { code: obsCode, description: finalDesc, location: location, materials: materials, qty: qty };
           if (photo) body.photo = photo;
 
           doSaveObservation(editId, body, function() {
@@ -3163,7 +3209,7 @@ input,select,textarea { font-size:16px !important; }
 
       } catch(e) {
         getPhoto(function(photo) {
-          doSaveObservation(editId, { code: obsCode, description: rawDesc, location: location, materials: materials, photo: photo });
+          doSaveObservation(editId, { code: obsCode, description: rawDesc, location: location, materials: materials, qty: qty, photo: photo });
         });
         if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Observation'; }
       }
@@ -3199,6 +3245,90 @@ input,select,textarea { font-size:16px !important; }
       toast('Observation deleted', 'success');
       navigate('site-detail', {currentSiteTab: 'observations'});
     }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  /* ===== QUOTE REPORT DOWNLOAD ===== */
+  function downloadQuoteReport() {
+    if (!state.observations.length || !state.currentSite) { toast('No observations to report', 'info'); return; }
+    var site = state.currentSite;
+    var h = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Quote Report — ' + esc(site.name || '') + '</title>' +
+      '<style>' +
+      'body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;margin:2rem;color:#1e293b;font-size:14px}' +
+      'h1{font-size:1.5rem;margin:0 0 .25rem}' +
+      'h2{font-size:1.1rem;color:#334155;margin:1.5rem 0 .75rem;border-bottom:2px solid #e2e8f0;padding-bottom:.25rem}' +
+      '.meta{color:#64748b;font-size:.85rem;margin-bottom:1.5rem}' +
+      'table{width:100%;border-collapse:collapse;margin-bottom:1.5rem;font-size:.85rem}' +
+      'th{background:#f1f5f9;text-align:left;padding:.5rem .75rem;border:1px solid #e2e8f0;font-weight:600}' +
+      'td{padding:.5rem .75rem;border:1px solid #e2e8f0;vertical-align:top}' +
+      '.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-weight:700;font-size:.75rem}' +
+      '.c1{background:#fef2f2;color:#ef4444}.c2{background:#fffbeb;color:#f59e0b}.c3{background:#eff6ff;color:#3b82f6}.fi{background:#faf5ff;color:#a855f7}' +
+      '.photo{max-width:200px;max-height:150px;border-radius:4px;margin-top:4px}' +
+      '.total{font-weight:700;background:#f8fafc}' +
+      '@media print{body{margin:1rem}h1{font-size:1.2rem}table{font-size:.8rem}.photo{max-width:150px;max-height:120px}}' +
+      '</style></head><body>' +
+      '<h1>Quote Report</h1>' +
+      '<p class="meta">' + esc(site.name || '') + (site.address ? ' — ' + esc(site.address) : '') +
+      '<br>Generated: ' + new Date().toLocaleDateString('en-GB') + '</p>';
+
+    h += '<h2>Observations & Required Materials</h2>' +
+      '<table><thead><tr>' +
+      '<th style="width:40px">#</th>' +
+      '<th style="width:50px">Code</th>' +
+      '<th>Description</th>' +
+      '<th>Location</th>' +
+      '<th>Materials</th>' +
+      '<th style="width:40px">Qty</th>' +
+      '<th>Photo</th>' +
+      '</tr></thead><tbody>';
+
+    state.observations.forEach(function(o, i) {
+      var bc = (o.code || '').toLowerCase();
+      h += '<tr>' +
+        '<td>' + (o.item_no || i + 1) + '</td>' +
+        '<td><span class="badge ' + bc + '">' + esc(o.code || '?') + '</span></td>' +
+        '<td>' + esc(o.description || '') + '</td>' +
+        '<td>' + esc(o.location || '-') + '</td>' +
+        '<td>' + esc(o.materials || '-') + '</td>' +
+        '<td>' + esc(o.qty || '-') + '</td>' +
+        '<td>' + (o.photo ? '<img class="photo" src="' + o.photo + '">' : '-') + '</td>' +
+        '</tr>';
+    });
+    h += '</tbody></table>';
+
+    /* Materials summary */
+    var mats = state.observations.filter(function(o) { return o.materials && o.materials.trim(); });
+    if (mats.length) {
+      h += '<h2>Materials Summary</h2><table><thead><tr><th>#</th><th>Material</th><th>Qty</th><th>For Observation</th></tr></thead><tbody>';
+      mats.forEach(function(o, i) {
+        h += '<tr><td>' + (i + 1) + '</td><td>' + esc(o.materials) + '</td><td>' + esc(o.qty || '1') + '</td><td>#' + (o.item_no || o.id) + ' — ' + esc((o.description || '').substring(0, 50)) + '</td></tr>';
+      });
+      h += '</tbody></table>';
+    }
+
+    /* Classification summary */
+    var c1 = state.observations.filter(function(o) { return o.code === 'C1'; }).length;
+    var c2 = state.observations.filter(function(o) { return o.code === 'C2'; }).length;
+    var c3 = state.observations.filter(function(o) { return o.code === 'C3'; }).length;
+    var fi = state.observations.filter(function(o) { return o.code === 'FI'; }).length;
+    h += '<h2>Summary</h2><table><tbody>' +
+      '<tr><td>Total observations</td><td class="total">' + state.observations.length + '</td></tr>' +
+      (c1 ? '<tr class="c1"><td>C1 — Danger present</td><td class="total">' + c1 + '</td></tr>' : '') +
+      (c2 ? '<tr class="c2"><td>C2 — Potentially dangerous</td><td class="total">' + c2 + '</td></tr>' : '') +
+      (c3 ? '<tr class="c3"><td>C3 — Improvement recommended</td><td class="total">' + c3 + '</td></tr>' : '') +
+      (fi ? '<tr class="fi"><td>FI — Further investigation</td><td class="total">' + fi + '</td></tr>' : '') +
+      '<tr><td>Materials items</td><td class="total">' + mats.length + '</td></tr>' +
+      '</tbody></table>';
+
+    h += '</body></html>';
+
+    var blob = new Blob([h], { type: 'text/html' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'Quote-Report-' + (site.name || 'site').replace(/[^a-zA-Z0-9]/g, '-') + '.html';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('Quote report downloaded — open and print to PDF', 'success');
   }
 
   /* ===== OBSERVATION TEXT FORMATTING ===== */
@@ -5242,6 +5372,9 @@ input,select,textarea { font-size:16px !important; }
         break;
       case 'save-observation':
         saveObservation();
+        break;
+      case 'download-quote-report':
+        downloadQuoteReport();
         break;
       case 'delete-observation':
         var obsId = target.getAttribute('data-id') || target.closest('[data-id]').getAttribute('data-id');
