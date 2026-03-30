@@ -88,8 +88,8 @@ input,select,textarea { font-size:16px !important; }
 .test-table.show-rcd .rcd-col { display:table-cell; }
 .scroll-wrapper { overflow-x:auto; -webkit-overflow-scrolling:touch; }
 .col-fill-popup { position:fixed; z-index:100; background:#fff; border:1px solid #e2e8f0; border-radius:.75rem; box-shadow:0 8px 24px rgba(0,0,0,.15); padding:.5rem; min-width:14rem; }
-.col-fill-popup button { display:block; width:100%; text-align:left; padding:.5rem .75rem; border:none; background:none; font-size:.875rem; cursor:pointer; border-radius:.5rem; }
-.col-fill-popup button:hover { background:#eff6ff; }
+.col-fill-popup > button { display:block; width:100%; text-align:left; padding:.5rem .75rem; border:none; background:none; font-size:.875rem; cursor:pointer; border-radius:.5rem; }
+.col-fill-popup > button:hover { background:#eff6ff; }
 .col-fill-popup .cfp-head { font-size:.7rem; color:#94a3b8; font-weight:600; padding:.25rem .75rem; text-transform:uppercase; }
 .inline-edit { position:fixed; z-index:100; background:#fff; border:2px solid #3b82f6; border-radius:.5rem; box-shadow:0 4px 16px rgba(0,0,0,.15); }
 .inline-edit input, .inline-edit select { border:none; font-size:.875rem; padding:.5rem .75rem; outline:none; min-width:6rem; border-radius:.5rem; }
@@ -908,7 +908,14 @@ input,select,textarea { font-size:16px !important; }
             '<input id="bh-supplied" class="desk-board-input" value="' + esc(b.supplied_from || '') + '" placeholder="Main Switch" data-board-field="1">' +
             '<strong class="desk-board-static text-xs">' + esc(b.supplied_from || '-') + '</strong>' +
           '</div>' +
-          bfi('bh-phase','Phase',b.num_phases,'single','16%') +
+          '<div style="flex:0 0 16%;min-width:0">' +
+            '<label class="text-xs text-slate-400 block" for="bh-phase">Phase</label>' +
+            '<select id="bh-phase" class="desk-board-input" data-board-field="1" style="font-size:.85rem;padding:.375rem;min-height:auto">' +
+              '<option value="1"' + (b.num_phases === '1' || b.num_phases === 'single' ? ' selected' : '') + '>1PH</option>' +
+              '<option value="3"' + (b.num_phases === '3' || b.num_phases === 'three' ? ' selected' : '') + '>3PH</option>' +
+            '</select>' +
+            '<strong class="desk-board-static text-xs">' + (b.num_phases === 'three' || b.num_phases === '3' ? '3PH' : '1PH') + '</strong>' +
+          '</div>' +
           bfi('bh-ocpd-bsen','BS(EN)',b.ocpd_bsen,'60898','16%') +
           bfi('bh-ocpd-type','Type',b.ocpd_type,'B','12%') +
           bfi('bh-ocpd-rating','Rating (A)',b.ocpd_rating,'100','14%') +
@@ -1400,7 +1407,7 @@ input,select,textarea { font-size:16px !important; }
           (isSpare ? ' disabled' : ' data-action="select-supply-circuit" data-board-id="' + boardId + '" data-circuit-num="' + esc(c.number || '') + '"' +
             ' data-bsen="' + esc(c.ocpd_bsen || '') + '" data-type="' + esc(c.ocpd_type || '') + '" data-rating="' + esc(c.ocpd_rating || '') + '"' +
             ' data-zs="' + esc(c.zs_measured || '') + '" data-board-ref="' + esc(board.ref || '') + '"' +
-            ' data-phase="' + esc(c.number && /\d+[Ll]\d/.test(c.number) ? 'three' : 'single') + '"') +
+            ' data-phase="' + esc(board.num_phases === 'three' ? 'three' : 'single') + '"') +
           '>' +
           '<span class="text-sm">' + label + '</span>' +
           (detail ? '<span class="text-xs text-slate-400">' + esc(detail) + '</span>' : '') +
@@ -1418,7 +1425,6 @@ input,select,textarea { font-size:16px !important; }
     if (bsen && bsen !== '--') { state.currentBoard.ocpd_bsen = bsen; }
     if (type && type !== '--') { state.currentBoard.ocpd_type = type; }
     if (rating && rating !== '--') { state.currentBoard.ocpd_rating = rating; }
-    if (phase) { state.currentBoard.num_phases = phase; }
     /* Ze = supply circuit Zs */
     if (zs && zs !== '--') {
       state.currentBoard.ze = zs;
@@ -6054,7 +6060,25 @@ input,select,textarea { font-size:16px !important; }
     if (target.id && target.id.indexOf('si_') === 0 && state.view === 'site-detail' && state.currentSiteTab === 'info') {
       autoSave('site-info');
     }
-    /* Desktop inline board field edit — auto-save on blur */
+    /* Desktop inline board field edit — auto-save on blur (and change for selects) */
+    if (target.getAttribute && target.getAttribute('data-board-field') && state.currentBoard) {
+      var fieldMap = {
+        'bh-ref':'ref', 'bh-location':'location', 'bh-supplied':'supplied_from',
+        'bh-phase':'num_phases', 'bh-ocpd-bsen':'ocpd_bsen', 'bh-ocpd-type':'ocpd_type',
+        'bh-ocpd-rating':'ocpd_rating', 'bh-ze':'ze', 'bh-ipf':'ipf',
+        'bh-instruments-multi':'instruments_multi', 'bh-instruments-loop':'instruments_loop'
+      };
+      var field = fieldMap[target.id];
+      if (field && state.currentBoard[field] !== target.value) {
+        state.currentBoard[field] = target.value;
+        api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
+      }
+    }
+  }, true);
+
+  /* Change event for select-based board fields (phase dropdown) */
+  document.addEventListener('change', function(e) {
+    var target = e.target;
     if (target.getAttribute && target.getAttribute('data-board-field') && state.currentBoard) {
       var fieldMap = {
         'bh-ref':'ref', 'bh-location':'location', 'bh-supplied':'supplied_from',
