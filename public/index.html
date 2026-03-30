@@ -3734,11 +3734,7 @@ input,select,textarea { font-size:16px !important; }
 
     if (state.circuits && state.circuits.length > 0) {
       ctx += '\nCIRCUITS (' + state.circuits.length + '):\n' + state.circuits.map(function(c) {
-        var parts = ['#' + (c.number || '?') + ' ' + (c.description || '?')];
-        if (c.ocpd_type || c.ocpd_rating) parts.push((c.ocpd_type || '') + (c.ocpd_rating || '') + 'A');
-        if (c.zs_measured) parts.push('Zs=' + c.zs_measured);
-        if (c.ir_ll || c.ir_le) parts.push('IR=' + (c.ir_ll || '-') + '/' + (c.ir_le || '-'));
-        return parts.join(' | ');
+        return buildCircuitSummary(c);
       }).join('\n');
     }
 
