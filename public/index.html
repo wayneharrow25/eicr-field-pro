@@ -1764,11 +1764,31 @@ input,select,textarea { font-size:16px !important; }
   /* Apply reviewed scan results to circuits */
   function applyScanResults() {
     if (!_scanState.updates || !_scanState.updates.length) return;
+    /* Deduplicate scan results first — keep last entry per number */
+    var deduped = {};
     _scanState.updates.forEach(function(u) {
       var mapped = mapScanFields(u);
-      var existing = state.circuits.findIndex(function(c) { return c.number === mapped.number; });
+      var key = (mapped.number || '').trim().toUpperCase();
+      if (deduped[key]) {
+        /* Merge: keep non-empty fields from both, prefer later entry */
+        Object.keys(mapped).forEach(function(k) {
+          if (mapped[k] !== '' && mapped[k] !== undefined && mapped[k] !== null) deduped[key][k] = mapped[k];
+        });
+      } else {
+        deduped[key] = mapped;
+      }
+    });
+    /* Apply deduped results — case-insensitive number matching */
+    Object.keys(deduped).forEach(function(key) {
+      var mapped = deduped[key];
+      var existing = state.circuits.findIndex(function(c) {
+        return (c.number || '').trim().toUpperCase() === key;
+      });
       if (existing !== -1) {
-        Object.assign(state.circuits[existing], mapped);
+        /* Merge: only overwrite non-empty fields */
+        Object.keys(mapped).forEach(function(k) {
+          if (mapped[k] !== '' && mapped[k] !== undefined && mapped[k] !== null) state.circuits[existing][k] = mapped[k];
+        });
       } else {
         state.circuits.push(mapped);
       }
