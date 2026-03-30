@@ -3550,9 +3550,15 @@ input,select,textarea { font-size:16px !important; }
       var fileInput = (photoCam && photoCam.files && photoCam.files[0]) ? photoCam :
                       (photoInput && photoInput.files && photoInput.files[0]) ? photoInput : null;
       if (fileInput) {
+        console.log('[obs-photo] Compressing file:', fileInput.files[0].name, fileInput.files[0].size + ' bytes');
         compressImage(fileInput.files[0]).then(function(base64) {
+          console.log('[obs-photo] Compressed to', base64.length, 'chars');
           cb('data:image/jpeg;base64,' + base64);
-        }).catch(function() { cb(null); });
+        }).catch(function(err) {
+          console.error('[obs-photo] compressImage failed:', err);
+          toast('Photo compression failed — try a smaller image', 'error');
+          cb(null);
+        });
       } else { cb(null); }
     };
 

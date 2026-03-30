@@ -690,13 +690,19 @@ app.post('/api/sites/:id/observations', authMiddleware, async (req, res) => {
 });
 
 app.put('/api/observations/:id', authMiddleware, async (req, res) => {
-  const d = req.body;
-  const fields = Object.keys(d).filter(k => !['id', 'site_id', 'created_at', 'created_by'].includes(k));
-  if (!fields.length) return res.json({ ok: true });
-  const sets = fields.map((f, i) => `${f} = $${i + 2}`);
-  const vals = fields.map(f => d[f]);
-  const { rows } = await pool.query(`UPDATE observations SET ${sets.join(', ')} WHERE id = $1 RETURNING *`, [req.params.id, ...vals]);
-  res.json(rows[0] || { ok: true });
+  try {
+    const d = req.body;
+    const allowedFields = ['description', 'code', 'location', 'photo', 'materials', 'qty', 'board_id', 'item_no'];
+    const fields = Object.keys(d).filter(k => allowedFields.includes(k));
+    if (!fields.length) return res.json({ ok: true });
+    const sets = fields.map((f, i) => `${f} = $${i + 2}`);
+    const vals = fields.map(f => d[f]);
+    const { rows } = await pool.query(`UPDATE observations SET ${sets.join(', ')} WHERE id = $1 RETURNING *`, [req.params.id, ...vals]);
+    res.json(rows[0] || { ok: true });
+  } catch (err) {
+    console.error('PUT /observations/:id error:', err.message);
+    res.status(500).json({ error: 'Failed to update observation: ' + err.message });
+  }
 });
 
 app.delete('/api/observations/:id', authMiddleware, async (req, res) => {
@@ -1238,9 +1244,9 @@ app.get('/api/sites/:id/report', (req, res, next) => {
   @page landscape { size: A4 landscape; margin: 10mm 10mm 18mm 10mm; }
   * { box-sizing: border-box; }
   body { font-family: Arial, Helvetica, sans-serif; font-size: 9px; line-height: 1.3; color: #000; margin: 0; padding: 0; }
-  .page { width: 100%; position: relative; page-break-after: always; }
+  .page { width: 100%; position: relative; page-break-after: always; padding: 0 8px; }
   .page:last-child { page-break-after: auto; }
-  .page-landscape { page-break-before: always; page: landscape; }
+  .page-landscape { page-break-before: always; page: landscape; padding: 0 6px; }
 
   /* Header bar */
   .hdr { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #1a365d; padding: 4px 0; margin-bottom: 6px; background: linear-gradient(to bottom, #ffffff, #f7fafc); }
@@ -1253,8 +1259,8 @@ app.get('/api/sites/:id/report', (req, res, next) => {
   .sec-hdr-gray { background: #4a5568; color: #fff; font-weight: bold; font-size: 8px; padding: 2px 6px; margin: 0; border: 1px solid #4a5568; }
 
   /* Tables */
-  table { border-collapse: collapse; width: 100%; margin: 0; }
-  th, td { border: 1px solid #000; padding: 1.5px 3px; font-size: 8px; text-align: left; vertical-align: top; }
+  table { border-collapse: collapse; width: 100%; margin: 2px 0; }
+  th, td { border: 1px solid #000; padding: 2px 4px; font-size: 8px; text-align: left; vertical-align: top; }
   th { background: #e0e0e0; font-weight: bold; font-size: 7.5px; text-align: center; }
   .fl { font-weight: bold; background: #f0f0f0; width: 25%; font-size: 8px; }
   .fl2 { font-weight: bold; background: #f0f0f0; font-size: 8px; }
