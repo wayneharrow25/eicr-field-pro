@@ -3561,7 +3561,9 @@ input,select,textarea { font-size:16px !important; }
     if (!provider) {
       /* No AI key — save raw and skip mapping */
       getPhoto(function(photo) {
-        doSaveObservation(editId, { code: obsCode, description: rawDesc, location: location, materials: materials, qty: qty, photo: photo });
+        var body = { code: obsCode, description: rawDesc, location: location, materials: materials, qty: qty };
+        if (photo) body.photo = photo;  /* Only include photo if new one was selected */
+        doSaveObservation(editId, body);
       });
       return;
     }
@@ -3579,7 +3581,9 @@ input,select,textarea { font-size:16px !important; }
       if (err) {
         /* Fallback: save raw */
         getPhoto(function(photo) {
-          doSaveObservation(editId, { code: obsCode, description: rawDesc, location: location, photo: photo });
+          var body = { code: obsCode, description: rawDesc, location: location, materials: materials, qty: qty };
+          if (photo) body.photo = photo;
+          doSaveObservation(editId, body);
         });
         if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Observation'; }
         return;
@@ -3630,7 +3634,9 @@ input,select,textarea { font-size:16px !important; }
 
       } catch(e) {
         getPhoto(function(photo) {
-          doSaveObservation(editId, { code: obsCode, description: rawDesc, location: location, materials: materials, qty: qty, photo: photo });
+          var body = { code: obsCode, description: rawDesc, location: location, materials: materials, qty: qty };
+          if (photo) body.photo = photo;
+          doSaveObservation(editId, body);
         });
         if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Observation'; }
       }
