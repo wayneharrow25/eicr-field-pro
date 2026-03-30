@@ -1322,7 +1322,20 @@ input,select,textarea { font-size:16px !important; }
         toast('All circuits saved', 'success');
         navigate('board-detail');
       }
-    }).catch(function(err) { if (!silent) toast(err.message, 'error'); });
+    }).catch(function(err) {
+      toast('Save failed — ' + (err.message || 'server error') + '. Retrying...', 'error');
+      /* Auto-retry once after 3 seconds */
+      setTimeout(function() {
+        if (!state.currentBoard) return;
+        api('PUT', '/boards/' + state.currentBoard.id + '/circuits/bulk?replace=1', updates).then(function(data) {
+          state.circuits = data.map(mapCircuitFromDB);
+          _lastKnownCircuitCount = state.circuits.length;
+          toast('Circuits saved (retry succeeded)', 'success');
+        }).catch(function() {
+          toast('Save failed again — check connection and tap Save manually', 'error');
+        });
+      }, 3000);
+    });
   }
 
   function lookupMaxZs() {
@@ -4977,7 +4990,7 @@ input,select,textarea { font-size:16px !important; }
 
   function autoSaveCircuits() {
     if (!state.currentBoard) return;
-    saveAllCircuits(); /* Reuse existing function */
+    saveAllCircuits(true); /* silent — don't navigate or toast on success */
   }
 
   /* Handle change events for inspection outcomes — now auto-saves */
