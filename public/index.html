@@ -146,7 +146,14 @@ input,select,textarea { font-size:16px !important; }
 .desk-col { display: none; }
 @media (min-width: 1024px) {
   .desk-grid { grid-template-columns: 1fr 1fr !important; }
+  .desk-board-input { display:block !important; width:100%; padding:2px 6px; border:1px solid #e2e8f0; border-radius:4px; font-size:13px !important; font-weight:600; color:#1e293b; background:#f8fafc; min-height:1.75rem; }
+  .desk-board-input:focus { border-color:#3b82f6; outline:none; box-shadow:0 0 0 2px rgba(59,130,246,.15); background:#fff; }
+  .desk-board-static { display:none !important; }
+  .desk-hide { display:none !important; }
+  .desk-photos-sm img, .desk-photos-sm .photo-thumb { width:3rem !important; height:3rem !important; }
 }
+.desk-board-input { display:none; }
+.desk-board-static { display:block; }
 </style>
 </head>
 <body>
@@ -878,28 +885,43 @@ input,select,textarea { font-size:16px !important; }
       '</header>';
 
     /* Board header + photos + tools — compact 2-col on desktop */
+    /* Helper for inline board fields (desktop editable, mobile static) */
+    function bfi(id, label, val, placeholder, width) {
+      var w = width || '100%';
+      return '<div style="flex:0 0 ' + w + ';min-width:0">' +
+        '<label class="text-xs text-slate-400 block" for="' + id + '">' + label + '</label>' +
+        '<input id="' + id + '" class="desk-board-input" value="' + esc(val || '') + '" placeholder="' + (placeholder || '-') + '" data-board-field="1">' +
+        '<strong class="desk-board-static text-xs">' + esc(val || '-') + '</strong>' +
+      '</div>';
+    }
+
     html += '<div class="p-4 space-y-3">' +
       '<div style="display:grid;grid-template-columns:1fr;gap:.75rem" class="desk-grid">' +
 
-      /* Left: Board info + photos */
+      /* Left: Board info (inline editable on desktop) + photos */
       '<div class="card p-3">' +
-        '<div class="grid grid-cols-3 gap-2 text-xs">' +
-          '<div><span class="text-slate-400">From:</span><br><strong>' + esc(b.supplied_from || '-') + '</strong></div>' +
-          '<div><span class="text-slate-400">Phase:</span><br><strong>' + esc(b.num_phases || '-') + '</strong></div>' +
-          '<div><span class="text-slate-400">BS:</span><br><strong>' + esc(b.ocpd_bsen || '-') + '</strong></div>' +
-          '<div><span class="text-slate-400">Rating:</span><br><strong>' + esc(b.ocpd_rating ? b.ocpd_rating + 'A' : '-') + '</strong></div>' +
-          '<div><span class="text-slate-400">Ze:</span><br><strong>' + esc(b.ze || '-') + '</strong></div>' +
-          '<div><span class="text-slate-400">Ipf:</span><br><strong>' + esc(b.ipf || '-') + '</strong></div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:.375rem .75rem">' +
+          bfi('bh-ref','Ref',b.ref,'DB/001','30%') +
+          bfi('bh-location','Location',b.location,'Kitchen','35%') +
+          bfi('bh-supplied','Supplied From',b.supplied_from,'Main Switch','35%') +
+          bfi('bh-phase','Phase',b.num_phases,'single','16%') +
+          bfi('bh-ocpd-bsen','BS(EN)',b.ocpd_bsen,'60898','16%') +
+          bfi('bh-ocpd-type','Type',b.ocpd_type,'B','12%') +
+          bfi('bh-ocpd-rating','Rating (A)',b.ocpd_rating,'100','14%') +
+          bfi('bh-ze','Ze (Ω)',b.ze,'0.35','14%') +
+          bfi('bh-ipf','Ipf (kA)',b.ipf,'3.5','14%') +
+          bfi('bh-instruments-multi','Multi-func',b.instruments_multi,'','50%') +
+          bfi('bh-instruments-loop','Loop',b.instruments_loop,'','50%') +
         '</div>' +
         '<div class="flex gap-1 mt-2">' +
-          '<button class="btn btn-ghost btn-sm text-xs flex-1" data-action="edit-board-header">Edit Board</button>' +
+          '<button class="btn btn-ghost btn-sm text-xs flex-1 desk-hide" data-action="edit-board-header">Edit Board</button>' +
           '<button class="btn btn-ghost btn-sm text-xs" data-action="board-photo-camera">&#128247;</button>' +
           '<button class="btn btn-ghost btn-sm text-xs" data-action="board-photo-gallery">&#128193;</button>' +
         '</div>' +
         '<input type="file" accept="image/*" id="board-photo-upload" style="display:none" multiple>' +
         '<input type="file" accept="image/*" capture="environment" id="board-photo-cam" style="display:none">' +
-        '<div id="board-photos-grid" class="grid grid-cols-3 gap-1 mt-2">' +
-          '<p class="text-xs text-slate-400 col-span-3">Loading...</p>' +
+        '<div id="board-photos-grid" class="grid grid-cols-4 gap-1 mt-2 desk-photos-sm">' +
+          '<p class="text-xs text-slate-400 col-span-4">Loading...</p>' +
         '</div>' +
       '</div>' +
 
@@ -5802,6 +5824,20 @@ input,select,textarea { font-size:16px !important; }
     var target = e.target;
     if (target.id && target.id.indexOf('si_') === 0 && state.view === 'site-detail' && state.currentSiteTab === 'info') {
       autoSave('site-info');
+    }
+    /* Desktop inline board field edit — auto-save on blur */
+    if (target.getAttribute && target.getAttribute('data-board-field') && state.currentBoard) {
+      var fieldMap = {
+        'bh-ref':'ref', 'bh-location':'location', 'bh-supplied':'supplied_from',
+        'bh-phase':'num_phases', 'bh-ocpd-bsen':'ocpd_bsen', 'bh-ocpd-type':'ocpd_type',
+        'bh-ocpd-rating':'ocpd_rating', 'bh-ze':'ze', 'bh-ipf':'ipf',
+        'bh-instruments-multi':'instruments_multi', 'bh-instruments-loop':'instruments_loop'
+      };
+      var field = fieldMap[target.id];
+      if (field && state.currentBoard[field] !== target.value) {
+        state.currentBoard[field] = target.value;
+        api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
+      }
     }
   }, true);
 
