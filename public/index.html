@@ -3691,17 +3691,12 @@ input,select,textarea { font-size:16px !important; }
     fd.append('qty', fields.qty || '');
 
     /* Attach photo: raw file from input (browser handles natively) */
-    var debugInfo = '';
     if (rawFile) {
       fd.append('photo', rawFile);
-      debugInfo = rawFile.name + ' (' + Math.round(rawFile.size/1024) + 'KB)';
     } else if (window._obsPhotoData) {
       fd.append('photo_data', window._obsPhotoData);
-      debugInfo = 'cached ' + Math.round(window._obsPhotoData.length/1024) + 'KB';
     }
-    toast('Saving' + (debugInfo ? ' + photo ' + debugInfo : '...'), 'info');
 
-    /* Token in URL query param — most reliable auth method for multipart on Android */
     fetch('/api/observations/save?token=' + encodeURIComponent(token || ''), {
       method: 'POST',
       body: fd
@@ -3713,8 +3708,7 @@ input,select,textarea { font-size:16px !important; }
       }
       return resp.json();
     }).then(function(result) {
-      var hasPhoto = result.photo ? 'with photo' : 'no photo in result';
-      toast('Saved OK — ' + hasPhoto, 'success');
+      toast('Observation saved', 'success');
       if (editId) {
         var idx = state.observations.findIndex(function(o) { return String(o.id) === String(editId); });
         if (idx !== -1) Object.assign(state.observations[idx], fields, result);
