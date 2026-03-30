@@ -1046,7 +1046,7 @@ input,select,textarea { font-size:16px !important; }
           '<td data-col="zs_measured" class="' + zsClass + '">' + esc(c.zs_measured || '') + '</td>' +
           '<td data-col="polarity">' + (c.polarity === true || c.polarity === 'true' ? '\u2713' : (c.polarity === false || c.polarity === 'false' ? '\u2717' : '')) + '</td>' +
           '<td data-col="rcd_time_x1" class="rcd-col">' + esc(c.rcd_time_x1 || '') + '</td>' +
-          '<td data-col="rcd_test_btn" class="rcd-col">' + (c.rcd_test_btn === true || c.rcd_test_btn === 'true' ? '\u2713' : (c.rcd_test_btn === false || c.rcd_test_btn === 'false' ? '\u2717' : '')) + '</td>' +
+          '<td data-col="rcd_test_btn" class="rcd-col">' + (c.rcd_test_btn === true || c.rcd_test_btn === 'true' ? '\u2713' : (c.rcd_test_btn === false || c.rcd_test_btn === 'false' ? '\u2717' : esc(c.rcd_test_btn || ''))) + '</td>' +
           '<td data-col="afdd_test" class="desk-col">' + (c.afdd_test === true ? '\u2713' : esc(c.afdd_test || '')) + '</td>' +
           '<td data-col="remarks" class="desk-col" style="max-width:5rem;overflow:hidden;text-overflow:ellipsis">' + esc(c.remarks || '') + '</td>' +
         '</tr>';
@@ -1560,13 +1560,15 @@ input,select,textarea { font-size:16px !important; }
     else if (c.ocpd_bsen === '61008') {
       if (!c.rcd_bsen) c.rcd_bsen = '61008';
     }
-    /* Non-RCD device (60898, 88-2, 3036, 60947-2 etc) — default RCD fields to -- */
+    /* Non-RCD device (60898, 88-2, 3036, 60947-2 etc) — default ALL RCD fields to -- */
     else if (c.ocpd_bsen && c.ocpd_bsen !== '61009' && c.ocpd_bsen !== '61008') {
       if (!c.rcd_bsen) c.rcd_bsen = '--';
       if (!c.rcd_idn) c.rcd_idn = '--';
       if (!c.rcd_type) c.rcd_type = '--';
       if (!c.rcd_op_x1 && c.rcd_op_x1 !== 0) c.rcd_op_x1 = '--';
-      if (c.rcd_test_btn === undefined || c.rcd_test_btn === null || c.rcd_test_btn === '') c.rcd_test_btn = '--';
+      if (!c.rcd_time_x1) c.rcd_time_x1 = '--';
+      if (!c.rcd_time_x5) c.rcd_time_x5 = '--';
+      if (c.rcd_test_btn === undefined || c.rcd_test_btn === null || c.rcd_test_btn === '' || c.rcd_test_btn === false) c.rcd_test_btn = '--';
     }
     /* Auto-lookup Max Zs */
     if (c.ocpd_bsen && c.ocpd_type && c.ocpd_rating) {
@@ -1791,13 +1793,13 @@ input,select,textarea { font-size:16px !important; }
     if (col === 'ocpd_bsen') {
       if (val === '61009') {
         c.rcd_bsen = '61009'; c.rcd_idn = '30'; c.rcd_type = 'A';
-        c.rcd_op_x1 = ''; c.rcd_test_btn = '';
+        c.rcd_op_x1 = ''; c.rcd_time_x1 = ''; c.rcd_time_x5 = ''; c.rcd_test_btn = '';
       } else if (val === '61008') {
         c.rcd_bsen = '61008';
-        c.rcd_idn = ''; c.rcd_type = ''; c.rcd_op_x1 = ''; c.rcd_test_btn = '';
+        c.rcd_idn = ''; c.rcd_type = ''; c.rcd_op_x1 = ''; c.rcd_time_x1 = ''; c.rcd_time_x5 = ''; c.rcd_test_btn = '';
       } else if (val) {
         c.rcd_bsen = '--'; c.rcd_idn = '--'; c.rcd_type = '--';
-        c.rcd_op_x1 = '--'; c.rcd_test_btn = '--';
+        c.rcd_op_x1 = '--'; c.rcd_time_x1 = '--'; c.rcd_time_x5 = '--'; c.rcd_test_btn = '--';
       }
     }
     /* If RCD BS(EN) set directly, default the test result fields to -- */
