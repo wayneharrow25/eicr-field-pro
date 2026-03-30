@@ -1097,8 +1097,13 @@ app.get('/api/sites/:id/report', (req, res, next) => {
   // Resolve frontend field names → report fields (frontend uses different col names from original schema)
   const R = {
     descPremises: site.desc_premises || site.description || '',
-    supplySystem: site.supply_system || site.earthing_type || '',          // TN-S, TN-C-S, TT etc
-    meansOfEarthing: site.earthing_type || site.means_of_earthing || '',   // "Supplier's facility" or "electrode"
+    supplySystem: site.supply_system || (() => {
+      // Extract system type from earthing_type like "Distributor's facility (TN-C-S)"
+      const et = site.earthing_type || '';
+      const m = et.match(/\b(TN-S|TN-C-S|TT|TN-C|IT)\b/i);
+      return m ? m[1].toUpperCase() : '';
+    })(),
+    meansOfEarthing: site.earthing_type || site.means_of_earthing || '',   // "Distributor's facility" or "electrode"
     mainSwitchRating: site.main_switch_rating || site.main_switch_current_rating || '',
     mainSwitchVoltage: site.main_switch_voltage || site.main_switch_voltage_rating || '',
     mainSwitchFuseRating: site.main_switch_fuse_rating || site.main_switch_rating || '',
@@ -1618,12 +1623,11 @@ app.get('/api/sites/:id/report', (req, res, next) => {
   html += `<table>
     <tr><td class="sec-hdr-gray" colspan="6">Earthing Arrangements</td></tr>
     <tr>
-      <td class="fv center" style="width:14%">TN-S ${earthTick('tn-s') ? '<strong style="font-size:14px">&#10003;</strong>' : ''}</td>
-      <td class="fv center" style="width:14%">TN-C-S ${earthTick('tn-c-s') ? '<strong style="font-size:14px">&#10003;</strong>' : ''}</td>
-      <td class="fv center" style="width:14%">TT ${earthTick('tt') ? '<strong style="font-size:14px">&#10003;</strong>' : ''}</td>
-      <td class="fv center" style="width:14%">TN-C ${earthTick('tn-c') ? '<strong style="font-size:14px">&#10003;</strong>' : ''}</td>
-      <td class="fv center" style="width:14%">IT ${earthTick('it') ? '<strong style="font-size:14px">&#10003;</strong>' : ''}</td>
-      <td class="fv" style="width:30%">${v(R.supplySystem)}</td>
+      <td class="fv center" style="width:17%">TN-S ${earthTick('tn-s') ? '<strong style="font-size:14px">&#10003;</strong>' : ''}</td>
+      <td class="fv center" style="width:17%">TN-C-S ${earthTick('tn-c-s') ? '<strong style="font-size:14px">&#10003;</strong>' : ''}</td>
+      <td class="fv center" style="width:17%">TT ${earthTick('tt') ? '<strong style="font-size:14px">&#10003;</strong>' : ''}</td>
+      <td class="fv center" style="width:17%">TN-C ${earthTick('tn-c') ? '<strong style="font-size:14px">&#10003;</strong>' : ''}</td>
+      <td class="fv center" style="width:17%">IT ${earthTick('it') ? '<strong style="font-size:14px">&#10003;</strong>' : ''}</td>
     </tr>
   </table>`;
 
@@ -1722,13 +1726,13 @@ app.get('/api/sites/:id/report', (req, res, next) => {
       <th>Water</th><th>Gas</th><th>Oil</th><th>Lightning</th><th>Structural Steel</th><th>Other</th><th>Details</th>
     </tr>
     <tr>
-      <td class="fv center tick">${tick(site.bonding_water) || e(site.bonding_water)}</td>
-      <td class="fv center tick">${tick(site.bonding_gas) || e(site.bonding_gas)}</td>
-      <td class="fv center tick">${tick(site.bonding_oil) || e(site.bonding_oil)}</td>
-      <td class="fv center tick">${tick(site.bonding_lightning) || e(site.bonding_lightning)}</td>
-      <td class="fv center tick">${tick(R.bondingSteel) || e(R.bondingSteel)}</td>
-      <td class="fv center tick">${tick(site.bonding_other) || e(site.bonding_other)}</td>
-      <td class="fv"></td>
+      <td class="fv center tick">${tick(site.bonding_water) || v(site.bonding_water)}</td>
+      <td class="fv center tick">${tick(site.bonding_gas) || v(site.bonding_gas)}</td>
+      <td class="fv center tick">${tick(site.bonding_oil) || v(site.bonding_oil)}</td>
+      <td class="fv center tick">${tick(site.bonding_lightning) || v(site.bonding_lightning)}</td>
+      <td class="fv center tick">${tick(R.bondingSteel) || v(R.bondingSteel)}</td>
+      <td class="fv center tick">${tick(site.bonding_other) || v(site.bonding_other)}</td>
+      <td class="fv">--</td>
     </tr>
   </table>`;
 

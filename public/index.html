@@ -671,11 +671,15 @@ input,select,textarea { font-size:16px !important; }
         {id:'si_pfc_confirmed', label:'PFC Confirmed Adequate', val:s.pfc_confirmed, options:['Yes','No']},
       ]) +
       renderFieldGroup('Earthing Arrangements', [
-        {id:'si_earthing_type', label:'Earthing Type', val:s.earthing_type, options:['Supplier\'s facility (TN-S/TN-C-S)','Installation earth electrode (TT)','Other']},
+        {id:'si_earthing_type', label:'Earthing Type', val:s.earthing_type, options:['Distributor\'s facility (TN-S)','Distributor\'s facility (TN-C-S)','Installation earth electrode (TT)','Distributor\'s facility (TN-C)','IT system','Other']},
         {id:'si_earth_electrode_type', label:'Earth Electrode Type (if TT)', val:s.earth_electrode_type, options:['Rod(s)','Tape','Plate','Other','N/A']},
         {id:'si_earth_electrode_location', label:'Earth Electrode Location', val:s.earth_electrode_location},
         {id:'si_earth_electrode_resistance', label:'Earth Electrode Resistance (ohms)', val:s.earth_electrode_resistance, type:'number'},
         {id:'si_ze', label:'Ze (External Loop Impedance) ohms', val:s.ze},
+        {id:'si_earthing_conductor_csa', label:'Earthing Conductor CSA (mm\u00b2)', val:s.earthing_conductor_csa},
+        {id:'si_earthing_conductor_verified', label:'Earthing Conductor Connection Verified', val:s.earthing_conductor_verified, options:['Yes','No']},
+        {id:'si_bonding_conductor_csa', label:'Main Bonding Conductor CSA (mm\u00b2)', val:s.bonding_conductor_csa},
+        {id:'si_bonding_conductor_verified', label:'Main Bonding Conductor Connection Verified', val:s.bonding_conductor_verified, options:['Yes','No']},
       ]) +
       renderFieldGroup('Main Switch / Isolator', [
         {id:'si_main_switch_location', label:'Location', val:s.main_switch_location},
@@ -757,6 +761,7 @@ input,select,textarea { font-size:16px !important; }
       'supply_system','supply_type','supply_protective','supply_protective_rating','nominal_voltage_ll',
       'nominal_voltage_ln','nominal_freq','pscc','pfc_confirmed',
       'earthing_type','earth_electrode_type','earth_electrode_location','earth_electrode_resistance','ze',
+      'earthing_conductor_csa','earthing_conductor_verified','bonding_conductor_csa','bonding_conductor_verified',
       'main_switch_location','main_switch_type','main_switch_bsen','main_switch_poles','main_switch_rating',
       'main_switch_voltage','main_switch_rcd_idn','main_switch_rcd_type',
       'bonding_water','bonding_gas','bonding_oil','bonding_structural','bonding_lightning','bonding_other','bonding_condition'
