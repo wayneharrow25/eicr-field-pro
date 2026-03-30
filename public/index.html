@@ -1332,7 +1332,7 @@ input,select,textarea { font-size:16px !important; }
     var currentWays = state.circuits.length;
     openSheet(
       '<h3 class="text-lg font-bold text-slate-800 mb-4">Setup Board</h3>' +
-      (currentWays > 0 ? '<p class="text-xs text-amber-600 mb-2">&#9888; ' + currentWays + ' circuits exist — setup will REPLACE them. Use Undo to restore.</p>' : '') +
+      (currentWays > 0 ? '<p class="text-xs text-teal-600 mb-2">&#9989; ' + currentWays + ' circuits exist — existing data will be kept, gaps filled with spares.</p>' : '') +
       '<div class="space-y-3">' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Board Type</label>' +
           '<div class="grid grid-cols-2 gap-2">' +
@@ -1357,7 +1357,7 @@ input,select,textarea { font-size:16px !important; }
           '<input type="hidden" id="bs-ways" value="">' +
         '</div>' +
         '<div id="bs-preview" class="text-sm text-slate-600 font-medium min-h-[1.5rem]"></div>' +
-        '<button class="btn btn-primary w-full mt-2" data-action="apply-board-size" disabled>Create Board Layout</button>' +
+        '<button class="btn btn-primary w-full mt-2" data-action="apply-board-size" disabled>Apply Board Layout</button>' +
       '</div>'
     );
     /* Custom ways input — update on change */
@@ -1400,49 +1400,100 @@ input,select,textarea { font-size:16px !important; }
     if (!ways || ways < 1) { toast('Select number of ways', 'error'); return; }
 
     snapshotCircuits();
-    state.circuits = [];
 
-    if (type === 'TP') {
-      /* TP: numbered as way+phase — 1L1, 1L2, 1L3, 2L1, 2L2, 2L3, etc. */
+    /* Build a map of existing circuits by number (case-insensitive) */
+    var existingMap = {};
+    state.circuits.forEach(function(c) {
+      if (c.number) existingMap[String(c.number).toUpperCase()] = c;
+    });
+
+    /* Detect current numbering style */
+    var hasTP = state.circuits.some(function(c) { return c.number && /^\d+[Ll]\d$/.test(c.number); });
+    var hasSP = state.circuits.some(function(c) { return c.number && /^\d+$/.test(c.number); });
+
+    /* If switching SP→TP, renumber existing SP circuits into TP slots */
+    if (type === 'TP' && hasSP && !hasTP) {
       var tpWays = Math.ceil(ways / 3);
-      for (var w = 1; w <= tpWays; w++) {
-        for (var p = 1; p <= 3; p++) {
-          var c = {
-            number: w + 'L' + p,
-            description: 'Spare',
-            board_id: state.currentBoard.id,
-            sort_order: (w - 1) * 3 + p
-          };
-          clearCircuitAsSpare(c);
+      var spCircuits = state.circuits.filter(function(c) { return c.number && /^\d+$/.test(c.number); });
+      spCircuits.sort(function(a, b) { return parseInt(a.number) - parseInt(b.number); });
+      /* Map SP number → TP number: 1→1L1, 2→1L2, 3→1L3, 4→2L1, etc. */
+      spCircuits.forEach(function(c) {
+        var n = parseInt(c.number);
+        var w = Math.ceil(n / 3);
+        var p = ((n - 1) % 3) + 1;
+        if (w <= tpWays) {
+          delete existingMap[c.number.toUpperCase()];
           c.number = w + 'L' + p;
-          c.description = 'Spare';
-          state.circuits.push(c);
+          existingMap[c.number.toUpperCase()] = c;
+        }
+      });
+    }
+
+    /* If switching TP→SP, renumber existing TP circuits into SP slots */
+    if (type === 'SP' && hasTP && !hasSP) {
+      var tpCircuits = state.circuits.filter(function(c) { return c.number && /^\d+[Ll]\d$/.test(c.number); });
+      tpCircuits.sort(function(a, b) {
+        var ka = circuitSortKey(a.number), kb = circuitSortKey(b.number);
+        return ka[0] !== kb[0] ? ka[0] - kb[0] : ka[1] - kb[1];
+      });
+      /* Map TP → SP: 1L1→1, 1L2→2, 1L3→3, 2L1→4, etc. */
+      tpCircuits.forEach(function(c, i) {
+        delete existingMap[c.number.toUpperCase()];
+        c.number = String(i + 1);
+        if (parseInt(c.number) <= ways) {
+          existingMap[c.number.toUpperCase()] = c;
+        }
+      });
+    }
+
+    /* Build target slot list */
+    var targetSlots = [];
+    if (type === 'TP') {
+      var tpW = Math.ceil(ways / 3);
+      for (var w = 1; w <= tpW; w++) {
+        for (var p = 1; p <= 3; p++) {
+          targetSlots.push(w + 'L' + p);
         }
       }
-      state.currentBoard.num_phases = 'three';
     } else {
-      /* SP: numbered 1,2,3... */
       for (var j = 1; j <= ways; j++) {
-        var sc = {
-          number: String(j),
-          description: 'Spare',
-          board_id: state.currentBoard.id,
-          sort_order: j
-        };
-        clearCircuitAsSpare(sc);
-        sc.number = String(j);
-        sc.description = 'Spare';
-        state.circuits.push(sc);
+        targetSlots.push(String(j));
       }
-      state.currentBoard.num_phases = 'single';
     }
+
+    /* Build final circuit list: keep existing, fill gaps with spares */
+    var newCircuits = [];
+    var kept = 0, added = 0;
+    targetSlots.forEach(function(slot, idx) {
+      var existing = existingMap[slot.toUpperCase()];
+      if (existing && !isSpareDescription(existing.description)) {
+        existing.sort_order = idx + 1;
+        newCircuits.push(existing);
+        kept++;
+      } else if (existing) {
+        /* Existing spare — keep it but update sort order */
+        existing.sort_order = idx + 1;
+        newCircuits.push(existing);
+      } else {
+        /* New spare slot */
+        var sc = { number: slot, description: 'Spare', board_id: state.currentBoard.id, sort_order: idx + 1 };
+        clearCircuitAsSpare(sc);
+        sc.number = slot;
+        sc.description = 'Spare';
+        newCircuits.push(sc);
+        added++;
+      }
+    });
+
+    state.circuits = newCircuits;
+    state.currentBoard.num_phases = type === 'TP' ? 'three' : 'single';
 
     api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
     saveAllCircuits(true);
     closeSheet();
     navigate('board-detail');
     var label = type === 'TP' ? (Math.ceil(ways/3) * 3) + ' way TP' : ways + ' way SP';
-    toast(label + ' board created — ' + state.circuits.length + ' circuits', 'success');
+    toast(label + ' — kept ' + kept + ' circuits, added ' + added + ' spares', 'success');
   }
 
   /* Refresh: recalculate Max Zs + apply defaults to all existing circuits */
