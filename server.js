@@ -1093,12 +1093,55 @@ app.get('/api/sites/:id/report', (req, res, next) => {
   const e = (s) => (s || '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const v = (s) => { const t = e(s); return t.trim() ? t : '--'; }; // form value — never empty
   const tick = (v) => (v === 'true' || v === true || v === 'Yes' || v === 'yes') ? '&#10003;' : '';
-  const earthTick = (type, val) => (site.earthing_type || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(type.toLowerCase().replace(/[^a-z0-9]/g, '')) ? '&#10003;' : '';
+
+  // Resolve frontend field names → report fields (frontend uses different col names from original schema)
+  const R = {
+    descPremises: site.desc_premises || site.description || '',
+    supplySystem: site.supply_system || site.earthing_type || '',          // TN-S, TN-C-S, TT etc
+    meansOfEarthing: site.earthing_type || site.means_of_earthing || '',   // "Supplier's facility" or "electrode"
+    mainSwitchRating: site.main_switch_rating || site.main_switch_current_rating || '',
+    mainSwitchVoltage: site.main_switch_voltage || site.main_switch_voltage_rating || '',
+    mainSwitchFuseRating: site.main_switch_fuse_rating || site.main_switch_rating || '',
+    supplyDeviceBsen: site.supply_protective || site.supply_device_bsen || '',
+    supplyDeviceRating: site.supply_protective_rating || site.supply_device_rating || '',
+    supplyDeviceType: site.supply_device_type || '',
+    nomVoltageLL: site.nominal_voltage_ll || '',
+    nomVoltageLN: site.nominal_voltage_ln || site.nominal_voltage || '230',
+    nomFreq: site.nominal_freq || site.nominal_frequency || '50',
+    ipf: site.pscc || site.ipf_at_origin || '',
+    ze: site.ze || site.ze_at_origin || '',
+    dateInspection: site.date_inspection || site.inspector_date || '',
+    dateLastInspection: site.date_last_inspection || site.last_inspection_date || '',
+    estAge: site.estimated_age || site.wiring_age || '',
+    additions: site.evidence_alteration || site.additions || '',
+    additionsAge: site.additions_age || '',
+    limitations: site.limitations || site.agreed_limitations || '',
+    opLimitations: site.operational_limitations || '',
+    bondingSteel: site.bonding_structural || site.bonding_steel || '',
+    bondingCondition: site.bonding_condition || '',
+    nextInspection: site.next_inspection || site.next_inspection_date || '',
+    sampling: site.sampling || '',
+  };
+
+  // Parse supply type → AC/DC and phase count from frontend options like "Single phase AC", "Three phase AC (4 wire)"
+  const supplyTypeRaw = (site.supply_type || 'Single phase AC').toLowerCase();
+  const isAC = supplyTypeRaw.includes('ac') || !supplyTypeRaw.includes('dc');
+  const isDC = supplyTypeRaw.includes('dc');
+  const isSingle = supplyTypeRaw.includes('single') || (site.num_phases || '').includes('1');
+  const isTwo = supplyTypeRaw.includes('two') || (site.num_phases || '').includes('2');
+  const isThree = supplyTypeRaw.includes('three') || (site.num_phases || '').includes('3');
+
+  // Earthing type tick — match against supply_system (TN-S, TN-C-S, TT, etc.)
+  const earthTick = (type) => {
+    const sysClean = R.supplySystem.toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/--+/g, '-');
+    const check = type.toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/--+/g, '-');
+    return sysClean === check ? '&#10003;' : '';
+  };
   const hasC1C2FI = obs.some(o => ['C1', 'C2', 'FI'].includes(o.code));
   const comp = company || {};
   const qs = siteTestersRaw.find(t => t.is_qs) || {};
   const testers = siteTestersRaw.filter(t => !t.is_qs);
-  const certNum = site.report_ref || '';
+  const certNum = site.report_ref || ('EICR-' + String(siteId).padStart(4, '0') + '-' + new Date().toISOString().slice(0, 10).replace(/-/g, ''));
   const totalBoards = siteBoards.length;
 
   // Count pages for footer
@@ -1107,102 +1150,91 @@ app.get('/api/sites/:id/report', (req, res, next) => {
   let pageNum = 0;
 
   // Inspection schedule master list with BS 7671 regulation references
+  // Must match frontend INSPECTION_ITEMS exactly (same refs)
   const inspectionSchedule = [
-    { ref: '1.0', desc: 'CONSUMER UNIT / DISTRIBUTION BOARD', items: [] },
-    { ref: '1.1', desc: 'Adequacy of access and working space', reg: 'Reg 132.12' },
-    { ref: '1.2', desc: 'Security of fixing', reg: '' },
-    { ref: '1.3', desc: 'Condition of enclosure(s) in terms of damage and deterioration', reg: '' },
-    { ref: '1.4', desc: 'Suitability of enclosure(s) for IP and fire ratings', reg: 'Reg 416.2, 421.1.6, 526.5' },
-    { ref: '1.5', desc: 'Enclosure not damaged/deteriorated so as to impair safety', reg: 'Reg 514.4.2' },
-    { ref: '1.6', desc: 'Presence of main linked switch (functional)', reg: 'Reg 537.1.4' },
-    { ref: '1.7', desc: 'Operation of main switch (functional check)', reg: 'Reg 612.13.2' },
-    { ref: '1.8', desc: 'Manual operation of circuit-breakers and RCDs to prove disconnection', reg: 'Reg 612.13.2' },
-    { ref: '1.9', desc: 'Correct identification of each circuit (labelling)', reg: 'Reg 514.8.1, 514.9.1' },
-    { ref: '1.10', desc: 'Presence of RCD quarterly test notice at or near origin', reg: 'Reg 514.12.2' },
-    { ref: '1.11', desc: 'Presence of diagrams, charts or schedules at or near distribution board', reg: 'Reg 514.9.1' },
-    { ref: '1.12', desc: 'Presence of non-standard (mixed) cable colour warning notice', reg: 'Reg 514.14' },
-    { ref: '1.13', desc: 'Presence of alternative supply warning notice at or near origin', reg: 'Reg 514.15' },
-    { ref: '1.14', desc: 'Adequacy of arrangements for isolation/switching of each circuit', reg: 'Reg 132.15, 537' },
-    { ref: '1.15', desc: 'Correct connection of conductors (no single-pole devices in N)', reg: 'Reg 132.14.1, 530.3.2' },
-    { ref: '1.16', desc: 'Adequacy of connections, including CPCs, within accessories', reg: 'Reg 526' },
-    { ref: '1.17', desc: 'Adequacy of conductor sizing (current-carrying capacity)', reg: 'Reg 523, 433' },
-    { ref: '1.18', desc: 'Presence of linked circuit-breaker or linked switch to each unmetered supply', reg: '' },
-    { ref: '1.19', desc: 'Confirmation that ALL conductors are correctly connected', reg: 'Reg 526.3' },
-    { ref: '1.20', desc: 'Confirmation that indicators and other devices are correctly connected', reg: '' },
-    { ref: '1.21', desc: 'No basic insulation of a conductor visible outside enclosure', reg: 'Reg 526.8' },
-    { ref: '1.22', desc: 'Suitability of surge protection device(s) (SPD) if fitted', reg: 'Reg 534' },
-    { ref: '2.0', desc: 'PARALLEL OR SWITCHED ALTERNATIVE SOURCES OF SUPPLY', items: [] },
-    { ref: '2.1', desc: 'Correct connection of alternative supply', reg: '' },
-    { ref: '2.2', desc: 'Means of isolation of alternative supply', reg: '' },
-    { ref: '2.3', desc: 'Adequate warning notices', reg: 'Reg 514.15' },
-    { ref: '3.0', desc: 'DISTRIBUTION CIRCUITS', items: [] },
-    { ref: '3.1', desc: 'Cables correctly supported throughout', reg: 'Table 4A, 4C' },
-    { ref: '3.2', desc: 'Condition of insulation of live parts', reg: '' },
-    { ref: '3.3', desc: 'Non-sheathed cables protected by enclosure in accordance with BS 7671', reg: 'Reg 521.10.1' },
-    { ref: '3.4', desc: 'Cables concealed under floors, above ceilings and in walls adequately protected against damage', reg: 'Reg 522.6' },
-    { ref: '3.5', desc: 'Provision of additional protection by RCD not exceeding 30 mA where required', reg: 'Reg 411.3.3, 411.3.4' },
-    { ref: '3.6', desc: 'Adequacy of cables for current-carrying capacity with respect to the type and nature of installation', reg: 'Reg 523' },
-    { ref: '3.7', desc: 'Cables adequately protected against mechanical damage and/or electromagnetic effects', reg: 'Reg 522.5, 522.6' },
-    { ref: '3.8', desc: 'No basic insulation of a conductor visible outside enclosure', reg: 'Reg 526.8' },
-    { ref: '3.9', desc: 'Connections soundly made and under no undue strain', reg: 'Reg 526.6' },
-    { ref: '3.10', desc: 'No signs of overheating at connections', reg: '' },
-    { ref: '4.0', desc: 'FINAL CIRCUITS', items: [] },
-    { ref: '4.1', desc: 'Identification of conductors', reg: 'Table 51' },
-    { ref: '4.2', desc: 'Cables correctly supported throughout', reg: 'Table 4A, 4C' },
-    { ref: '4.3', desc: 'Condition of insulation of live parts', reg: '' },
-    { ref: '4.4', desc: 'Non-sheathed cables protected by enclosure in accordance with BS 7671', reg: 'Reg 521.10.1' },
-    { ref: '4.5', desc: 'Cables concealed under floors, above ceilings and in walls adequately protected against damage', reg: 'Reg 522.6' },
-    { ref: '4.6', desc: 'Provision of additional protection by RCD not exceeding 30 mA', reg: 'Reg 411.3.3, 411.3.4' },
-    { ref: '4.7', desc: 'Cables adequately protected against mechanical damage', reg: 'Reg 522.5, 522.6' },
-    { ref: '4.8', desc: 'No basic insulation of a conductor visible outside enclosure', reg: 'Reg 526.8' },
-    { ref: '4.9', desc: 'Connections soundly made and under no undue strain', reg: 'Reg 526.6' },
-    { ref: '4.10', desc: 'No signs of overheating at connections', reg: '' },
-    { ref: '4.11', desc: 'Adequacy of cables for current-carrying capacity', reg: 'Reg 523' },
-    { ref: '5.0', desc: 'ISOLATION AND SWITCHING', items: [] },
-    { ref: '5.1', desc: 'Presence and correct operation of appropriate devices for isolation and switching', reg: 'Reg 537' },
-    { ref: '5.2', desc: 'Correct functioning of all isolators and switches', reg: 'Reg 537' },
-    { ref: '5.3', desc: 'Isolator/switch accessible and clearly identified', reg: 'Reg 537.3' },
-    { ref: '5.4', desc: 'Correct operation of all circuit-breakers', reg: 'Reg 612.13.2' },
-    { ref: '5.5', desc: 'Condition of all enclosures and accessories', reg: '' },
-    { ref: '6.0', desc: 'CURRENT-USING EQUIPMENT (Permanently Connected)', items: [] },
-    { ref: '6.1', desc: 'Suitability of equipment in terms of IP rating and fire rating', reg: '' },
-    { ref: '6.2', desc: 'Enclosure not damaged/deteriorated so as to impair safety', reg: '' },
-    { ref: '6.3', desc: 'Suitability for the environment and external influences', reg: '' },
-    { ref: '6.4', desc: 'Security of fixing', reg: '' },
-    { ref: '6.5', desc: 'Cable entry holes adequately sealed', reg: '' },
-    { ref: '7.0', desc: 'EARTHING AND BONDING', items: [] },
-    { ref: '7.1', desc: 'Presence and adequacy of earthing conductor', reg: 'Table 54.7' },
-    { ref: '7.2', desc: 'Presence and adequacy of circuit protective conductors', reg: 'Reg 543' },
-    { ref: '7.3', desc: 'Presence and adequacy of main protective bonding conductors', reg: 'Reg 544.1' },
-    { ref: '7.4', desc: 'Presence and adequacy of supplementary bonding conductors (where required)', reg: 'Reg 544.2' },
-    { ref: '7.5', desc: 'Adequacy of earthing/bonding labels at all appropriate locations', reg: 'Reg 514.13' },
-    { ref: '7.6', desc: 'Accessibility and condition of earthing and bonding connections', reg: '' },
-    { ref: '7.7', desc: 'Accessibility and condition of earth electrode connection (where applicable)', reg: '' },
-    { ref: '8.0', desc: 'GENERAL', items: [] },
-    { ref: '8.1', desc: 'Adequacy of access to switchgear, equipment etc.', reg: 'Reg 132.12' },
-    { ref: '8.2', desc: 'Presence of danger or warning notices and other required notices', reg: 'Reg 514' },
-    { ref: '8.3', desc: 'Condition of accessories including socket-outlets, switches, fused connection units, etc.', reg: '' },
-    { ref: '8.4', desc: 'Single-pole switches or devices in line conductors only', reg: 'Reg 530.3.2' },
-    { ref: '8.5', desc: 'Protection against mechanical damage where cables pass through walls, floors and ceilings', reg: 'Reg 522.6' },
-    { ref: '8.6', desc: 'Additional protection for cables concealed in walls at a depth less than 50 mm', reg: 'Reg 522.6.101, 522.6.102, 522.6.103' },
-    { ref: '8.7', desc: 'Provision of fire barriers, sealing and protection against thermal effects', reg: 'Reg 527' },
-    { ref: '8.8', desc: 'External condition of wiring system components', reg: '' },
-    { ref: '8.9', desc: 'Security of fixing of wiring systems', reg: '' },
-    { ref: '8.10', desc: 'Condition of enclosures', reg: '' },
-    { ref: '9.0', desc: 'PROSUMER\'S LOW VOLTAGE INSTALLATION', items: [] },
-    { ref: '9.1', desc: 'Confirmation of the type of PEI and its external influences', reg: '' },
-    { ref: '9.2', desc: 'Confirmation of correct type and operation of interface protection', reg: '' },
-    { ref: '9.3', desc: 'Presence of all appropriate notices and labels', reg: '' },
-    { ref: '10.0', desc: 'ELECTRIC VEHICLE CHARGING INSTALLATION', items: [] },
-    { ref: '10.1', desc: 'Correct type and rating of EVCP', reg: '' },
-    { ref: '10.2', desc: 'Supply cable adequately sized and protected', reg: '' },
-    { ref: '10.3', desc: 'Earthing arrangement adequate', reg: '' },
-    { ref: '10.4', desc: 'Protective devices correctly rated and suitable', reg: '' },
-    { ref: '11.0', desc: 'LOCATIONS CONTAINING A BATH OR SHOWER', items: [] },
-    { ref: '11.1', desc: 'Suitability of equipment for the zone in which it is installed', reg: 'Section 701' },
-    { ref: '11.2', desc: 'Suitability of equipment for external influences (IP rating)', reg: 'Reg 701.512.2' },
-    { ref: '11.3', desc: 'Supplementary bonding conductors (where required)', reg: 'Reg 701.415.2' },
-    { ref: '11.4', desc: 'Additional protection by 30 mA RCD for circuits serving the location', reg: 'Reg 701.411.3.3' },
+    { section: '1.0', title: 'External Condition of Intake Equipment' },
+    { ref: '1.1', desc: 'Service cable adequacy', reg: 'Reg 132.6' },
+    { ref: '1.2', desc: 'Service head condition', reg: 'Reg 132.6' },
+    { ref: '1.3', desc: 'Meter tails adequacy — condition and correct size', reg: 'Reg 132.6, 132.12' },
+    { ref: '1.4', desc: 'Metering equipment condition', reg: 'Reg 132.6' },
+    { ref: '1.5', desc: 'Isolator — condition, accessibility, correct operation', reg: 'Reg 132.15, 537.1' },
+    { ref: '1.6', desc: 'Earthing conductor — condition, connection, correct size', reg: 'Reg 542.3' },
+    { section: '2.0', title: 'Parallel or Switched Alternative Sources of Supply' },
+    { ref: '2.1', desc: 'Adequacy of means of isolation/switching', reg: 'Reg 537.1, 551.6' },
+    { ref: '2.2', desc: 'Condition of equipment and connections', reg: 'Reg 551.6, 551.7' },
+    { section: '3.0', title: 'Methods of Protection Against Electric Shock' },
+    { ref: '3.1.1', desc: 'Main protective bonding conductors — correct size (BS 7671 Table 54.8)', reg: 'Reg 544.1' },
+    { ref: '3.1.2', desc: 'Main protective bonding conductors — presence and condition (water)', reg: 'Reg 411.3.1.2' },
+    { ref: '3.1.3', desc: 'Main protective bonding conductors — presence and condition (gas)', reg: 'Reg 411.3.1.2' },
+    { ref: '3.1.4', desc: 'Main protective bonding conductors — presence and condition (oil)', reg: 'Reg 411.3.1.2' },
+    { ref: '3.1.5', desc: 'Main protective bonding conductors — presence and condition (structural steel)', reg: 'Reg 411.3.1.2' },
+    { ref: '3.1.6', desc: 'Main protective bonding conductors — presence and condition (lightning protection)', reg: 'Reg 411.3.1.2' },
+    { ref: '3.1.7', desc: 'Main protective bonding conductors — presence and condition (other extraneous-conductive-parts)', reg: 'Reg 411.3.1.2' },
+    { ref: '3.1.8', desc: 'Main protective bonding connections are accessible', reg: 'Reg 543.3.2' },
+    { ref: '3.2', desc: 'Automatic disconnection of supply (ADS) — presence of RCDs for additional protection', reg: 'Reg 411.3.3' },
+    { section: '4.0', title: 'Other Methods of Protection' },
+    { ref: '4.1', desc: 'Obstacles — present and effective where required', reg: 'Reg 417.2' },
+    { ref: '4.2', desc: 'Placing out of reach — adequate where required', reg: 'Reg 417.3' },
+    { ref: '4.3', desc: 'Non-conducting location — present and effective where required', reg: 'Reg 418.1' },
+    { ref: '4.4', desc: 'Earth-free local equipotential bonding — present and effective where required', reg: 'Reg 418.2' },
+    { ref: '4.5', desc: 'Electrical separation — adequate where required', reg: 'Reg 418.3' },
+    { section: '5.0', title: 'Distribution Equipment (Switchgear)' },
+    { ref: '5.1', desc: 'Adequacy of access and working space', reg: 'Reg 132.12, 513.1' },
+    { ref: '5.2', desc: 'Security of fixing', reg: 'Reg 134.1.1' },
+    { ref: '5.3', desc: 'Condition of enclosure(s) — damage, deterioration', reg: 'Reg 416.2, 421.1' },
+    { ref: '5.4', desc: 'Suitability for the environment (IP rating)', reg: 'Reg 512.2, 522' },
+    { ref: '5.5', desc: 'Presence of danger/warning notices and other labelling', reg: 'Reg 514' },
+    { ref: '5.6', desc: 'Presence of circuit identification/schedule', reg: 'Reg 514.9' },
+    { ref: '5.7', desc: 'Switchgear adequately rated and suitable for its purpose', reg: 'Reg 511.1, 536' },
+    { ref: '5.8', desc: 'Condition of conductors/connections/terminations', reg: 'Reg 526' },
+    { ref: '5.9', desc: 'Adequacy of main earthing conductor size', reg: 'Reg 543.1' },
+    { ref: '5.10', desc: 'Adequacy of main earthing conductor connections', reg: 'Reg 543.2' },
+    { ref: '5.11', desc: 'Presence and adequacy of circuit protective conductors', reg: 'Reg 543' },
+    { ref: '5.12', desc: 'Adequacy of protective bonding conductors for distribution circuits', reg: 'Reg 544.1' },
+    { ref: '5.13', desc: 'Condition of surge protection device (SPD) if present', reg: 'Reg 534' },
+    { ref: '5.14', desc: 'Adequacy of SPD if required', reg: 'Reg 443' },
+    { ref: '5.15', desc: 'RCD quarterly test notice displayed at consumer unit', reg: 'Reg 514.12.2' },
+    { ref: '5.16', desc: 'Confirmation that all conductors are correctly connected', reg: 'Reg 526.3' },
+    { ref: '5.17', desc: 'Single-pole switching or protection in line conductors only', reg: 'Reg 132.14.1' },
+    { ref: '5.18', desc: 'Protection against mechanical damage where cables enter equipment', reg: 'Reg 522.8.1' },
+    { ref: '5.19', desc: 'Presence of fire barriers, seals and protection where necessary', reg: 'Reg 527.1' },
+    { ref: '5.20', desc: 'Correct connection of accessories and equipment', reg: 'Reg 526.3' },
+    { ref: '5.21', desc: 'Enclosures not damaged/deteriorated so as to impair safety', reg: 'Reg 421.1, 522' },
+    { ref: '5.22', desc: 'Adequacy of arrangements for parallel or switched supplies', reg: 'Reg 551.6' },
+    { ref: '5.23', desc: 'Adequate arrangements where a generating set operates as a switched alternative to the public supply', reg: 'Reg 551.6' },
+    { section: '6.0', title: 'Distribution Circuits' },
+    { ref: '6.1', desc: 'Cables adequately supported throughout', reg: 'Reg 522.8' },
+    { ref: '6.2', desc: 'Wiring system(s) appropriate for the type and nature of the installation and the environment', reg: 'Reg 522' },
+    { ref: '6.3', desc: 'Cables adequately protected against mechanical damage', reg: 'Reg 522.6, 522.8' },
+    { ref: '6.4', desc: 'Cables adequately protected against electromagnetic effects where necessary', reg: 'Reg 521.5' },
+    { ref: '6.5', desc: 'Suitability of containment systems including cable tray, trunking, and conduit', reg: 'Reg 521.4, 522' },
+    { ref: '6.6', desc: 'Cables not found to be damaged or deteriorated', reg: 'Reg 421.1' },
+    { ref: '6.7', desc: 'Cables correctly terminated/connected at each end', reg: 'Reg 526' },
+    { ref: '6.8', desc: 'No basic insulation of a conductor visible outside of enclosure', reg: 'Reg 416.2' },
+    { ref: '6.9', desc: 'No single insulated conductors found outside of suitable enclosure', reg: 'Reg 521.10' },
+    { ref: '6.10', desc: 'Cables correctly selected for current-carrying capacity', reg: 'Reg 523, 524' },
+    { ref: '6.11', desc: 'Cables correctly selected for voltage drop', reg: 'Reg 525' },
+    { ref: '6.12', desc: 'Presence and adequacy of supplementary bonding', reg: 'Reg 544.2' },
+    { ref: '6.13', desc: 'Correct type of overcurrent protective device(s)', reg: 'Reg 432, 433' },
+    { ref: '6.14', desc: 'Correct rating of overcurrent protective device(s)', reg: 'Reg 432, 433' },
+    { ref: '6.15', desc: 'Presence of fire barriers, seals and protection where necessary', reg: 'Reg 527.1' },
+    { ref: '6.16.1', desc: 'Band II circuits separated from Band I circuits where necessary', reg: 'Reg 528.1' },
+    { ref: '6.16.2', desc: 'Separation from non-electrical services where necessary', reg: 'Reg 528.3' },
+    { section: '7.0', title: 'Final Circuits' },
+    { ref: '7.1', desc: 'Cables adequately supported throughout', reg: 'Reg 522.8' },
+    { ref: '7.2', desc: 'Wiring system(s) appropriate for the type and nature of the installation and environment', reg: 'Reg 522' },
+    { ref: '7.3', desc: 'Cables not found to be damaged or deteriorated', reg: 'Reg 421.1' },
+    { ref: '7.4', desc: 'Cables correctly terminated/connected at each end', reg: 'Reg 526' },
+    { ref: '7.5', desc: 'No basic insulation of a conductor visible outside of enclosure', reg: 'Reg 416.2' },
+    { ref: '7.6', desc: 'Cables correctly selected for current-carrying capacity', reg: 'Reg 523, 524' },
+    { ref: '7.7', desc: 'Cables correctly selected for voltage drop', reg: 'Reg 525' },
+    { ref: '7.8', desc: 'Correct type of overcurrent protective device(s)', reg: 'Reg 432, 433' },
+    { ref: '7.9', desc: 'Correct rating of overcurrent protective device(s)', reg: 'Reg 432, 433' },
+    { ref: '7.10', desc: 'Presence and adequacy of supplementary bonding', reg: 'Reg 544.2' },
+    { ref: '7.11', desc: 'Presence of RCD protection for socket-outlets rated up to 32A', reg: 'Reg 411.3.3' },
+    { ref: '7.12', desc: 'Presence of RCD additional protection for cables concealed in walls/partitions at a depth less than 50mm', reg: 'Reg 522.6.202' },
+    { ref: '7.13', desc: 'Adequacy and security of accessories/equipment', reg: 'Reg 421.1, 526' },
+    { ref: '7.14', desc: 'Correct connection of accessories and equipment', reg: 'Reg 526.3' },
   ];
 
   // Build inspection outcome lookup
@@ -1234,13 +1266,13 @@ app.get('/api/sites/:id/report', (req, res, next) => {
     if (o.code === 'FI') fiNos.push(num);
   });
 
-  // Description checkbox helper
-  const descType = (site.description || '').toLowerCase();
+  // Description checkbox helper — use desc_premises (frontend) OR description (legacy)
+  const descType = R.descPremises.toLowerCase();
   const chk = (type) => descType.includes(type) ? '&#10003;' : '';
 
   let html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>EICR - ${e(site.name)}</title>
 <style>
-  @page { size: A4 portrait; margin: 10mm 10mm 18mm 10mm; }
+  @page { size: A4 landscape; margin: 10mm 10mm 18mm 10mm; }
   @page landscape { size: A4 landscape; margin: 10mm 10mm 18mm 10mm; }
   * { box-sizing: border-box; }
   body { font-family: Arial, Helvetica, sans-serif; font-size: 9px; line-height: 1.3; color: #000; margin: 0; padding: 0; }
@@ -1341,13 +1373,14 @@ app.get('/api/sites/:id/report', (req, res, next) => {
     <tr><td class="sec-hdr" colspan="4">SECTION 1: DETAILS OF THE PERSON ORDERING THE REPORT</td></tr>
     <tr><td class="fl" style="width:20%">Client:</td><td class="fv" colspan="3">${v(site.client_name)}</td></tr>
     <tr><td class="fl">Address:</td><td class="fv" colspan="3">${v((site.client_address || site.address || '') + (site.postcode ? ' ' + site.postcode : ''))}</td></tr>
+    <tr><td class="fl">Tel:</td><td class="fv">${v(site.client_phone || site.client_tel)}</td><td class="fl" style="width:20%">Email:</td><td class="fv">${v(site.client_email)}</td></tr>
   </table>`;
 
   // Section 2
   html += `<table>
     <tr><td class="sec-hdr" colspan="4">SECTION 2: REASON FOR PRODUCING THIS REPORT</td></tr>
     <tr><td class="fl" style="width:20%">Reason:</td><td class="fv" colspan="3">${v(site.purpose)}</td></tr>
-    <tr><td class="fl">Date(s) of inspection:</td><td class="fv">${v(site.inspector_date || '')}</td><td class="fl" style="width:20%">Report Ref:</td><td class="fv">${v(certNum)}</td></tr>
+    <tr><td class="fl">Date(s) of inspection:</td><td class="fv">${v(R.dateInspection)}</td><td class="fl" style="width:20%">Report Ref:</td><td class="fv">${v(certNum)}</td></tr>
   </table>`;
 
   // Section 3
@@ -1356,27 +1389,27 @@ app.get('/api/sites/:id/report', (req, res, next) => {
     <tr><td class="fl" style="width:20%">Installation Address:</td><td class="fv" colspan="5">${v((site.address || '') + (site.postcode ? ' ' + site.postcode : ''))}</td></tr>
     <tr>
       <td class="fl">Description of Premises:</td>
-      <td class="fv" style="width:15%">Domestic <span class="tick">${chk('domestic')}</span></td>
-      <td class="fv" style="width:15%">Commercial <span class="tick">${chk('commercial')}</span></td>
-      <td class="fv" style="width:15%">Industrial <span class="tick">${chk('industrial')}</span></td>
-      <td class="fv" style="width:15%">Other <span class="tick">${chk('other')}</span></td>
-      <td class="fv">${v(site.description)}</td>
+      <td class="fv center" style="width:15%">${chk('domestic') ? '<strong style="font-size:14px">&#10003;</strong><br>' : ''}Domestic</td>
+      <td class="fv center" style="width:15%">${chk('commercial') ? '<strong style="font-size:14px">&#10003;</strong><br>' : ''}Commercial</td>
+      <td class="fv center" style="width:15%">${chk('industrial') ? '<strong style="font-size:14px">&#10003;</strong><br>' : ''}Industrial</td>
+      <td class="fv center" style="width:15%">${chk('other') || (!chk('domestic') && !chk('commercial') && !chk('industrial') && R.descPremises ? '<strong style="font-size:14px">&#10003;</strong><br>' : '')}Other</td>
+      <td class="fv">${v(R.descPremises)}</td>
     </tr>
     <tr>
-      <td class="fl">Estimated age of the<br>electrical installation (years):</td><td class="fv">${v(site.wiring_age)}${site.wiring_age ? '' : ''}</td>
-      <td class="fl2">Evidence of additions<br>or alterations:</td><td class="fv">${v(site.additions)}${site.additions_age ? ' (' + e(site.additions_age) + ' years est.)' : ''}</td>
+      <td class="fl">Estimated age of the<br>electrical installation (years):</td><td class="fv">${v(R.estAge)}</td>
+      <td class="fl2">Evidence of additions<br>or alterations:</td><td class="fv">${v(R.additions)}${R.additionsAge ? ' (' + e(R.additionsAge) + ' years est.)' : ''}</td>
       <td class="fl2">Installation records<br>available:</td><td class="fv">${v(site.records_available)}</td>
     </tr>
-    <tr><td class="fl">Date of last inspection:</td><td class="fv" colspan="5">${v(site.last_inspection_date)}</td></tr>
+    <tr><td class="fl">Date of last inspection:</td><td class="fv" colspan="5">${v(R.dateLastInspection)}</td></tr>
   </table>`;
 
   // Section 4
   html += `<table>
     <tr><td class="sec-hdr" colspan="2">SECTION 4: EXTENT AND LIMITATIONS OF THE INSPECTION AND TESTING</td></tr>
     <tr><td class="fl" style="width:20%">Extent of the installation covered<br>by this report:</td><td class="fv">${v(site.extent)}</td></tr>
-    <tr><td class="fl">Agreed limitations including<br>reasons (see also Section 12):</td><td class="fv">${v(site.agreed_limitations)}</td></tr>
-    <tr><td class="fl">Agreed with:</td><td class="fv">${v(site.agreed_with)}</td></tr>
-    <tr><td class="fl">Operational limitations including<br>reasons (see also Section 12):</td><td class="fv">${v(site.operational_limitations)}</td></tr>
+    <tr><td class="fl">Agreed limitations including<br>reasons (see also Section 12):</td><td class="fv">${v(R.limitations)}</td></tr>
+    <tr><td class="fl">Agreed with:</td><td class="fv">${v(site.agreed_with || site.client_name)}</td></tr>
+    <tr><td class="fl">Operational limitations including<br>reasons (see also Section 12):</td><td class="fv">${v(R.opLimitations)}</td></tr>
     <tr><td colspan="2" style="font-size:7px;padding:3px">The inspection and testing has been carried out in accordance with BS 7671: 2018+A2:2022 as amended. The inspection and testing detailed within this report, and described within the limitations given in Section 12, has been carried out in a manner intended to identify, so far as is reasonably practicable, any damage, deterioration, defects, dangerous conditions and non-compliances with the requirements of BS 7671 that may give rise to danger.</td></tr>
   </table>`;
 
@@ -1389,7 +1422,7 @@ app.get('/api/sites/:id/report', (req, res, next) => {
         <div class="assess-${hasC1C2FI ? 'unsat' : 'sat'}">${hasC1C2FI ? 'UNSATISFACTORY' : 'SATISFACTORY'}</div>
       </td>
       <td class="fl" style="width:20%">Date of next inspection<br>(recommended):</td>
-      <td class="fv" style="font-size:11px;font-weight:bold">${v(site.next_inspection || site.next_inspection_date)}</td>
+      <td class="fv" style="font-size:11px;font-weight:bold">${v(R.nextInspection)}</td>
     </tr>
   </table>`;
 
@@ -1417,7 +1450,8 @@ app.get('/api/sites/:id/report', (req, res, next) => {
   if (obs.length) {
     obs.forEach((o, i) => {
       const cls = o.code === 'C1' ? 'obs-c1' : o.code === 'C2' ? 'obs-c2' : o.code === 'C3' ? 'obs-c3' : o.code === 'FI' ? 'obs-fi' : '';
-      html += `<tr class="${cls}"><td class="center">${i + 1}</td><td>${e(o.description)}</td><td>${e(o.location || '')}</td><td class="center"><strong>${e(o.code)}</strong></td></tr>`;
+      const codeColor = o.code === 'C1' ? '#c53030' : o.code === 'C2' ? '#c05621' : o.code === 'C3' ? '#2b6cb0' : o.code === 'FI' ? '#6b46c1' : '#000';
+      html += `<tr class="${cls}"><td class="center">${i + 1}</td><td>${e(o.description)}</td><td>${e(o.location || '')}</td><td class="center" style="font-size:10px;font-weight:bold;color:${codeColor}">${e(o.code)}</td></tr>`;
     });
   } else {
     html += `<tr><td class="center">-</td><td style="color:#666;font-style:italic">No observations recorded</td><td>-</td><td class="center">-</td></tr>`;
@@ -1496,7 +1530,8 @@ app.get('/api/sites/:id/report', (req, res, next) => {
       </tr></thead><tbody>`;
     bObs.forEach((o, i) => {
       const cls = o.code === 'C1' ? 'obs-c1' : o.code === 'C2' ? 'obs-c2' : o.code === 'C3' ? 'obs-c3' : o.code === 'FI' ? 'obs-fi' : '';
-      html += `<tr class="${cls}"><td class="center">${o.item_no || (i + 1)}</td><td>${e(o.description)}</td><td>${e(o.location || '')}</td><td class="center"><strong>${e(o.code)}</strong></td></tr>`;
+      const bCodeColor = o.code === 'C1' ? '#c53030' : o.code === 'C2' ? '#c05621' : o.code === 'C3' ? '#2b6cb0' : o.code === 'FI' ? '#6b46c1' : '#000';
+      html += `<tr class="${cls}"><td class="center">${o.item_no || (i + 1)}</td><td>${e(o.description)}</td><td>${e(o.location || '')}</td><td class="center" style="font-size:10px;font-weight:bold;color:${bCodeColor}">${e(o.code)}</td></tr>`;
     });
     html += `</tbody></table>`;
     html += `</div>`;
@@ -1570,11 +1605,11 @@ app.get('/api/sites/:id/report', (req, res, next) => {
   html += `<table>
     <tr><td class="sec-hdr-gray" colspan="6">Nature of Supply Parameters</td></tr>
     <tr>
-      <td class="fl2">AC <span class="tick">${(site.supply_type || 'AC').toUpperCase() === 'AC' ? '&#10003;' : ''}</span></td>
-      <td class="fl2">DC <span class="tick">${(site.supply_type || '').toUpperCase() === 'DC' ? '&#10003;' : ''}</span></td>
-      <td class="fl2">Single phase <span class="tick">${(site.num_phases || '').includes('1') || (site.num_phases || '').toLowerCase().includes('single') ? '&#10003;' : ''}</span></td>
-      <td class="fl2">Two phase <span class="tick">${(site.num_phases || '').includes('2') ? '&#10003;' : ''}</span></td>
-      <td class="fl2">Three phase <span class="tick">${(site.num_phases || '').includes('3') ? '&#10003;' : ''}</span></td>
+      <td class="fl2">AC <span class="tick">${isAC ? '&#10003;' : ''}</span></td>
+      <td class="fl2">DC <span class="tick">${isDC ? '&#10003;' : ''}</span></td>
+      <td class="fl2">Single phase <span class="tick">${isSingle ? '&#10003;' : ''}</span></td>
+      <td class="fl2">Two phase <span class="tick">${isTwo ? '&#10003;' : ''}</span></td>
+      <td class="fl2">Three phase <span class="tick">${isThree ? '&#10003;' : ''}</span></td>
       <td class="fv"></td>
     </tr>
   </table>`;
@@ -1583,25 +1618,25 @@ app.get('/api/sites/:id/report', (req, res, next) => {
   html += `<table>
     <tr><td class="sec-hdr-gray" colspan="6">Earthing Arrangements</td></tr>
     <tr>
-      <td class="fl2">TN-S <span class="tick">${earthTick('TNS', site.earthing_type)}</span></td>
-      <td class="fl2">TN-C-S <span class="tick">${earthTick('TNCS', site.earthing_type)}</span></td>
-      <td class="fl2">TT <span class="tick">${earthTick('TT', site.earthing_type)}</span></td>
-      <td class="fl2">TN-C <span class="tick">${earthTick('TNC', site.earthing_type)}</span></td>
-      <td class="fl2">IT <span class="tick">${earthTick('IT', site.earthing_type)}</span></td>
-      <td class="fv">${v(site.earthing_type)}</td>
+      <td class="fv center" style="width:14%">TN-S ${earthTick('tn-s') ? '<strong style="font-size:14px">&#10003;</strong>' : ''}</td>
+      <td class="fv center" style="width:14%">TN-C-S ${earthTick('tn-c-s') ? '<strong style="font-size:14px">&#10003;</strong>' : ''}</td>
+      <td class="fv center" style="width:14%">TT ${earthTick('tt') ? '<strong style="font-size:14px">&#10003;</strong>' : ''}</td>
+      <td class="fv center" style="width:14%">TN-C ${earthTick('tn-c') ? '<strong style="font-size:14px">&#10003;</strong>' : ''}</td>
+      <td class="fv center" style="width:14%">IT ${earthTick('it') ? '<strong style="font-size:14px">&#10003;</strong>' : ''}</td>
+      <td class="fv" style="width:30%">${v(R.supplySystem)}</td>
     </tr>
   </table>`;
 
   // Supply details
   html += `<table>
-    <tr><td class="fl" style="width:25%">Nominal voltage, U / U<sub>0</sub> (V):</td><td class="fv" style="width:25%">${v(site.nominal_voltage)}</td><td class="fl" style="width:25%">Nominal frequency, f (Hz):</td><td class="fv" style="width:25%">${v(site.nominal_frequency)}</td></tr>
-    <tr><td class="fl">Prospective fault current,<br>Ipf (kA):</td><td class="fv">${v(site.ipf_at_origin)}</td><td class="fl">External loop impedance,<br>Ze (&Omega;):</td><td class="fv">${v(site.ze_at_origin)}</td></tr>
+    <tr><td class="fl" style="width:25%">Nominal voltage, U / U<sub>0</sub> (V):</td><td class="fv" style="width:25%">${v(R.nomVoltageLN)}${R.nomVoltageLL ? ' / ' + e(R.nomVoltageLL) : ''}</td><td class="fl" style="width:25%">Nominal frequency, f (Hz):</td><td class="fv" style="width:25%">${v(R.nomFreq)}</td></tr>
+    <tr><td class="fl">Prospective fault current,<br>Ipf (kA):</td><td class="fv">${v(R.ipf)}</td><td class="fl">External loop impedance,<br>Ze (&Omega;):</td><td class="fv">${v(R.ze)}</td></tr>
   </table>`;
 
   // Supply protective device
   html += `<table>
     <tr><td class="sec-hdr-gray" colspan="6">Supply Protective Device</td></tr>
-    <tr><td class="fl" style="width:20%">BS (EN):</td><td class="fv" style="width:15%">${v(site.supply_device_bsen)}</td><td class="fl" style="width:15%">Type:</td><td class="fv" style="width:15%">${v(site.supply_device_type)}</td><td class="fl" style="width:15%">Rating (A):</td><td class="fv" style="width:20%">${v(site.supply_device_rating)}</td></tr>
+    <tr><td class="fl" style="width:20%">BS (EN):</td><td class="fv" style="width:15%">${v(R.supplyDeviceBsen)}</td><td class="fl" style="width:15%">Type:</td><td class="fv" style="width:15%">${v(R.supplyDeviceType)}</td><td class="fl" style="width:15%">Rating (A):</td><td class="fv" style="width:20%">${v(R.supplyDeviceRating)}</td></tr>
     <tr><td class="fl">Number of supplies:</td><td class="fv" colspan="5">${v(site.num_supplies || '1')}</td></tr>
   </table>`;
 
@@ -1624,9 +1659,9 @@ app.get('/api/sites/:id/report', (req, res, next) => {
     <tr><td class="sec-hdr-gray" colspan="4">Means of Earthing</td></tr>
     <tr>
       <td class="fl" style="width:30%">Distributor's facility:</td>
-      <td class="fv" style="width:20%"><span class="tick">${(site.means_of_earthing || '').toLowerCase().includes('distributor') ? '&#10003;' : ''}</span></td>
+      <td class="fv" style="width:20%"><span class="tick">${R.meansOfEarthing.toLowerCase().includes('supplier') || R.meansOfEarthing.toLowerCase().includes('distributor') || R.meansOfEarthing.toLowerCase().includes('tn-') ? '&#10003;' : ''}</span></td>
       <td class="fl" style="width:30%">Installation earth electrode:</td>
-      <td class="fv" style="width:20%"><span class="tick">${(site.means_of_earthing || '').toLowerCase().includes('electrode') ? '&#10003;' : ''}</span></td>
+      <td class="fv" style="width:20%"><span class="tick">${R.meansOfEarthing.toLowerCase().includes('electrode') || R.meansOfEarthing.toLowerCase().includes('tt') ? '&#10003;' : ''}</span></td>
     </tr>
   </table>`;
 
@@ -1649,9 +1684,9 @@ app.get('/api/sites/:id/report', (req, res, next) => {
       <td class="fl" style="width:15%">No. of poles:</td><td class="fv" style="width:20%">${v(site.main_switch_poles)}</td>
     </tr>
     <tr>
-      <td class="fl">Current rating (A):</td><td class="fv">${v(site.main_switch_current_rating)}</td>
-      <td class="fl">Fuse/device rating (A):</td><td class="fv">${v(site.main_switch_fuse_rating)}</td>
-      <td class="fl">Voltage rating (V):</td><td class="fv">${v(site.main_switch_voltage_rating)}</td>
+      <td class="fl">Current rating (A):</td><td class="fv">${v(R.mainSwitchRating)}</td>
+      <td class="fl">Fuse/device rating (A):</td><td class="fv">${v(R.mainSwitchFuseRating)}</td>
+      <td class="fl">Voltage rating (V):</td><td class="fv">${v(R.mainSwitchVoltage)}</td>
     </tr>
     <tr>
       <td class="fl">RCD type (if applicable):</td><td class="fv">${v(site.main_switch_rcd_type)}</td>
@@ -1691,7 +1726,7 @@ app.get('/api/sites/:id/report', (req, res, next) => {
       <td class="fv center tick">${tick(site.bonding_gas) || e(site.bonding_gas)}</td>
       <td class="fv center tick">${tick(site.bonding_oil) || e(site.bonding_oil)}</td>
       <td class="fv center tick">${tick(site.bonding_lightning) || e(site.bonding_lightning)}</td>
-      <td class="fv center tick">${tick(site.bonding_steel) || e(site.bonding_steel)}</td>
+      <td class="fv center tick">${tick(R.bondingSteel) || e(R.bondingSteel)}</td>
       <td class="fv center tick">${tick(site.bonding_other) || e(site.bonding_other)}</td>
       <td class="fv"></td>
     </tr>
@@ -1734,9 +1769,9 @@ app.get('/api/sites/:id/report', (req, res, next) => {
       </tr></thead><tbody>`;
 
     chunk.forEach(item => {
-      if (item.items) {
+      if (item.section) {
         // Section header
-        html += `<tr class="insp-section"><td>${e(item.ref)}</td><td colspan="2">${e(item.desc)}</td></tr>`;
+        html += `<tr class="insp-section"><td>${e(item.section)}</td><td colspan="2"><strong>${e(item.title || item.desc || '')}</strong></td></tr>`;
       } else {
         const outcome = inspMap[item.ref] || 'N/V';
         const oClass = outcome === 'Pass' ? 'insp-pass' : ['C1','C2','FI'].includes(outcome) ? 'insp-fail' : '';

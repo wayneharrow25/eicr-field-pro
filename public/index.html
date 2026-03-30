@@ -2195,42 +2195,73 @@ input,select,textarea { font-size:16px !important; }
     maxWidth = maxWidth || 1600;
     quality = quality || 0.8;
     return new Promise(function(resolve, reject) {
-      /* Timeout — if image doesn't load in 30s, try sending raw base64 */
+      /* Timeout — if image doesn't load in 15s, try sending raw base64 */
+      var settled = false;
+      var done = function(val, isErr) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        isErr ? reject(val) : resolve(val);
+      };
       var timeout = setTimeout(function() {
         console.warn('compressImage: timeout, falling back to raw FileReader');
         var reader = new FileReader();
-        reader.onload = function() { resolve(reader.result.split(',')[1]); };
-        reader.onerror = function() { reject(new Error('Could not read image file')); };
+        reader.onload = function() { done(reader.result.split(',')[1]); };
+        reader.onerror = function() { done(new Error('Could not read image file'), true); };
         reader.readAsDataURL(file);
-      }, 30000);
+      }, 15000);
 
-      var img = new Image();
-      img.onload = function() {
-        clearTimeout(timeout);
-        try {
-          var canvas = document.createElement('canvas');
-          var scale = Math.min(1, maxWidth / img.width);
-          canvas.width = img.width * scale;
-          canvas.height = img.height * scale;
-          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-          var result = canvas.toDataURL('image/jpeg', quality).split(',')[1];
+      /* Try createImageBitmap first (handles more formats incl. HEIC on some browsers) */
+      if (typeof createImageBitmap === 'function') {
+        createImageBitmap(file).then(function(bmp) {
+          try {
+            var canvas = document.createElement('canvas');
+            var scale = Math.min(1, maxWidth / bmp.width);
+            canvas.width = bmp.width * scale;
+            canvas.height = bmp.height * scale;
+            canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+            bmp.close();
+            var result = canvas.toDataURL('image/jpeg', quality).split(',')[1];
+            done(result);
+          } catch(e) {
+            bmp.close();
+            /* Fall through to Image() path */
+            tryImageElement();
+          }
+        }).catch(function() {
+          tryImageElement();
+        });
+      } else {
+        tryImageElement();
+      }
+
+      function tryImageElement() {
+        var img = new Image();
+        img.onload = function() {
+          try {
+            var canvas = document.createElement('canvas');
+            var scale = Math.min(1, maxWidth / img.width);
+            canvas.width = img.width * scale;
+            canvas.height = img.height * scale;
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+            var result = canvas.toDataURL('image/jpeg', quality).split(',')[1];
+            URL.revokeObjectURL(img.src);
+            done(result);
+          } catch(e) {
+            URL.revokeObjectURL(img.src);
+            done(e, true);
+          }
+        };
+        img.onerror = function() {
           URL.revokeObjectURL(img.src);
-          resolve(result);
-        } catch(e) {
-          URL.revokeObjectURL(img.src);
-          reject(e);
-        }
-      };
-      img.onerror = function() {
-        clearTimeout(timeout);
-        URL.revokeObjectURL(img.src);
-        /* Image failed to decode (HEIC, corrupt, etc.) — try raw FileReader */
-        var reader = new FileReader();
-        reader.onload = function() { resolve(reader.result.split(',')[1]); };
-        reader.onerror = function() { reject(new Error('Could not read image')); };
-        reader.readAsDataURL(file);
-      };
-      img.src = URL.createObjectURL(file);
+          /* Image failed to decode (HEIC, corrupt, etc.) — try raw FileReader */
+          var reader = new FileReader();
+          reader.onload = function() { done(reader.result.split(',')[1]); };
+          reader.onerror = function() { done(new Error('Could not read image'), true); };
+          reader.readAsDataURL(file);
+        };
+        img.src = URL.createObjectURL(file);
+      }
     });
   }
 
@@ -3499,7 +3530,10 @@ input,select,textarea { font-size:16px !important; }
           '<input type="file" id="obs-photo" accept="image/*" style="display:none">' +
           '<input type="file" id="obs-photo-cam" accept="image/*" capture="environment" style="display:none">' +
           '<div id="obs-photo-preview"></div></div>' +
-        '<button class="btn btn-primary w-full mt-4" data-action="save-observation">Save Observation</button>' +
+        '<div class="flex gap-2 mt-4">' +
+          '<button class="btn btn-primary flex-1" data-action="save-observation">Save</button>' +
+          '<button class="btn flex-1" style="background:#6366f1;color:#fff" data-action="save-observation-ai">&#9733; Save + AI Review</button>' +
+        '</div>' +
       '</div>'
     );
 
@@ -3529,7 +3563,7 @@ input,select,textarea { font-size:16px !important; }
     });
   }
 
-  function saveObservation() {
+  function saveObservation(useAI) {
     var code = document.getElementById('obs-code');
     var desc = document.getElementById('obs-description');
     var editId = (document.getElementById('obs-edit-id') || {}).value;
@@ -3550,33 +3584,43 @@ input,select,textarea { font-size:16px !important; }
       var fileInput = (photoCam && photoCam.files && photoCam.files[0]) ? photoCam :
                       (photoInput && photoInput.files && photoInput.files[0]) ? photoInput : null;
       if (fileInput) {
-        console.log('[obs-photo] Compressing file:', fileInput.files[0].name, fileInput.files[0].size + ' bytes');
-        compressImage(fileInput.files[0]).then(function(base64) {
+        var theFile = fileInput.files[0];
+        console.log('[obs-photo] Compressing file:', theFile.name, theFile.size + ' bytes');
+        compressImage(theFile).then(function(base64) {
           console.log('[obs-photo] Compressed to', base64.length, 'chars');
           cb('data:image/jpeg;base64,' + base64);
         }).catch(function(err) {
-          console.error('[obs-photo] compressImage failed:', err);
-          toast('Photo compression failed — try a smaller image', 'error');
-          cb(null);
+          console.error('[obs-photo] compressImage failed, trying raw FileReader:', err);
+          /* Fallback: read raw without compression */
+          var reader = new FileReader();
+          reader.onload = function() {
+            console.log('[obs-photo] Raw FileReader succeeded:', reader.result.length, 'chars');
+            cb(reader.result);
+          };
+          reader.onerror = function() {
+            console.error('[obs-photo] Raw FileReader also failed');
+            toast('Could not read photo — try a different image', 'error');
+            cb(null);
+          };
+          reader.readAsDataURL(theFile);
         });
       } else { cb(null); }
     };
 
-    /* Try AI: reword technically + map to inspection items */
-    var provider = getSelectedProvider();
+    /* If not using AI, or no AI key — just save directly */
+    var provider = useAI ? getSelectedProvider() : null;
     if (!provider) {
-      /* No AI key — save raw and skip mapping */
       getPhoto(function(photo) {
         var body = { code: obsCode, description: rawDesc, location: location, materials: materials, qty: qty };
-        if (photo) body.photo = photo;  /* Only include photo if new one was selected */
+        if (photo) body.photo = photo;
         doSaveObservation(editId, body);
       });
       return;
     }
 
     /* Show processing state */
-    var saveBtn = document.querySelector('[data-action="save-observation"]');
-    if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<div class="loading-spinner" style="width:1.25rem;height:1.25rem"></div> AI processing...'; }
+    var aiBtn = document.querySelector('[data-action="save-observation-ai"]');
+    if (aiBtn) { aiBtn.disabled = true; aiBtn.innerHTML = '<div class="loading-spinner" style="width:1.25rem;height:1.25rem"></div> AI...'; }
 
     /* Use unified AI brain — ask it to reword + map to inspection */
     var aiPrompt = 'Reword this observation technically and identify inspection schedule items.\n' +
@@ -3591,7 +3635,7 @@ input,select,textarea { font-size:16px !important; }
           if (photo) body.photo = photo;
           doSaveObservation(editId, body);
         });
-        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Observation'; }
+        if (aiBtn) { aiBtn.disabled = false; aiBtn.textContent = '★ Save + AI Review'; }
         return;
       }
 
@@ -3644,7 +3688,7 @@ input,select,textarea { font-size:16px !important; }
           if (photo) body.photo = photo;
           doSaveObservation(editId, body);
         });
-        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Observation'; }
+        if (aiBtn) { aiBtn.disabled = false; aiBtn.textContent = '★ Save + AI Review'; }
       }
     });
   }
@@ -5919,7 +5963,10 @@ input,select,textarea { font-size:16px !important; }
         selectObsCode(target.getAttribute('data-code'));
         break;
       case 'save-observation':
-        saveObservation();
+        saveObservation(false);
+        break;
+      case 'save-observation-ai':
+        saveObservation(true);
         break;
       case 'download-quote-report':
         downloadQuoteReport();
