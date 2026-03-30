@@ -1330,11 +1330,10 @@ app.get('/api/sites/:id/report', (req, res, next) => {
   /* Signature */
   .sig-img { max-height: 30px; }
 
-  /* Circuit table — compact to avoid wasted space */
-  .cct-table { table-layout: fixed; width: 100%; }
-  .cct-table th { font-size: 5.5px; padding: 1px 1px; white-space: nowrap; overflow: hidden; }
-  .cct-table td { font-size: 6px; padding: 1px 1px; text-align: center; overflow: hidden; white-space: nowrap; }
-  .cct-table td:nth-child(2) { text-align: left; white-space: normal; }
+  /* Circuit table */
+  .cct-table th { font-size: 6.5px; padding: 1px 2px; white-space: nowrap; }
+  .cct-table td { font-size: 7px; padding: 1px 2px; text-align: center; }
+  .cct-table td:nth-child(2) { text-align: left; }
 
   /* Print overrides */
   @media print {
@@ -1844,41 +1843,41 @@ app.get('/api/sites/:id/report', (req, res, next) => {
             <th colspan="11" style="background:#000;color:#fff;font-size:7px">TEST RESULT DETAILS</th>
           </tr>
           <tr>
-            <th rowspan="2" style="width:2.5%">Cct<br>No</th>
-            <th rowspan="2" style="width:12%">Circuit<br>description</th>
-            <th rowspan="2" style="width:2.5%">Type<br>wiring</th>
-            <th rowspan="2" style="width:2.5%">Ref<br>meth</th>
-            <th rowspan="2" style="width:2%">No.<br>pts</th>
-            <th rowspan="2" style="width:2.5%">Live<br>mm&sup2;</th>
-            <th rowspan="2" style="width:2.5%">cpc<br>mm&sup2;</th>
-            <th rowspan="2" style="width:2.5%">Max<br>disc<br>time</th>
-            <th rowspan="2" style="width:3.5%">BS<br>(EN)</th>
-            <th rowspan="2" style="width:2%">Type</th>
-            <th rowspan="2" style="width:2.5%">Rtg<br>(A)</th>
-            <th rowspan="2" style="width:2.5%">Brk<br>cap</th>
-            <th rowspan="2" style="width:3%">Max<br>Zs</th>
-            <th rowspan="2" style="width:3.5%">BS<br>(EN)</th>
-            <th rowspan="2" style="width:2%">Type</th>
-            <th rowspan="2" style="width:2.5%">I&Delta;n<br>mA</th>
-            <th rowspan="2" style="width:2.5%">Rtg<br>(A)</th>
-            <th colspan="3" style="background:#e0e0e0;font-size:5px">Ring final cct</th>
-            <th colspan="2" style="background:#e0e0e0;font-size:5px">Continuity</th>
-            <th colspan="2" style="background:#e0e0e0;font-size:5px">Insulation res.</th>
-            <th rowspan="2" style="width:2%">Pol<br>&#10003;</th>
-            <th rowspan="2" style="width:3%">Zs<br>&Omega;</th>
-            <th colspan="2" style="background:#e0e0e0;font-size:5px">RCD</th>
-            <th rowspan="2" style="width:2%">AFDD<br>&#10003;</th>
+            <th rowspan="2" style="width:22px">Cct<br>No</th>
+            <th rowspan="2" style="min-width:60px">Circuit<br>description</th>
+            <th rowspan="2" style="width:22px">Type<br>wiring</th>
+            <th rowspan="2" style="width:20px">Ref<br>method</th>
+            <th rowspan="2" style="width:18px">No.<br>pts</th>
+            <th rowspan="2" style="width:20px">Live<br>mm&sup2;</th>
+            <th rowspan="2" style="width:20px">cpc<br>mm&sup2;</th>
+            <th rowspan="2" style="width:22px">Max<br>disc<br>time</th>
+            <th rowspan="2" style="width:24px">BS<br>(EN)</th>
+            <th rowspan="2" style="width:18px">Type</th>
+            <th rowspan="2" style="width:22px">Rating<br>(A)</th>
+            <th rowspan="2" style="width:22px">Brk<br>cap<br>(kA)</th>
+            <th rowspan="2" style="width:25px">Max<br>Zs<br>(&Omega;)</th>
+            <th rowspan="2" style="width:24px">BS<br>(EN)</th>
+            <th rowspan="2" style="width:18px">Type</th>
+            <th rowspan="2" style="width:22px">I&Delta;n<br>(mA)</th>
+            <th rowspan="2" style="width:22px">Rating<br>(A)</th>
+            <th colspan="3" style="background:#e0e0e0;font-size:6px">Ring final cct</th>
+            <th colspan="2" style="background:#e0e0e0;font-size:6px">Continuity</th>
+            <th colspan="2" style="background:#e0e0e0;font-size:6px">Insulation resistance</th>
+            <th rowspan="2" style="width:18px">Pol<br>&#10003;</th>
+            <th rowspan="2" style="width:25px">Zs<br>(&Omega;)</th>
+            <th colspan="2" style="background:#e0e0e0;font-size:6px">RCD</th>
+            <th rowspan="2" style="width:18px">AFDD<br>&#10003;</th>
           </tr>
           <tr>
-            <th style="width:2.5%">r1</th>
-            <th style="width:2.5%">rn</th>
-            <th style="width:2.5%">r2</th>
-            <th style="width:3%">R1+R2</th>
-            <th style="width:2.5%">R2</th>
-            <th style="width:3%">L-L<br>M&Omega;</th>
-            <th style="width:3%">L-E<br>M&Omega;</th>
-            <th style="width:2.5%">x1<br>ms</th>
-            <th style="width:2%">Btn<br>&#10003;</th>
+            <th style="width:20px;font-size:6px">r1<br>(&Omega;)</th>
+            <th style="width:20px;font-size:6px">rn<br>(&Omega;)</th>
+            <th style="width:20px;font-size:6px">r2<br>(&Omega;)</th>
+            <th style="width:25px;font-size:6px">R1+R2<br>(&Omega;)</th>
+            <th style="width:20px;font-size:6px">R2<br>(&Omega;)</th>
+            <th style="width:25px;font-size:6px">L-L<br>(M&Omega;)</th>
+            <th style="width:25px;font-size:6px">L-E<br>(M&Omega;)</th>
+            <th style="width:22px;font-size:6px">x1<br>(ms)</th>
+            <th style="width:18px;font-size:6px">Btn<br>&#10003;</th>
           </tr>
         </thead><tbody>`;
 

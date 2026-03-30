@@ -1012,7 +1012,9 @@ input,select,textarea { font-size:16px !important; }
             '<th data-col="cpc_mm" title="CPC Size (mm\u00B2)">E</th>' +
             '<th data-col="r1" title="Ring: Line Conductor Resistance r1 (\u03A9)">r1</th>' +
             '<th data-col="rn" title="Ring: Neutral Conductor Resistance rn (\u03A9)">rn</th>' +
-            '<th data-col="r1r2" title="Continuity R1+R2 (\u03A9)">R1R2</th>' +
+            '<th data-col="r2" title="Ring: CPC Resistance r2 (\u03A9)">r2</th>' +
+            '<th data-col="r1r2" title="Continuity R1+R2 (\u03A9)">R1+R2</th>' +
+            '<th data-col="r2_ring" title="Continuity R2 (\u03A9)">R2</th>' +
             '<th data-col="ir_test_v" class="desk-col" title="Insulation Resistance Test Voltage (V)">TV</th>' +
             '<th data-col="ir_ll" title="Insulation Resistance Line-Line (M\u03A9)">L-L</th>' +
             '<th data-col="ir_le" title="Insulation Resistance Line-Earth (M\u03A9)">L-E</th>' +
@@ -1055,7 +1057,9 @@ input,select,textarea { font-size:16px !important; }
           '<td data-col="cpc_mm">' + esc(c.cpc_mm || '') + '</td>' +
           '<td data-col="r1">' + esc(c.r1 || '') + '</td>' +
           '<td data-col="rn">' + esc(c.rn || '') + '</td>' +
+          '<td data-col="r2">' + esc(c.r2 || '') + '</td>' +
           '<td data-col="r1r2">' + esc(c.r1r2 || '') + '</td>' +
+          '<td data-col="r2_ring">' + esc(c.r2_ring || '') + '</td>' +
           '<td data-col="ir_test_v" class="desk-col">' + esc(c.ir_test_v || '') + '</td>' +
           '<td data-col="ir_ll">' + esc(c.ir_ll || '') + '</td>' +
           '<td data-col="ir_le">' + esc(c.ir_le || '') + '</td>' +
@@ -1942,7 +1946,7 @@ input,select,textarea { font-size:16px !important; }
        Skip: number, description, wiring_type, ref_method, ocpd_bsen, ocpd_type, ocpd_rating,
              rcd_bsen, rcd_type, rcd_idn, rcd_rating — these are design data, not test results */
     var testFields = [
-      'r1', 'rn', 'r1r2',
+      'r1', 'rn', 'r2', 'r1r2', 'r2_ring',
       'ir_test_v', 'ir_ll', 'ir_le',
       'zs_measured', 'rcd_time_x1'
     ];
