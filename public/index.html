@@ -788,6 +788,22 @@ input,select,textarea { font-size:16px !important; }
         '<button class="btn btn-ghost btn-sm mt-3" data-action="edit-board-header">Edit Board Details</button>' +
       '</div>';
 
+    /* Board reference photos */
+    html += '<div class="card p-3">' +
+      '<div class="flex items-center justify-between mb-2">' +
+        '<h4 class="text-xs font-bold text-slate-500 uppercase tracking-wide">Photos</h4>' +
+        '<div class="flex gap-1">' +
+          '<button class="btn btn-ghost btn-sm text-xs" data-action="board-photo-camera">&#128247;</button>' +
+          '<button class="btn btn-ghost btn-sm text-xs" data-action="board-photo-gallery">&#128193;</button>' +
+        '</div>' +
+        '<input type="file" accept="image/*" id="board-photo-upload" style="display:none" multiple>' +
+        '<input type="file" accept="image/*" capture="environment" id="board-photo-cam" style="display:none">' +
+      '</div>' +
+      '<div id="board-photos-grid" class="grid grid-cols-3 gap-2">' +
+        '<p class="text-xs text-slate-400 col-span-3">Loading...</p>' +
+      '</div>' +
+    '</div>';
+
     /* AI Tools */
     html += '<div class="card p-4">' +
       '<h3 class="font-semibold text-slate-800 mb-3">AI Tools</h3>' +
@@ -814,6 +830,23 @@ input,select,textarea { font-size:16px !important; }
           '<button class="btn btn-ghost text-xs" data-action="fill-lim-empty">' +
             '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
             'Fill LIM</button>' +
+        '</div>' +
+      '</div>' +
+      (b.num_phases === 'three' || b.num_phases === '3' || b.num_phases === 'TPN' ?
+      '<div class="mt-3 pt-3 border-t border-slate-100">' +
+        '<h4 class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">3-Phase Numbering</h4>' +
+        '<div class="grid grid-cols-2 gap-2">' +
+          '<button class="btn btn-ghost text-xs" data-action="renumber-tp" data-mode="L">L1/1, L2/1, L3/1...</button>' +
+          '<button class="btn btn-ghost text-xs" data-action="renumber-tp" data-mode="row">1L1, 1L2, 1L3...</button>' +
+        '</div>' +
+        '<p class="text-xs text-slate-400 mt-1">Renumbers existing circuits into 3-phase pattern</p>' +
+      '</div>' : '') +
+      '<div class="mt-3 pt-3 border-t border-slate-100">' +
+        '<h4 class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Text Format</h4>' +
+        '<div class="grid grid-cols-3 gap-2">' +
+          '<button class="btn btn-ghost text-xs" data-action="format-board-caps">ABC CAPS</button>' +
+          '<button class="btn btn-ghost text-xs" data-action="format-board-proper">Abc Proper</button>' +
+          '<button class="btn btn-ghost text-xs" data-action="format-board-spellcheck">&#9998; Spell</button>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -940,6 +973,76 @@ input,select,textarea { font-size:16px !important; }
     api('GET', '/boards/' + boardId + '/circuits').then(function(data) {
       state.circuits = data.map(mapCircuitFromDB);
       navigate('board-detail');
+      loadBoardPhotos(boardId);
+    }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  function loadBoardPhotos(boardId) {
+    api('GET', '/boards/' + boardId + '/photos').then(function(photos) {
+      var grid = document.getElementById('board-photos-grid');
+      if (!grid) return;
+      if (!photos.length) {
+        grid.innerHTML = '<p class="text-xs text-slate-400 col-span-3">No photos yet</p>';
+        return;
+      }
+      grid.innerHTML = photos.map(function(p) {
+        return '<div class="relative group" style="aspect-ratio:1;overflow:hidden;border-radius:.5rem;background:#f1f5f9">' +
+          '<img src="" data-photo-id="' + p.id + '" style="width:100%;height:100%;object-fit:cover;cursor:pointer" data-action="view-board-photo" data-id="' + p.id + '" alt="' + esc(p.caption || 'Board photo') + '">' +
+          '<button class="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs leading-none flex items-center justify-center" ' +
+            'data-action="delete-board-photo" data-id="' + p.id + '" style="font-size:10px">&#10007;</button>' +
+          (p.caption ? '<span class="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-1 py-0.5 truncate">' + esc(p.caption) + '</span>' : '') +
+        '</div>';
+      }).join('');
+      /* Lazy load thumbnails */
+      photos.forEach(function(p) {
+        var img = grid.querySelector('[data-photo-id="' + p.id + '"]');
+        if (img) {
+          api('GET', '/board-photos/' + p.id).then(function(full) {
+            img.src = full.photo;
+          }).catch(function(){});
+        }
+      });
+    }).catch(function() {
+      var grid = document.getElementById('board-photos-grid');
+      if (grid) grid.innerHTML = '<p class="text-xs text-slate-400 col-span-3">No photos yet</p>';
+    });
+  }
+
+  function uploadBoardPhotos(files) {
+    if (!state.currentBoard || !files.length) return;
+    var boardId = state.currentBoard.id;
+    var total = files.length;
+    var done = 0;
+    toast('Uploading ' + total + ' photo(s)...', 'info');
+
+    Array.from(files).forEach(function(file) {
+      compressImage(file).then(function(base64) {
+        var dataUrl = 'data:image/jpeg;base64,' + base64;
+        return api('POST', '/boards/' + boardId + '/photos', {
+          photo: dataUrl, caption: file.name.replace(/\.[^.]+$/, '')
+        });
+      }).then(function() {
+        done++;
+        if (done >= total) {
+          toast(total + ' photo(s) uploaded', 'success');
+          loadBoardPhotos(boardId);
+        }
+      }).catch(function(err) {
+        done++;
+        toast('Upload error: ' + err.message, 'error');
+      });
+    });
+  }
+
+  function viewBoardPhoto(photoId) {
+    api('GET', '/board-photos/' + photoId).then(function(p) {
+      openSheet(
+        '<div class="text-center">' +
+          '<img src="' + p.photo + '" style="max-width:100%;max-height:70vh;border-radius:.5rem" alt="Board photo">' +
+          (p.caption ? '<p class="text-sm text-slate-500 mt-2">' + esc(p.caption) + '</p>' : '') +
+          '<button class="btn btn-danger btn-sm mt-3" data-action="delete-board-photo" data-id="' + p.id + '">Delete Photo</button>' +
+        '</div>'
+      );
     }).catch(function(err) { toast(err.message, 'error'); });
   }
 
@@ -1154,6 +1257,9 @@ input,select,textarea { font-size:16px !important; }
           '<input type="file" id="ai-scan-file-cam" accept="image/*" style="display:none">' +
           '<div id="ai-scan-preview" class="mt-2"></div>' +
           '</div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Notes for AI <span class="text-slate-400 font-normal">(optional)</span></label>' +
+          '<input type="text" id="ai-scan-hint" class="input-field" placeholder="e.g. 3-phase board, ways 5-8 are spares, schedule is for DB3">' +
+        '</div>' +
         '<button class="btn btn-primary w-full" data-action="run-photo-scan">' +
           '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>' +
           'Analyse Photo</button>' +
@@ -1172,22 +1278,48 @@ input,select,textarea { font-size:16px !important; }
   function compressImage(file, maxWidth, quality) {
     maxWidth = maxWidth || 1600;
     quality = quality || 0.8;
-    return new Promise(function(resolve) {
+    return new Promise(function(resolve, reject) {
+      /* Timeout — if image doesn't load in 30s, try sending raw base64 */
+      var timeout = setTimeout(function() {
+        console.warn('compressImage: timeout, falling back to raw FileReader');
+        var reader = new FileReader();
+        reader.onload = function() { resolve(reader.result.split(',')[1]); };
+        reader.onerror = function() { reject(new Error('Could not read image file')); };
+        reader.readAsDataURL(file);
+      }, 30000);
+
       var img = new Image();
       img.onload = function() {
-        var canvas = document.createElement('canvas');
-        var scale = Math.min(1, maxWidth / img.width);
-        canvas.width = img.width * scale;
-        canvas.height = img.height * scale;
-        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', quality).split(',')[1]);
+        clearTimeout(timeout);
+        try {
+          var canvas = document.createElement('canvas');
+          var scale = Math.min(1, maxWidth / img.width);
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          var result = canvas.toDataURL('image/jpeg', quality).split(',')[1];
+          URL.revokeObjectURL(img.src);
+          resolve(result);
+        } catch(e) {
+          URL.revokeObjectURL(img.src);
+          reject(e);
+        }
+      };
+      img.onerror = function() {
+        clearTimeout(timeout);
+        URL.revokeObjectURL(img.src);
+        /* Image failed to decode (HEIC, corrupt, etc.) — try raw FileReader */
+        var reader = new FileReader();
+        reader.onload = function() { resolve(reader.result.split(',')[1]); };
+        reader.onerror = function() { reject(new Error('Could not read image')); };
+        reader.readAsDataURL(file);
       };
       img.src = URL.createObjectURL(file);
     });
   }
 
   /* Scan state for multi-turn conversation with AI about the photo */
-  var _scanState = { base64: null, keyId: null, history: [], updates: null, systemPrompt: '' };
+  var _scanState = { base64: null, keyId: null, history: [], updates: null, boardUpdates: null, systemPrompt: '' };
   var _scanAbort = null; /* AbortController for cancellable scans */
   var _bulkAbort = false; /* flag for cancelling bulk scan */
 
@@ -1243,7 +1375,14 @@ input,select,textarea { font-size:16px !important; }
       'Include spare/blank ways. Be precise on BS(EN) standards: MCBs=60898, RCBOs=61009, MCCBs=60947-2. ' +
       'If an RCD protects a group of circuits, add rcd_bsen/rcd_type/rcd_idn to each circuit in that group. ' +
       'Do NOT skip outgoing ways. Do NOT reorder. Top-to-bottom after the main switch. ' +
-      'If you can identify the main switch, return its details separately in the "main_switch" field.';
+      'If you can identify the main switch, return its details separately in the "main_switch" field.\n\n' +
+      'ALSO extract board header info if visible:\n' +
+      '- "board_updates": {ref, location, dist_type (manufacturer/model), dist_bsen, dist_rating, ' +
+      'ocpd_bsen, ocpd_type, ocpd_rating (main switch), num_phases, supplied_from}\n' +
+      '- Look for: board reference labels (DB1, MSDB), manufacturer plates (Schneider, Hager, MEM, etc.), ' +
+      'location labels, "fed from" labels, phase indicators, main switch ratings.\n' +
+      '- If this is a circuit schedule/chart (printed paper), extract all circuit data from it — these are more accurate than reading device labels.\n' +
+      '- If you see BOTH a board photo AND a schedule, prefer the schedule data for descriptions/ratings.';
 
     var prompt = 'Analyse this UK distribution board photo for a BS 7671 EICR (Electrical Installation Condition Report).\n\n' +
       'CRITICAL RULES:\n' +
@@ -1258,7 +1397,15 @@ input,select,textarea { font-size:16px !important; }
       '9. Include wiring_type if visible at entries: A=T+E flat, B=T+E in metal conduit, C=T+E in PVC conduit, F=SWA, H=MICC.\n\n' +
       'Return ONLY valid JSON:\n' +
       '{"main_switch": {"description":"Main Switch","ocpd_bsen":"60947-3","ocpd_type":"Isolator","ocpd_rating":"100","poles":"TP&N"}, ' +
+      '"board_updates": {"ref":"DB1","location":"Plant Room","dist_type":"Schneider Isobar","dist_bsen":"61439","num_phases":"3","supplied_from":"MSDB Way 3"}, ' +
       '"updates": [{"number":"1","description":"Lighting","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","wiring_type":"A","rcd_bsen":"","rcd_type":"","rcd_idn":""}]}';
+
+    /* Append user hint if provided */
+    var hintEl = document.getElementById('ai-scan-hint');
+    var hint = hintEl ? hintEl.value.trim() : '';
+    if (hint) {
+      prompt += '\n\nADDITIONAL INFO FROM INSPECTOR: ' + hint;
+    }
 
     updateScanStatus('Compressing image...');
     compressImage(fileEl.files[0]).then(function(base64) {
@@ -1300,7 +1447,8 @@ input,select,textarea { font-size:16px !important; }
       });
       _scanState.updates = parsed.updates;
       _scanState.mainSwitch = parsed.main_switch || null;
-      showScanReview(resultEl, parsed.updates, parsed.main_switch);
+      _scanState.boardUpdates = parsed.board_updates || null;
+      showScanReview(resultEl, parsed.updates, parsed.main_switch, parsed.board_updates);
 
     }).catch(function(err) {
       clearInterval(timer);
@@ -1312,8 +1460,27 @@ input,select,textarea { font-size:16px !important; }
   }
 
   /* Show extracted circuits for review before applying */
-  function showScanReview(container, updates, mainSwitch) {
+  function showScanReview(container, updates, mainSwitch, boardUpdates) {
     var html = '<div class="mt-3">';
+
+    /* Board header info from photo */
+    if (boardUpdates) {
+      var bdParts = [];
+      if (boardUpdates.ref) bdParts.push('<strong>Ref:</strong> ' + esc(boardUpdates.ref));
+      if (boardUpdates.location) bdParts.push('<strong>Location:</strong> ' + esc(boardUpdates.location));
+      if (boardUpdates.dist_type) bdParts.push('<strong>Type:</strong> ' + esc(boardUpdates.dist_type));
+      if (boardUpdates.dist_bsen) bdParts.push('<strong>BS(EN):</strong> ' + esc(boardUpdates.dist_bsen));
+      if (boardUpdates.num_phases) bdParts.push('<strong>Phases:</strong> ' + esc(boardUpdates.num_phases));
+      if (boardUpdates.supplied_from) bdParts.push('<strong>Fed from:</strong> ' + esc(boardUpdates.supplied_from));
+      if (boardUpdates.dist_rating) bdParts.push('<strong>Rating:</strong> ' + esc(boardUpdates.dist_rating));
+      if (bdParts.length) {
+        html += '<div class="p-2 mb-2 bg-purple-50 border border-purple-200 rounded text-sm">' +
+          '<div class="font-bold text-purple-700 mb-1">&#128203; Board Header Data</div>' +
+          '<div class="text-purple-600 text-xs space-y-0.5">' + bdParts.join(' &bull; ') + '</div>' +
+          '<p class="text-xs text-purple-400 mt-1">Will update board header on apply</p>' +
+        '</div>';
+      }
+    }
 
     /* Main switch info (not a circuit — goes in board header) */
     if (mainSwitch) {
@@ -1383,6 +1550,19 @@ input,select,textarea { font-size:16px !important; }
       }
     });
 
+    var headerUpdated = false;
+
+    /* Apply board_updates to current board header */
+    if (_scanState.boardUpdates && state.currentBoard) {
+      var bu = _scanState.boardUpdates;
+      var boardFields = ['ref', 'location', 'dist_type', 'dist_bsen', 'dist_rating',
+        'ocpd_bsen', 'ocpd_type', 'ocpd_rating', 'num_phases', 'supplied_from'];
+      boardFields.forEach(function(f) {
+        if (bu[f]) state.currentBoard[f] = bu[f];
+      });
+      headerUpdated = true;
+    }
+
     /* Apply main switch data to current board header if available */
     if (_scanState.mainSwitch && state.currentBoard) {
       var ms = _scanState.mainSwitch;
@@ -1390,14 +1570,18 @@ input,select,textarea { font-size:16px !important; }
       if (ms.ocpd_type) state.currentBoard.ocpd_type = ms.ocpd_type;
       if (ms.ocpd_rating) state.currentBoard.ocpd_rating = ms.ocpd_rating;
       if (ms.poles) state.currentBoard.poles = ms.poles;
-      /* Save board header update */
+      headerUpdated = true;
+    }
+
+    /* Save board header if anything changed */
+    if (headerUpdated) {
       api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
     }
 
     closeSheet();
     navigate('board-detail');
     var msg = _scanState.updates.length + ' circuits applied';
-    if (_scanState.mainSwitch) msg += ' (main switch → board header)';
+    if (headerUpdated) msg += ' + board header updated';
     toast(msg + ' — save to persist', 'success');
   }
 
@@ -1429,8 +1613,8 @@ input,select,textarea { font-size:16px !important; }
     }, 1000);
 
     var refinePrompt = 'The user says: "' + correction + '"\n\n' +
-      'Based on this correction, update the circuit list. Return the FULL updated JSON with ALL circuits (not just the changed ones). ' +
-      'Return ONLY valid JSON: {"updates": [...]}';
+      'Based on this correction, update the circuit list and board header if relevant. Return the FULL updated JSON with ALL circuits (not just the changed ones). ' +
+      'Return ONLY valid JSON: {"board_updates": {...}, "updates": [...]}';
 
     api('POST', '/ai/process', {
       key_id: _scanState.keyId,
@@ -1459,7 +1643,8 @@ input,select,textarea { font-size:16px !important; }
           return na - nb;
         });
         _scanState.updates = parsed.updates;
-        showScanReview(resultEl, parsed.updates);
+        if (parsed.board_updates) _scanState.boardUpdates = parsed.board_updates;
+        showScanReview(resultEl, parsed.updates, _scanState.mainSwitch, _scanState.boardUpdates);
         toast('Updated to ' + parsed.updates.length + ' circuits — review and apply', 'info');
       } else {
         toast('No updates in AI response', 'error');
@@ -1542,7 +1727,7 @@ input,select,textarea { font-size:16px !important; }
     try {
       var directParse = JSON.parse(raw.replace(/```json|```/g, '').trim());
       if (directParse.updates && directParse.updates.length) {
-        applyParsedCircuits(directParse.updates, directParse.main_switch, resultEl);
+        applyParsedCircuits(directParse.updates, directParse.main_switch, resultEl, directParse.board_updates);
         return;
       }
     } catch(ex) { /* Not valid JSON — send to AI */ }
@@ -1567,7 +1752,7 @@ input,select,textarea { font-size:16px !important; }
       if (!jsonMatch) { resultEl.innerHTML = '<p class="text-red-500">Could not parse. Try pasting as JSON.</p>'; return; }
       var parsed = JSON.parse(jsonMatch[0]);
       if (parsed.updates && parsed.updates.length) {
-        applyParsedCircuits(parsed.updates, parsed.main_switch, resultEl);
+        applyParsedCircuits(parsed.updates, parsed.main_switch, resultEl, parsed.board_updates);
       } else {
         resultEl.innerHTML = '<p class="text-amber-600">No circuits found in pasted data.</p>';
       }
@@ -1576,7 +1761,7 @@ input,select,textarea { font-size:16px !important; }
     });
   }
 
-  function applyParsedCircuits(updates, mainSwitch, resultEl) {
+  function applyParsedCircuits(updates, mainSwitch, resultEl, boardUpdates) {
     updates.sort(function(a, b) {
       var na = parseInt((a.number || '').replace(/\D.*/, '')) || 999;
       var nb = parseInt((b.number || '').replace(/\D.*/, '')) || 999;
@@ -1587,15 +1772,29 @@ input,select,textarea { font-size:16px !important; }
       if (existing !== -1) { Object.assign(state.circuits[existing], u); }
       else { state.circuits.push(u); }
     });
+    var headerUpdated = false;
+    if (boardUpdates && state.currentBoard) {
+      var boardFields = ['ref', 'location', 'dist_type', 'dist_bsen', 'dist_rating',
+        'ocpd_bsen', 'ocpd_type', 'ocpd_rating', 'num_phases', 'supplied_from'];
+      boardFields.forEach(function(f) {
+        if (boardUpdates[f]) state.currentBoard[f] = boardUpdates[f];
+      });
+      headerUpdated = true;
+    }
     if (mainSwitch && state.currentBoard) {
       if (mainSwitch.ocpd_bsen) state.currentBoard.ocpd_bsen = mainSwitch.ocpd_bsen;
       if (mainSwitch.ocpd_type) state.currentBoard.ocpd_type = mainSwitch.ocpd_type;
       if (mainSwitch.ocpd_rating) state.currentBoard.ocpd_rating = mainSwitch.ocpd_rating;
+      headerUpdated = true;
+    }
+    if (headerUpdated) {
       api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
     }
     closeSheet();
     navigate('board-detail');
-    toast(updates.length + ' circuits imported — save to persist', 'success');
+    var msg = updates.length + ' circuits imported';
+    if (headerUpdated) msg += ' + board header updated';
+    toast(msg + ' — save to persist', 'success');
   }
 
   /* ===== BULK PHOTO SCAN — multiple DB photos at once ===== */
@@ -1607,7 +1806,7 @@ input,select,textarea { font-size:16px !important; }
 
     openSheet(
       '<h3 class="text-lg font-bold text-slate-800 mb-4">Bulk Photo Scan</h3>' +
-      '<p class="text-sm text-slate-500 mb-3">Select multiple DB photos. Each will be scanned and circuits added to this board.</p>' +
+      '<p class="text-sm text-slate-500 mb-3">Select multiple photos of this board — board photos, circuit schedules, labels. AI merges all data for maximum extraction.</p>' +
       '<div class="space-y-3">' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">AI Model</label>' +
           '<select id="bulk-scan-key" class="select-field">' + keyOpts + '</select></div>' +
@@ -1631,38 +1830,102 @@ input,select,textarea { font-size:16px !important; }
     var total = files.length;
     var completed = 0;
     var allUpdates = [];
+    var mergedBoardUpdates = {};
+    var mergedMainSwitch = null;
+
+    /* Enhanced system prompt — same as single photo scan (unified brain) */
+    var bulkSystemPrompt = 'You are a BS 7671 qualified electrical inspector filling out Form 4 — Schedule of Circuit Details and Test Results for an EICR. ' +
+      'Extract every OUTGOING circuit from the distribution board photo. ' +
+      'CRITICAL: Do NOT include the main switch/isolator/incomer as a circuit — it belongs in the board header, not the test schedule. ' +
+      'Only include outgoing ways: MCBs, RCBOs, fuses that feed final circuits. ' +
+      'Number circuits sequentially from 1. Include spare/blank ways. ' +
+      'Be precise on BS(EN) standards: MCBs=60898, RCBOs=61009, MCCBs=60947-2. ' +
+      'If an RCD protects a group, add rcd_bsen/rcd_type/rcd_idn to each circuit in that group. ' +
+      'If you can identify the main switch, return it in "main_switch".\n' +
+      'ALSO extract board header info if visible: "board_updates": {ref, location, dist_type, dist_bsen, dist_rating, ocpd_bsen, ocpd_type, ocpd_rating, num_phases, supplied_from}\n' +
+      'If this is a circuit schedule/chart (printed paper), extract all circuit data from it — these are MORE ACCURATE than reading device labels.\n' +
+      'If you see both a board photo AND a schedule, prefer the schedule data.';
+
+    var bulkPrompt = 'Analyse this UK distribution board photo for a BS 7671 EICR.\n' +
+      'Extract outgoing circuits (NOT main switch), board header data, and main switch info.\n' +
+      'Number circuits sequentially from 1. Include spares. MCBs=60898, RCBOs=61009.\n' +
+      'Return ONLY valid JSON:\n' +
+      '{"main_switch": {"description":"Main Switch","ocpd_bsen":"60947-3","ocpd_type":"Isolator","ocpd_rating":"100","poles":"TP&N"}, ' +
+      '"board_updates": {"ref":"DB1","location":"Plant Room","dist_type":"Schneider Isobar","num_phases":"3"}, ' +
+      '"updates": [{"number":"1","description":"Lighting","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6"}]}';
 
     progressEl.innerHTML = '<div class="space-y-1"><p class="font-medium">Scanning ' + total + ' photos...</p>' +
       '<div id="bulk-log"></div>' +
       '<button class="btn btn-danger btn-sm w-full mt-2" data-action="cancel-bulk-scan">Cancel Bulk Scan</button></div>';
 
+    function applyBulkResults() {
+      /* Merge circuits — same-numbered circuits from later photos overwrite earlier ones (schedule > board photo) */
+      var circuitMap = {};
+      allUpdates.forEach(function(u) {
+        var key = String(u.number);
+        if (circuitMap[key]) {
+          /* Merge: later data fills in blanks, overwrites with non-empty values */
+          Object.keys(u).forEach(function(k) {
+            if (u[k] && u[k] !== '' && u[k] !== 'Spare') circuitMap[key][k] = u[k];
+          });
+        } else {
+          circuitMap[key] = Object.assign({}, u);
+        }
+      });
+
+      var mergedCircuits = Object.values(circuitMap);
+      mergedCircuits.sort(function(a, b) {
+        var na = parseInt((a.number || '').replace(/\D.*/, '')) || 999;
+        var nb = parseInt((b.number || '').replace(/\D.*/, '')) || 999;
+        return na - nb;
+      });
+
+      /* Apply circuits */
+      mergedCircuits.forEach(function(u) {
+        var existing = state.circuits.findIndex(function(c) { return String(c.number) === String(u.number); });
+        if (existing !== -1) { Object.assign(state.circuits[existing], u); }
+        else { state.circuits.push(u); }
+      });
+
+      /* Apply board header updates */
+      var headerUpdated = false;
+      if (Object.keys(mergedBoardUpdates).length && state.currentBoard) {
+        var boardFields = ['ref', 'location', 'dist_type', 'dist_bsen', 'dist_rating',
+          'ocpd_bsen', 'ocpd_type', 'ocpd_rating', 'num_phases', 'supplied_from'];
+        boardFields.forEach(function(f) {
+          if (mergedBoardUpdates[f]) state.currentBoard[f] = mergedBoardUpdates[f];
+        });
+        headerUpdated = true;
+      }
+      if (mergedMainSwitch && state.currentBoard) {
+        if (mergedMainSwitch.ocpd_bsen) state.currentBoard.ocpd_bsen = mergedMainSwitch.ocpd_bsen;
+        if (mergedMainSwitch.ocpd_type) state.currentBoard.ocpd_type = mergedMainSwitch.ocpd_type;
+        if (mergedMainSwitch.ocpd_rating) state.currentBoard.ocpd_rating = mergedMainSwitch.ocpd_rating;
+        if (mergedMainSwitch.poles) state.currentBoard.poles = mergedMainSwitch.poles;
+        headerUpdated = true;
+      }
+      if (headerUpdated) {
+        api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
+      }
+
+      closeSheet();
+      navigate('board-detail');
+      var msg = mergedCircuits.length + ' circuits from ' + total + ' photos';
+      if (headerUpdated) msg += ' + board header updated';
+      toast(msg + ' — save to persist', 'success');
+    }
+
     function scanNext() {
       if (_bulkAbort) {
         var log = document.getElementById('bulk-log');
         if (log) log.innerHTML += '<p class="text-amber-600 font-medium mt-1">Cancelled. ' + allUpdates.length + ' circuits from ' + completed + '/' + total + ' photos.</p>';
-        if (allUpdates.length) {
-          allUpdates.forEach(function(u) {
-            var existing = state.circuits.findIndex(function(c) { return String(c.number) === String(u.number); });
-            if (existing !== -1) { Object.assign(state.circuits[existing], u); }
-            else { state.circuits.push(u); }
-          });
-          toast(allUpdates.length + ' circuits applied from partial scan', 'info');
-          navigate('board-detail');
-        }
+        if (allUpdates.length) applyBulkResults();
         return;
       }
 
       if (completed >= total) {
-        /* All done — apply all results */
         if (allUpdates.length) {
-          allUpdates.forEach(function(u) {
-            var existing = state.circuits.findIndex(function(c) { return String(c.number) === String(u.number); });
-            if (existing !== -1) { Object.assign(state.circuits[existing], u); }
-            else { state.circuits.push(u); }
-          });
-          closeSheet();
-          navigate('board-detail');
-          toast(allUpdates.length + ' circuits from ' + total + ' photos — save to persist', 'success');
+          applyBulkResults();
         } else {
           progressEl.innerHTML += '<p class="text-amber-600 mt-2">No circuits extracted from any photo.</p>';
         }
@@ -1681,24 +1944,43 @@ input,select,textarea { font-size:16px !important; }
         }
         return api('POST', '/ai/process', {
           key_id: keyEl.value,
-          prompt: 'Extract outgoing circuits from this distribution board photo. Do NOT include main switch. Number sequentially. Return JSON: {"updates": [...]}',
+          prompt: bulkPrompt,
           image_base64: base64,
-          system_prompt: 'Extract circuits from a UK distribution board for EICR Form 4. Exclude main switches. Include spare ways.'
+          system_prompt: bulkSystemPrompt
         });
       }).then(function(data) {
         var result = data.result || '';
         var jsonMatch = result.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           var parsed = JSON.parse(jsonMatch[0]);
-          if (parsed.updates) {
-            /* Renumber based on existing circuits */
-            var offset = state.circuits.length + allUpdates.length;
-            parsed.updates.forEach(function(u, i) { u.number = String(offset + i + 1); });
+
+          /* Merge board_updates — later photos fill gaps */
+          if (parsed.board_updates) {
+            Object.keys(parsed.board_updates).forEach(function(k) {
+              if (parsed.board_updates[k] && parsed.board_updates[k] !== '') {
+                mergedBoardUpdates[k] = parsed.board_updates[k];
+              }
+            });
+            if (log) {
+              var bdKeys = Object.keys(parsed.board_updates).filter(function(k) { return parsed.board_updates[k]; });
+              if (bdKeys.length) log.innerHTML += '<p class="text-purple-600 text-xs">&#128203; Board header: ' + bdKeys.join(', ') + '</p>';
+            }
+          }
+
+          /* Capture main switch — later photo overwrites */
+          if (parsed.main_switch) {
+            mergedMainSwitch = parsed.main_switch;
+            if (log) log.innerHTML += '<p class="text-blue-600 text-xs">⚡ Main switch detected</p>';
+          }
+
+          if (parsed.updates && parsed.updates.length) {
             allUpdates = allUpdates.concat(parsed.updates);
             if (log) log.innerHTML += '<p class="text-green-600">&#10003; ' + parsed.updates.length + ' circuits found</p>';
+          } else {
+            if (log) log.innerHTML += '<p class="text-amber-500">&#9888; No circuits in this photo (may be header/schedule only)</p>';
           }
         } else {
-          if (log) log.innerHTML += '<p class="text-amber-500">&#9888; No circuits found</p>';
+          if (log) log.innerHTML += '<p class="text-amber-500">&#9888; No data extracted</p>';
         }
         completed++;
         scanNext();
@@ -1960,21 +2242,31 @@ input,select,textarea { font-size:16px !important; }
     if (state.observations.length === 0) {
       html += '<div class="text-center py-8 text-slate-400"><p class="font-medium">No observations recorded</p></div>';
     } else {
+      /* Bulk format buttons */
+      html += '<div class="flex gap-2">' +
+        '<button class="btn btn-ghost btn-sm flex-1 text-xs" data-action="format-obs-caps">ABC ALL CAPS</button>' +
+        '<button class="btn btn-ghost btn-sm flex-1 text-xs" data-action="format-obs-proper">Abc Proper Case</button>' +
+        '<button class="btn btn-ghost btn-sm flex-1 text-xs" data-action="format-obs-spellcheck">&#9998; Spell Check</button>' +
+      '</div>';
       state.observations.forEach(function(o) {
         var badgeClass = o.code ? 'badge-' + o.code.toLowerCase() : '';
-        html += '<div class="card p-4 active:bg-slate-50 transition-colors" data-action="edit-observation" data-id="' + o.id + '">' +
+        html += '<div class="card p-4">' +
           '<div class="flex items-start justify-between mb-2">' +
             '<span class="badge ' + badgeClass + '">' + esc(o.code || '?') + '</span>' +
-            '<div class="flex gap-1">' +
-              '<span class="text-xs text-slate-400">tap to edit</span>' +
-              '<button class="p-1 rounded active:bg-slate-100" data-action="delete-observation" data-id="' + o.id + '">' +
-                '<svg class="w-4 h-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5z"/></svg>' +
-              '</button>' +
-            '</div>' +
+            '<span class="text-xs text-slate-400">#' + (o.item_no || o.id) + '</span>' +
           '</div>' +
           '<p class="text-sm text-slate-700">' + esc(o.description || '') + '</p>' +
           (o.location ? '<p class="text-xs text-slate-500 mt-1">Location: ' + esc(o.location) + '</p>' : '') +
+          (o.materials ? '<p class="text-xs text-amber-600 mt-1">Materials: ' + esc(o.materials) + '</p>' : '') +
           (o.photo ? '<img src="' + o.photo + '" class="photo-thumb mt-2" alt="Photo">' : '') +
+          '<div class="flex gap-2 mt-3 pt-2 border-t border-slate-100">' +
+            '<button class="btn btn-ghost btn-sm flex-1" data-action="edit-observation" data-id="' + o.id + '">' +
+              '<svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z"/></svg>' +
+              ' Edit</button>' +
+            '<button class="btn btn-sm flex-1" style="background:#fee2e2;color:#dc2626" data-action="delete-observation" data-id="' + o.id + '">' +
+              '<svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5z"/></svg>' +
+              ' Delete</button>' +
+          '</div>' +
         '</div>';
       });
     }
@@ -2017,10 +2309,17 @@ input,select,textarea { font-size:16px !important; }
           textareaWithMic('obs-description', 'Describe the observation/defect...', o.description, 3) + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Location</label>' +
           inputWithMic('obs-location', 'e.g. Kitchen DB, Way 3', o.location) + '</div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Materials Required</label>' +
+          inputWithMic('obs-materials', 'e.g. 1x DP 40A RCBO, 2.5mm T+E 10m', o.materials) + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Photo</label>' +
           (o.photo ? '<div id="obs-existing-photo"><img src="' + o.photo + '" style="max-height:120px;border-radius:.5rem;margin-bottom:.5rem"><br>' +
             '<button class="btn btn-danger btn-sm mb-2" data-action="remove-obs-photo">Remove Photo</button></div>' : '') +
-          '<input type="file" id="obs-photo" accept="image/*" class="input-field" style="padding:.5rem">' +
+          '<div class="flex gap-2 mb-2">' +
+            '<button class="btn btn-primary btn-sm flex-1" data-action="obs-take-photo">&#128247; Camera</button>' +
+            '<button class="btn btn-ghost btn-sm flex-1" data-action="obs-choose-gallery">&#128193; Gallery</button>' +
+          '</div>' +
+          '<input type="file" id="obs-photo" accept="image/*" style="display:none">' +
+          '<input type="file" id="obs-photo-cam" accept="image/*" capture="environment" style="display:none">' +
           '<div id="obs-photo-preview"></div></div>' +
         '<button class="btn btn-primary w-full mt-4" data-action="save-observation">Save Observation</button>' +
       '</div>'
@@ -2063,14 +2362,18 @@ input,select,textarea { font-size:16px !important; }
     var rawDesc = desc.value.trim();
     var obsCode = code.value;
     var location = (document.getElementById('obs-location') || {}).value || '';
+    var materials = (document.getElementById('obs-materials') || {}).value || '';
 
-    /* Get photo data first */
+    /* Get photo data first — check camera input then gallery */
     var photoInput = document.getElementById('obs-photo');
+    var photoCam = document.getElementById('obs-photo-cam');
     var getPhoto = function(cb) {
-      if (photoInput && photoInput.files && photoInput.files[0]) {
-        var reader = new FileReader();
-        reader.onload = function(e) { cb(e.target.result); };
-        reader.readAsDataURL(photoInput.files[0]);
+      var fileInput = (photoCam && photoCam.files && photoCam.files[0]) ? photoCam :
+                      (photoInput && photoInput.files && photoInput.files[0]) ? photoInput : null;
+      if (fileInput) {
+        compressImage(fileInput.files[0]).then(function(base64) {
+          cb('data:image/jpeg;base64,' + base64);
+        }).catch(function() { cb(null); });
       } else { cb(null); }
     };
 
@@ -2079,7 +2382,7 @@ input,select,textarea { font-size:16px !important; }
     if (!provider) {
       /* No AI key — save raw and skip mapping */
       getPhoto(function(photo) {
-        doSaveObservation(editId, { code: obsCode, description: rawDesc, location: location, photo: photo });
+        doSaveObservation(editId, { code: obsCode, description: rawDesc, location: location, materials: materials, photo: photo });
       });
       return;
     }
@@ -2120,7 +2423,7 @@ input,select,textarea { font-size:16px !important; }
         closeSheet();
 
         getPhoto(function(photo) {
-          var body = { code: obsCode, description: finalDesc, location: location };
+          var body = { code: obsCode, description: finalDesc, location: location, materials: materials };
           if (photo) body.photo = photo;
 
           doSaveObservation(editId, body, function() {
@@ -2149,7 +2452,7 @@ input,select,textarea { font-size:16px !important; }
 
       } catch(e) {
         getPhoto(function(photo) {
-          doSaveObservation(editId, { code: obsCode, description: rawDesc, location: location, photo: photo });
+          doSaveObservation(editId, { code: obsCode, description: rawDesc, location: location, materials: materials, photo: photo });
         });
         if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Observation'; }
       }
@@ -2181,10 +2484,198 @@ input,select,textarea { font-size:16px !important; }
 
   function deleteObservation(id) {
     api('DELETE', '/observations/' + id).then(function() {
-      state.observations = state.observations.filter(function(o) { return o.id !== id; });
+      state.observations = state.observations.filter(function(o) { return String(o.id) !== String(id); });
       toast('Observation deleted', 'success');
       navigate('site-detail', {currentSiteTab: 'observations'});
     }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  /* ===== OBSERVATION TEXT FORMATTING ===== */
+  function formatObsAllCaps() {
+    if (!state.observations.length || !state.currentSite) return;
+    var promises = state.observations.map(function(o) {
+      var upper = (o.description || '').toUpperCase();
+      var locUpper = (o.location || '').toUpperCase();
+      if (upper === o.description && locUpper === o.location) return Promise.resolve(null);
+      o.description = upper;
+      o.location = locUpper;
+      return api('PUT', '/observations/' + o.id, { description: upper, location: locUpper });
+    });
+    Promise.all(promises).then(function() {
+      toast('All observations → CAPS', 'success');
+      navigate('site-detail', { currentSiteTab: 'observations' });
+    }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  function toProperCase(str) {
+    if (!str) return str;
+    return str.replace(/\b\w+/g, function(w) {
+      /* Keep common abbreviations uppercase */
+      var keep = ['DB','RCD','MCB','RCBO','FCU','SWA','MICC','TPN','DP','SPN','AC','A','BS','EN','EICR','IP','LED','EL','UV','PIR','MK','CU','PVC'];
+      if (keep.indexOf(w.toUpperCase()) !== -1) return w.toUpperCase();
+      return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+    });
+  }
+
+  function formatObsProperCase() {
+    if (!state.observations.length || !state.currentSite) return;
+    var promises = state.observations.map(function(o) {
+      var proper = toProperCase(o.description || '');
+      var locProper = toProperCase(o.location || '');
+      if (proper === o.description && locProper === o.location) return Promise.resolve(null);
+      o.description = proper;
+      o.location = locProper;
+      return api('PUT', '/observations/' + o.id, { description: proper, location: locProper });
+    });
+    Promise.all(promises).then(function() {
+      toast('All observations → Proper Case', 'success');
+      navigate('site-detail', { currentSiteTab: 'observations' });
+    }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  function formatObsSpellCheck() {
+    if (!state.observations.length || !state.currentSite) return;
+    var provider = getSelectedProvider();
+    if (!provider) { toast('Add an AI key in Settings first', 'error'); return; }
+
+    toast('Checking spelling & grammar...', 'info');
+    var allText = state.observations.map(function(o, i) {
+      return (i + 1) + '. [' + (o.code || '') + '] ' + (o.description || '') + ' | Location: ' + (o.location || '');
+    }).join('\n');
+
+    api('POST', '/ai/process', {
+      key_id: provider.id,
+      system_prompt: 'You are a spell-checker and grammar fixer for electrical inspection reports (BS 7671 EICR). ' +
+        'Fix spelling errors, grammar issues, and punctuation. Keep electrical terms correct (e.g. RCBO, MCB, RCD, BS(EN), etc.). ' +
+        'Keep the meaning identical. Do NOT add or remove observations. Return ONLY valid JSON.',
+      prompt: 'Fix spelling and grammar in these EICR observations. Return JSON array with corrected text:\n\n' + allText +
+        '\n\nReturn: {"corrections": [{"index": 0, "description": "corrected text", "location": "corrected location"}, ...]}\n' +
+        'Only include entries that have changes. If nothing to fix, return {"corrections": []}'
+    }).then(function(data) {
+      var result = data.result || '';
+      var jsonMatch = result.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) { toast('No corrections needed', 'success'); return; }
+      var parsed = JSON.parse(jsonMatch[0]);
+      if (!parsed.corrections || !parsed.corrections.length) { toast('No corrections needed', 'success'); return; }
+
+      var updatePromises = parsed.corrections.map(function(c) {
+        var obs = state.observations[c.index];
+        if (!obs) return Promise.resolve(null);
+        var updates = {};
+        if (c.description && c.description !== obs.description) { obs.description = c.description; updates.description = c.description; }
+        if (c.location && c.location !== obs.location) { obs.location = c.location; updates.location = c.location; }
+        if (Object.keys(updates).length) return api('PUT', '/observations/' + obs.id, updates);
+        return Promise.resolve(null);
+      });
+      return Promise.all(updatePromises).then(function() {
+        toast(parsed.corrections.length + ' observation(s) corrected', 'success');
+        navigate('site-detail', { currentSiteTab: 'observations' });
+      });
+    }).catch(function(err) { toast('Spell check error: ' + err.message, 'error'); });
+  }
+
+  /* ===== 3-PHASE RENUMBERING ===== */
+  function renumberTP(mode) {
+    if (!state.circuits.length) { toast('No circuits to renumber', 'error'); return; }
+    var phases = ['L1', 'L2', 'L3'];
+    var count = state.circuits.length;
+
+    state.circuits.forEach(function(c, i) {
+      var row = Math.floor(i / 3) + 1;
+      var phase = phases[i % 3];
+      if (mode === 'L') {
+        /* L1/1, L2/1, L3/1, L1/2, L2/2, L3/2 */
+        c.number = phase + '/' + row;
+      } else {
+        /* 1L1, 1L2, 1L3, 2L1, 2L2, 2L3 */
+        c.number = row + phase;
+      }
+    });
+
+    saveAllCircuits(true);
+    toast(count + ' circuits renumbered to 3-phase (' + mode + ' format)', 'success');
+    navigate('board-detail');
+  }
+
+  /* ===== BOARD TEXT FORMATTING ===== */
+  function formatBoardAllCaps() {
+    if (!state.circuits.length && !state.currentBoard) return;
+    /* Format circuit descriptions */
+    state.circuits.forEach(function(c) {
+      if (c.description) c.description = c.description.toUpperCase();
+      if (c.location) c.location = c.location.toUpperCase();
+    });
+    /* Format board header text fields */
+    if (state.currentBoard) {
+      ['ref', 'location', 'supplied_from', 'dist_type'].forEach(function(f) {
+        if (state.currentBoard[f]) state.currentBoard[f] = state.currentBoard[f].toUpperCase();
+      });
+      api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
+    }
+    saveAllCircuits(true);
+    toast('Board & circuits → CAPS', 'success');
+    navigate('board-detail');
+  }
+
+  function formatBoardProperCase() {
+    if (!state.circuits.length && !state.currentBoard) return;
+    state.circuits.forEach(function(c) {
+      if (c.description) c.description = toProperCase(c.description);
+      if (c.location) c.location = toProperCase(c.location);
+    });
+    if (state.currentBoard) {
+      ['ref', 'location', 'supplied_from', 'dist_type'].forEach(function(f) {
+        if (state.currentBoard[f]) state.currentBoard[f] = toProperCase(state.currentBoard[f]);
+      });
+      api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
+    }
+    saveAllCircuits(true);
+    toast('Board & circuits → Proper Case', 'success');
+    navigate('board-detail');
+  }
+
+  function formatBoardSpellCheck() {
+    if (!state.circuits.length) { toast('No circuits to check', 'error'); return; }
+    var provider = getSelectedProvider();
+    if (!provider) { toast('Add an AI key in Settings first', 'error'); return; }
+
+    toast('Checking spelling & grammar...', 'info');
+    var boardInfo = state.currentBoard ? 'Board: ' + (state.currentBoard.ref || '') + ' at ' + (state.currentBoard.location || '') + ', supplied from ' + (state.currentBoard.supplied_from || '') + '\n' : '';
+    var circuitText = state.circuits.map(function(c, i) {
+      return (i + 1) + '. #' + (c.number || '') + ' ' + (c.description || '');
+    }).join('\n');
+
+    api('POST', '/ai/process', {
+      key_id: provider.id,
+      system_prompt: 'You are a spell-checker for BS 7671 EICR circuit schedules. Fix spelling errors and grammar. ' +
+        'Keep ALL electrical terms correct (RCBO, MCB, RCD, FCU, SWA, MICC, T+E, CU, etc.). ' +
+        'Keep circuit descriptions concise and technical. Do NOT change meaning. Return ONLY valid JSON.',
+      prompt: 'Fix spelling/grammar in this board data:\n\n' + boardInfo + circuitText +
+        '\n\nReturn: {"board": {"location": "...", "supplied_from": "..."}, "circuits": [{"index": 0, "description": "corrected"}]}\n' +
+        'Only include entries with changes. Empty = no fixes needed.'
+    }).then(function(data) {
+      var result = data.result || '';
+      var jsonMatch = result.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) { toast('No corrections needed', 'success'); return; }
+      var parsed = JSON.parse(jsonMatch[0]);
+      var count = 0;
+
+      if (parsed.board && state.currentBoard) {
+        var bu = parsed.board;
+        if (bu.location && bu.location !== state.currentBoard.location) { state.currentBoard.location = bu.location; count++; }
+        if (bu.supplied_from && bu.supplied_from !== state.currentBoard.supplied_from) { state.currentBoard.supplied_from = bu.supplied_from; count++; }
+        if (count) api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
+      }
+      if (parsed.circuits && parsed.circuits.length) {
+        parsed.circuits.forEach(function(c) {
+          var circ = state.circuits[c.index];
+          if (circ && c.description && c.description !== circ.description) { circ.description = c.description; count++; }
+        });
+        if (parsed.circuits.length) saveAllCircuits(true);
+      }
+      toast(count ? count + ' correction(s) applied' : 'No corrections needed', 'success');
+      navigate('board-detail');
+    }).catch(function(err) { toast('Spell check error: ' + err.message, 'error'); });
   }
 
   /* ===== SITE TESTERS TAB ===== */
@@ -2858,10 +3349,12 @@ input,select,textarea { font-size:16px !important; }
       '   ALWAYS rewrite descriptions in proper technical EICR report language\n' +
       '7. "message" — Text response to questions\n\n' +
       'CIRCUIT FIELDS: number, description, ocpd_bsen (60898=MCB, 61009=RCBO, 61008=RCD, 60947-2=MCCB), ' +
-      'ocpd_type (B/C/D), ocpd_rating, live_mm, cpc_mm, wiring_type (A=T+E, B=conduit metal, C=conduit plastic, F=SWA, H=MICC), ref_method, points, ' +
+      'ocpd_type (B/C/D), ocpd_rating, breaking_cap (kA — breaking capacity of the OCPD, e.g. "6", "10", "16"), ' +
+      'live_mm, cpc_mm, wiring_type (A=T+E, B=conduit metal, C=conduit plastic, F=SWA, H=MICC), ref_method, points, ' +
       'r1, rn, r2, r1r2, r2_measured, r2_ring, ir_test_v (250/500/1000), ir_ll, ir_le, ' +
       'polarity (boolean), zs_measured, max_zs, rcd_bsen, rcd_type, rcd_idn, ' +
-      'rcd_time_x1, rcd_time_x5, rcd_test_btn (boolean), remarks.\n\n' +
+      'rcd_time_x1, rcd_time_x5, rcd_test_btn (boolean), afdd, max_disconnect (0.4 or 5), remarks.\n' +
+      'NOTE: "kA" = breaking_cap. "set kA to 6" or "MCB kA 6" = breaking_cap:"6". Standard MCB kA: 6kA (domestic), 10kA (commercial), 16kA (industrial).\n\n' +
       'INSPECTION SCHEDULE:\n' + itemList + '\n\n' +
       'COMPOUND INSTRUCTIONS:\n' +
       '- "16mm water bonding, no other bonding required" → inspection_updates: 3.1.1→Sat (note size), 3.1.2→Sat, 3.1.3→N/A, 3.1.4→N/A, 3.1.5→N/A, 3.1.6→N/A, 3.1.7→N/A\n' +
@@ -2869,7 +3362,9 @@ input,select,textarea { font-size:16px !important; }
       '- "set Ze 0.35" → board_updates {ze:"0.35"}\n' +
       '- "all pass section 4" → inspection_updates: 4.1→Sat, 4.2→Sat, 4.3→N/A, 4.4→N/A, 4.5→N/A (use N/A for items typically not applicable)\n' +
       '- "circuit 3 Zs 0.45" → updates [{number:"3", zs_measured:"0.45"}]\n' +
-      '- "insulation all greater than 200" → updates for all existing circuits with ir_ll:">200", ir_le:">200"\n\n' +
+      '- "insulation all greater than 200" → updates for all existing circuits with ir_ll:">200", ir_le:">200"\n' +
+      '- "set kA to 6 for all MCBs" or "breaking capacity 6 kA" → updates for all circuits with breaking_cap:"6"\n' +
+      '- "all MCBs are 6kA" → updates for all circuits that have ocpd_bsen:"60898" with breaking_cap:"6"\n\n' +
       'RULES:\n' +
       '- "greater than 200" or "infinity" for insulation = ">200"\n' +
       '- Only include fields the user mentioned\n' +
@@ -2978,13 +3473,25 @@ input,select,textarea { font-size:16px !important; }
       actions.push('Inspection: ' + inspItems.join(', '));
     }
 
-    /* Observations */
+    /* Observations — save and refresh list */
     if (parsed.observations && parsed.observations.length > 0 && state.currentSite) {
-      parsed.observations.forEach(function(o) {
-        api('POST', '/sites/' + state.currentSite.id + '/observations', {
+      var obsPromises = parsed.observations.map(function(o) {
+        return api('POST', '/sites/' + state.currentSite.id + '/observations', {
           code: o.code || 'C2', description: o.description || '', location: o.location || ''
-        }).then(function(saved) { state.observations.push(saved); }).catch(function() {});
+        }).then(function(saved) { state.observations.push(saved); return saved; });
       });
+      Promise.all(obsPromises).then(function() {
+        /* Re-render observations list so new ones appear immediately */
+        if (state.currentSiteTab === 'observations') {
+          var obsContainer = document.getElementById('observations-container');
+          if (obsContainer) {
+            var tmpDiv = document.createElement('div');
+            tmpDiv.innerHTML = renderObservations();
+            var newContainer = tmpDiv.querySelector('#observations-container');
+            if (newContainer) obsContainer.innerHTML = newContainer.innerHTML;
+          }
+        }
+      }).catch(function() {});
       actions.push(parsed.observations.length + ' observation(s)');
     }
 
@@ -2996,29 +3503,97 @@ input,select,textarea { font-size:16px !important; }
     setTimeout(function() {
       var container = document.getElementById('observations-container') || document.getElementById('board-detail-container');
       if (!container) return;
-      var html = '<div class="p-3 bg-blue-50 border border-blue-200 rounded-xl mb-3" style="cursor:pointer" onclick="this.remove()">' +
-        '<h4 class="font-bold text-blue-800 text-xs mb-1">AI Result</h4>';
-      if (transcript) html += '<p class="text-xs text-slate-500"><strong>Input:</strong> ' + esc(transcript) + '</p>';
-      if (result.actions.length > 0) html += '<p class="text-xs text-slate-800 mt-1">' + esc(result.actions.join(' • ')) + '</p>';
+
+      /* Remove any previous AI banner */
+      var prev = container.querySelector('.ai-result-banner');
+      if (prev) prev.remove();
+
+      var html = '<div class="ai-result-banner p-3 bg-blue-50 border border-blue-200 rounded-xl mb-3">' +
+        '<h4 class="font-bold text-blue-800 text-sm mb-1">AI Result</h4>';
+      if (transcript) html += '<p class="text-xs text-slate-500"><strong>You said:</strong> "' + esc(transcript) + '"</p>';
+
+      /* Show what AI did */
+      if (result.actions.length > 0) html += '<p class="text-xs text-slate-800 mt-1 font-medium">' + esc(result.actions.join(' • ')) + '</p>';
       if (result.message) html += '<p class="text-xs text-blue-700 mt-1">' + esc(result.message) + '</p>';
-      if (parsed.observations) {
+
+      /* Show observations detail */
+      if (parsed.observations && parsed.observations.length) {
         parsed.observations.forEach(function(o) {
-          html += '<p class="text-xs mt-1"><strong class="text-red-600">' + esc(o.code || 'C2') + ':</strong> ' + esc(o.description) + '</p>';
+          html += '<div class="flex items-start gap-2 mt-2 p-2 bg-white rounded border border-blue-100">' +
+            '<span class="badge badge-' + (o.code || 'c2').toLowerCase() + ' text-xs shrink-0">' + esc(o.code || 'C2') + '</span>' +
+            '<div class="flex-1">' +
+              '<p class="text-xs text-slate-800 font-medium">' + esc(o.description) + '</p>' +
+              (o.location ? '<p class="text-xs text-slate-500">Location: ' + esc(o.location) + '</p>' : '') +
+            '</div>' +
+          '</div>';
         });
       }
+
+      /* Show inspection schedule mappings */
       if (parsed.inspection_updates && parsed.inspection_updates.length > 0) {
-        html += '<p class="text-xs text-blue-700 mt-1"><strong>Inspection:</strong> ';
-        html += parsed.inspection_updates.map(function(i) {
+        html += '<div class="mt-2 p-2 bg-white rounded border border-blue-100">';
+        html += '<p class="text-xs font-medium text-blue-800 mb-1">Inspection Schedule:</p>';
+        parsed.inspection_updates.forEach(function(i) {
           var item = INSPECTION_ITEMS.find(function(x) { return x.ref === i.item_ref; });
-          return i.item_ref + ' (' + (item ? item.desc.substring(0, 35) + '...' : '') + ') → ' + i.outcome;
-        }).join('; ');
-        html += '</p>';
+          html += '<p class="text-xs text-slate-700">' + esc(i.item_ref) + ' → <strong>' + esc(i.outcome) + '</strong>';
+          if (item) html += ' <span class="text-slate-400">(' + esc(item.desc.substring(0, 40)) + ')</span>';
+          html += '</p>';
+        });
+        html += '</div>';
       }
-      html += '<p class="text-xs text-slate-400 mt-1 italic">tap to dismiss</p></div>';
+
+      /* Action buttons */
+      html += '<div class="flex gap-2 mt-3">' +
+        '<button class="btn btn-sm flex-1" style="background:#dcfce7;color:#16a34a" data-action="ai-banner-ok">' +
+          '&#10003; OK</button>' +
+        '<button class="btn btn-sm flex-1" style="background:#dbeafe;color:#2563eb" data-action="ai-banner-amend">' +
+          '&#127908; Amend</button>' +
+        '<button class="btn btn-sm flex-1" style="background:#fee2e2;color:#dc2626" data-action="ai-banner-undo">' +
+          '&#10007; Undo</button>' +
+      '</div>';
+
+      html += '</div>';
       var el = document.createElement('div');
       el.innerHTML = html;
+      /* Store parsed data for undo */
+      el.firstChild._parsed = parsed;
       container.insertBefore(el, container.firstChild);
     }, 200);
+  }
+
+  /* Undo the last AI action (remove observations it added) */
+  function undoAIBanner(bannerEl) {
+    var parsed = bannerEl._parsed;
+    if (!parsed) { bannerEl.remove(); return; }
+
+    /* Undo observations — delete from server and state */
+    if (parsed.observations && parsed.observations.length && state.currentSite) {
+      /* Find the most recently added observations matching these descriptions */
+      parsed.observations.forEach(function(o) {
+        var match = state.observations.slice().reverse().find(function(obs) {
+          return obs.description === o.description || (obs.code === o.code && obs.location === o.location);
+        });
+        if (match) {
+          api('DELETE', '/observations/' + match.id).catch(function() {});
+          state.observations = state.observations.filter(function(x) { return String(x.id) !== String(match.id); });
+        }
+      });
+    }
+
+    /* Undo inspection updates — reset to N/V */
+    if (parsed.inspection_updates && parsed.inspection_updates.length && state.currentSite) {
+      var resets = parsed.inspection_updates.map(function(i) { return { item_ref: i.item_ref, outcome: '' }; });
+      api('PUT', '/sites/' + state.currentSite.id + '/inspections', resets).then(function(data) {
+        state.inspections = data;
+      }).catch(function() {});
+    }
+
+    bannerEl.remove();
+    toast('AI action undone', 'info');
+    /* Re-render observations if on that tab */
+    if (state.currentSiteTab === 'observations') {
+      navigate('site-detail', { currentSiteTab: 'observations' });
+    }
   }
 
   /* Single entry point: send any instruction to the unified AI */
@@ -3383,9 +3958,10 @@ input,select,textarea { font-size:16px !important; }
           if (aiResult.message) msg += ' — ' + aiResult.message;
           toast(msg, 'success');
           if (viBtn) viBtn.innerHTML = '🎤 SPEAK OUTCOMES';
-      }).catch(function(err) {
-        toast('Parse failed: ' + err.message, 'error');
-        if (viBtn) viBtn.innerHTML = '🎤 SPEAK OUTCOMES';
+        } catch(parseErr) {
+          toast('Parse failed: ' + parseErr.message, 'error');
+          if (viBtn) viBtn.innerHTML = '🎤 SPEAK OUTCOMES';
+        }
       });
     };
 
@@ -3509,6 +4085,28 @@ input,select,textarea { font-size:16px !important; }
           }).catch(function(err) { toast(err.message, 'error'); });
         }
         break;
+      case 'board-photo-camera':
+        var bpCam = document.getElementById('board-photo-cam');
+        if (bpCam) bpCam.click();
+        break;
+      case 'board-photo-gallery':
+        var bpGal = document.getElementById('board-photo-upload');
+        if (bpGal) bpGal.click();
+        break;
+      case 'view-board-photo':
+        var vpId = target.getAttribute('data-id') || (target.closest('[data-id]') && target.closest('[data-id]').getAttribute('data-id'));
+        if (vpId) viewBoardPhoto(vpId);
+        break;
+      case 'delete-board-photo':
+        var dpId = target.getAttribute('data-id') || (target.closest('[data-id]') && target.closest('[data-id]').getAttribute('data-id'));
+        if (dpId) {
+          api('DELETE', '/board-photos/' + dpId).then(function() {
+            toast('Photo deleted', 'info');
+            if (state.currentBoard) loadBoardPhotos(state.currentBoard.id);
+            closeSheet();
+          }).catch(function(err) { toast(err.message, 'error'); });
+        }
+        break;
       case 'edit-board-header':
         openEditBoardHeaderSheet();
         break;
@@ -3595,6 +4193,28 @@ input,select,textarea { font-size:16px !important; }
       case 'cancel-bulk-scan':
         cancelBulkScan();
         break;
+      case 'format-obs-caps':
+        formatObsAllCaps();
+        break;
+      case 'format-obs-proper':
+        formatObsProperCase();
+        break;
+      case 'format-obs-spellcheck':
+        ensureAiKeys().then(function() { formatObsSpellCheck(); });
+        break;
+      case 'renumber-tp':
+        var tpMode = target.getAttribute('data-mode') || 'L';
+        renumberTP(tpMode);
+        break;
+      case 'format-board-caps':
+        formatBoardAllCaps();
+        break;
+      case 'format-board-proper':
+        formatBoardProperCase();
+        break;
+      case 'format-board-spellcheck':
+        ensureAiKeys().then(function() { formatBoardSpellCheck(); });
+        break;
       case 'fill-na-empty':
         fillEmptyFields('N/A');
         break;
@@ -3605,7 +4225,7 @@ input,select,textarea { font-size:16px !important; }
         applyScanResults();
         break;
       case 'discard-scan-results':
-        _scanState = { base64: null, keyId: null, history: [], updates: null, systemPrompt: '' };
+        _scanState = { base64: null, keyId: null, history: [], updates: null, boardUpdates: null, systemPrompt: '' };
         closeSheet();
         toast('Scan discarded', 'info');
         break;
@@ -3628,8 +4248,16 @@ input,select,textarea { font-size:16px !important; }
         openNewObservationSheet();
         break;
       case 'edit-observation':
-        var eObsId = target.getAttribute('data-id');
+        var eObsId = target.getAttribute('data-id') || (target.closest('[data-id]') && target.closest('[data-id]').getAttribute('data-id'));
         if (eObsId) openNewObservationSheet(eObsId);
+        break;
+      case 'obs-take-photo':
+        var camIn = document.getElementById('obs-photo-cam');
+        if (camIn) camIn.click();
+        break;
+      case 'obs-choose-gallery':
+        var galIn = document.getElementById('obs-photo');
+        if (galIn) galIn.click();
         break;
       case 'remove-obs-photo':
         var existingPhotoDiv = document.getElementById('obs-existing-photo');
@@ -3651,8 +4279,41 @@ input,select,textarea { font-size:16px !important; }
         saveObservation();
         break;
       case 'delete-observation':
-        var obsId = target.getAttribute('data-id');
-        if (confirm('Delete this observation?')) deleteObservation(obsId);
+        var obsId = target.getAttribute('data-id') || target.closest('[data-id]').getAttribute('data-id');
+        if (!obsId) break;
+        /* Two-tap delete: first tap turns red "Confirm?", second tap deletes */
+        if (target.closest('button').getAttribute('data-confirm') === 'yes') {
+          deleteObservation(obsId);
+        } else {
+          var delBtn = target.closest('button');
+          delBtn.setAttribute('data-confirm', 'yes');
+          delBtn.style.background = '#dc2626';
+          delBtn.style.color = '#fff';
+          delBtn.innerHTML = '<svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5z"/></svg> Confirm Delete?';
+          /* Reset after 3 seconds if not confirmed */
+          setTimeout(function() {
+            if (delBtn && delBtn.getAttribute('data-confirm') === 'yes') {
+              delBtn.removeAttribute('data-confirm');
+              delBtn.style.background = '#fee2e2';
+              delBtn.style.color = '#dc2626';
+              delBtn.innerHTML = '<svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5z"/></svg> Delete';
+            }
+          }, 3000);
+        }
+        break;
+      case 'ai-banner-ok':
+        var bannerOk = target.closest('.ai-result-banner');
+        if (bannerOk) bannerOk.remove();
+        break;
+      case 'ai-banner-amend':
+        /* Start voice recognition to amend/add to AI result */
+        var bannerAmend = target.closest('.ai-result-banner');
+        if (bannerAmend) bannerAmend.remove();
+        ensureAiKeys().then(function() { voiceObservation(); });
+        break;
+      case 'ai-banner-undo':
+        var bannerUndo = target.closest('.ai-result-banner');
+        if (bannerUndo) undoAIBanner(bannerUndo);
         break;
       case 'generate-report':
         generateReport();
@@ -3762,6 +4423,21 @@ input,select,textarea { font-size:16px !important; }
     /* Default AI model preference */
     if (target.getAttribute && target.getAttribute('data-action') === 'set-preferred-model') {
       setPreferredModel(target.value);
+    }
+    /* Board reference photo upload (gallery or camera) */
+    if ((target.id === 'board-photo-upload' || target.id === 'board-photo-cam') && target.files && target.files.length) {
+      uploadBoardPhotos(target.files);
+      target.value = '';
+    }
+    /* Observation photo preview (camera or gallery) */
+    if (target.id === 'obs-photo' || target.id === 'obs-photo-cam') {
+      if (target.files && target.files[0]) {
+        var obsPreview = document.getElementById('obs-photo-preview');
+        if (obsPreview) {
+          var obsUrl = URL.createObjectURL(target.files[0]);
+          obsPreview.innerHTML = '<img src="' + obsUrl + '" style="max-height:120px;border-radius:.5rem;margin-top:.5rem">';
+        }
+      }
     }
     /* Show preview when photo selected (camera or gallery) */
     if (target.id === 'ai-scan-file' || target.id === 'ai-scan-file-cam') {

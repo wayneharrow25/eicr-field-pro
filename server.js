@@ -240,6 +240,14 @@ async function initDB() {
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
 
+      CREATE TABLE IF NOT EXISTS board_photos (
+        id SERIAL PRIMARY KEY,
+        board_id INT REFERENCES boards(id) ON DELETE CASCADE,
+        photo TEXT NOT NULL,
+        caption TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
       CREATE TABLE IF NOT EXISTS testers (
         id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
@@ -278,6 +286,12 @@ async function initDB() {
     for (const col of siteColumns) {
       const colName = col.split(' ')[0];
       await client.query(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS ${col}`).catch(() => {});
+    }
+
+    // Add missing columns to observations table
+    const obsColumns = ['materials TEXT'];
+    for (const col of obsColumns) {
+      await client.query(`ALTER TABLE observations ADD COLUMN IF NOT EXISTS ${col}`).catch(() => {});
     }
 
     // Add missing columns to boards table
@@ -476,6 +490,33 @@ app.delete('/api/boards/:id', authMiddleware, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---- BOARD PHOTOS ----
+app.get('/api/boards/:id/photos', authMiddleware, async (req, res) => {
+  const { rows } = await pool.query('SELECT id, caption, created_at FROM board_photos WHERE board_id = $1 ORDER BY id', [req.params.id]);
+  res.json(rows);
+});
+
+app.get('/api/board-photos/:id', authMiddleware, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM board_photos WHERE id = $1', [req.params.id]);
+  if (!rows.length) return res.status(404).json({ error: 'Not found' });
+  res.json(rows[0]);
+});
+
+app.post('/api/boards/:id/photos', authMiddleware, async (req, res) => {
+  const { photo, caption } = req.body;
+  if (!photo) return res.status(400).json({ error: 'photo required' });
+  const { rows } = await pool.query(
+    'INSERT INTO board_photos (board_id, photo, caption) VALUES ($1, $2, $3) RETURNING *',
+    [req.params.id, photo, caption || '']
+  );
+  res.json(rows[0]);
+});
+
+app.delete('/api/board-photos/:id', authMiddleware, async (req, res) => {
+  await pool.query('DELETE FROM board_photos WHERE id = $1', [req.params.id]);
+  res.json({ ok: true });
+});
+
 // ---- CIRCUITS CRUD ----
 app.get('/api/boards/:id/circuits', authMiddleware, async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM circuits WHERE board_id = $1 ORDER BY sort_order, id', [req.params.id]);
@@ -580,6 +621,24 @@ app.put('/api/observations/:id', authMiddleware, async (req, res) => {
   const vals = fields.map(f => d[f]);
   await pool.query(`UPDATE observations SET ${sets.join(', ')} WHERE id = $1`, [req.params.id, ...vals]);
   res.json({ ok: true });
+});
+
+app.put('/api/observations/:id', authMiddleware, async (req, res) => {
+  const { code, description, location, photo } = req.body;
+  const fields = [];
+  const vals = [];
+  let idx = 1;
+  if (code !== undefined) { fields.push('code = $' + idx++); vals.push(code); }
+  if (description !== undefined) { fields.push('description = $' + idx++); vals.push(description); }
+  if (location !== undefined) { fields.push('location = $' + idx++); vals.push(location); }
+  if (photo !== undefined) { fields.push('photo = $' + idx++); vals.push(photo); }
+  if (!fields.length) return res.json(req.body);
+  vals.push(req.params.id);
+  const { rows } = await pool.query(
+    'UPDATE observations SET ' + fields.join(', ') + ' WHERE id = $' + idx + ' RETURNING *',
+    vals
+  );
+  res.json(rows[0] || {});
 });
 
 app.delete('/api/observations/:id', authMiddleware, async (req, res) => {
