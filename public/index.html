@@ -4247,6 +4247,7 @@ input,select,textarea { font-size:16px !important; }
         bulkSelectAll(allChecked);
         break;
       case 'edit-circuit':
+        if (_bulkSelectMode) break; /* Don't open edit when selecting */
         var idx = parseInt(target.getAttribute('data-idx'));
         if (!isNaN(idx)) openEditCircuitSheet(idx);
         break;
