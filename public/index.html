@@ -2280,16 +2280,83 @@ input,select,textarea { font-size:16px !important; }
   var _micSvg = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>';
   var _stopSvg = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
 
-  function startDictation() {
-    var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) { toast('Speech recognition not supported', 'error'); return; }
+  /* Shared helper: continuous voice that stays open through pauses.
+     Uses continuous:true + index tracking to avoid duplication.
+     If the browser kills the session (Android), auto-restarts seamlessly. */
+  function startContinuousVoice(opts) {
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { toast('Speech not supported', 'error'); return null; }
 
+    var accum = opts.initial || '';
+    var active = true;
+    var rec = null;
+
+    function buildRec() {
+      var r = new SR();
+      r.continuous = true;
+      r.interimResults = true;
+      r.lang = 'en-GB';
+
+      /* Track which result indices we already consumed as final */
+      var consumed = 0;
+
+      r.onresult = function(event) {
+        /* Build text: already-consumed finals are in accum.
+           Process new finals + show current interim. */
+        for (var i = consumed; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            var t = event.results[i][0].transcript.trim();
+            if (t) accum = accum ? accum + ' ' + t : t;
+            consumed = i + 1;
+          }
+        }
+        /* Show accumulated + any trailing interim */
+        var interim = '';
+        for (var j = consumed; j < event.results.length; j++) {
+          interim += event.results[j][0].transcript;
+        }
+        var display = interim ? (accum ? accum + ' ' + interim.trim() : interim.trim()) : accum;
+        if (opts.onText) opts.onText(display);
+      };
+
+      r.onerror = function(e) {
+        if (e.error === 'aborted' || e.error === 'no-speech') return;
+        active = false;
+        if (opts.onStop) opts.onStop();
+        toast('Speech: ' + e.error, 'error');
+      };
+
+      r.onend = function() {
+        /* Browser killed session (Android does this) — auto-restart if still active */
+        if (active) {
+          rec = buildRec();
+          try { rec.start(); } catch(ex) { active = false; if (opts.onStop) opts.onStop(); }
+        } else {
+          if (opts.onStop) opts.onStop();
+        }
+      };
+
+      return r;
+    }
+
+    rec = buildRec();
+    try { rec.start(); } catch(ex) { toast('Mic busy', 'error'); return null; }
+
+    /* Return control handle */
+    return {
+      stop: function() { active = false; try { rec.stop(); } catch(ex) {} },
+      isActive: function() { return active; },
+      getRec: function() { return rec; }
+    };
+  }
+
+  function startDictation() {
     var btn = document.querySelector('[data-action="start-dictation"]');
 
     /* Toggle off if already running */
-    if (_dictationActive) {
+    if (_dictationActive && _dictationRec) {
+      _dictationRec.stop();
       _dictationActive = false;
-      if (_dictationRec) { try { _dictationRec.stop(); } catch(ex) {} }
       _dictationRec = null;
       if (btn) { btn.style.background = ''; btn.innerHTML = _micSvg + 'Tap to Speak'; }
       return;
@@ -2298,58 +2365,22 @@ input,select,textarea { font-size:16px !important; }
     var textArea = document.getElementById('ai-voice-text');
     if (!textArea) return;
 
-    /* Start fresh — accumulate text across auto-restarts */
-    _dictationText = textArea.value ? textArea.value.trimEnd() : '';
-    _dictationActive = true;
-
-    function startSession() {
-      if (!_dictationActive) return;
-      var rec = new SpeechRecognition();
-      rec.continuous = false;
-      rec.interimResults = false;
-      rec.lang = 'en-GB';
-      _dictationRec = rec;
-
-      rec.onresult = function(event) {
-        for (var i = 0; i < event.results.length; i++) {
-          if (event.results[i].isFinal) {
-            var t = event.results[i][0].transcript.trim();
-            if (t) _dictationText = _dictationText ? _dictationText + ' ' + t : t;
-          }
-        }
-        if (textArea) textArea.value = _dictationText;
-      };
-
-      rec.onerror = function(e) {
-        if (e.error === 'aborted' || e.error === 'no-speech') return;
+    var handle = startContinuousVoice({
+      initial: textArea.value ? textArea.value.trimEnd() : '',
+      onText: function(text) { textArea.value = text; },
+      onStop: function() {
         _dictationActive = false;
         _dictationRec = null;
         if (btn) { btn.style.background = ''; btn.innerHTML = _micSvg + 'Tap to Speak'; }
-        toast('Speech: ' + e.error, 'error');
-      };
-
-      rec.onend = function() {
-        /* Auto-restart if user hasn't stopped */
-        if (_dictationActive) {
-          setTimeout(startSession, 100);
-        } else {
-          _dictationRec = null;
-          if (btn) { btn.style.background = ''; btn.innerHTML = _micSvg + 'Tap to Speak'; }
-        }
-      };
-
-      try { rec.start(); }
-      catch(ex) {
-        _dictationActive = false;
-        _dictationRec = null;
-        if (btn) { btn.style.background = ''; btn.innerHTML = _micSvg + 'Tap to Speak'; }
-        toast('Mic busy — try again', 'error');
       }
-    }
+    });
 
-    if (btn) { btn.style.background = '#ef4444'; btn.innerHTML = _stopSvg + 'Tap to Stop'; }
-    toast('Listening...', 'info');
-    startSession();
+    if (handle) {
+      _dictationActive = true;
+      _dictationRec = handle;
+      if (btn) { btn.style.background = '#ef4444'; btn.innerHTML = _stopSvg + 'Tap to Stop'; }
+      toast('Listening — tap stop when done', 'info');
+    }
   }
 
   function runVoiceParse() {
@@ -4216,8 +4247,6 @@ input,select,textarea { font-size:16px !important; }
     return ctx;
   }
 
-  var _vfAccum = ''; /* accumulated text for chat bar voice */
-
   function voiceToField(fieldId) {
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return toast('Speech not supported in this browser', 'error');
@@ -4229,53 +4258,28 @@ input,select,textarea { font-size:16px !important; }
     /* Stop any existing recognition */
     if (_voiceActive && _voiceRec) {
       _voiceActive = false;
-      try { _voiceRec.stop(); } catch(ex) {}
+      if (_voiceRec.stop) _voiceRec.stop(); /* works for both raw rec and handle */
       _voiceRec = null;
       if (btn) { btn.style.background = ''; btn.textContent = '🎤'; }
       return;
     }
 
     if (isChatInput) {
-      /* Chat bar: auto-restart approach — no duplication on Android */
-      _vfAccum = field.value ? field.value.trimEnd() : '';
-      _voiceActive = true;
-      if (btn) { btn.style.background = '#ef4444'; btn.textContent = '⏹'; }
-
-      function startChatSession() {
-        if (!_voiceActive) return;
-        var rec = new SR();
-        rec.continuous = false;
-        rec.interimResults = false;
-        rec.lang = 'en-GB';
-        _voiceRec = rec;
-
-        rec.onresult = function(e) {
-          for (var i = 0; i < e.results.length; i++) {
-            if (e.results[i].isFinal) {
-              var t = e.results[i][0].transcript.trim();
-              if (t) _vfAccum = _vfAccum ? _vfAccum + ' ' + t : t;
-            }
-          }
-          if (field) field.value = _vfAccum;
-        };
-        rec.onerror = function(ev) {
-          if (ev.error === 'aborted' || ev.error === 'no-speech') return;
+      /* Chat bar: continuous voice, stays open through pauses */
+      var handle = startContinuousVoice({
+        initial: field.value ? field.value.trimEnd() : '',
+        onText: function(text) { field.value = text; },
+        onStop: function() {
           _voiceActive = false;
           _voiceRec = null;
           if (btn) { btn.style.background = ''; btn.textContent = '🎤'; }
-          toast('Voice: ' + ev.error, 'error');
-        };
-        rec.onend = function() {
-          if (_voiceActive) { setTimeout(startChatSession, 100); }
-          else { _voiceRec = null; if (btn) { btn.style.background = ''; btn.textContent = '🎤'; } }
-        };
-        try { rec.start(); } catch(ex) {
-          _voiceActive = false; _voiceRec = null;
-          if (btn) { btn.style.background = ''; btn.textContent = '🎤'; }
-          toast('Mic busy', 'error');
         }
+      });
+      if (handle) {
+        _voiceActive = true;
+        _voiceRec = handle;
+        if (btn) { btn.style.background = '#ef4444'; btn.textContent = '⏹'; }
       }
-      startChatSession();
       return;
     }
 
