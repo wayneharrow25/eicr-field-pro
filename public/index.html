@@ -742,10 +742,15 @@ input,select,textarea { font-size:16px !important; }
   }
 
   function openNewBoardSheet() {
+    var hasAI = state.aiKeys && state.aiKeys.length > 0;
     openSheet(
       '<h3 class="text-lg font-bold text-slate-800 mb-4">New Distribution Board</h3>' +
       '<div class="space-y-3">' +
-        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Board Reference *</label>' +
+        (hasAI ? '<button class="btn btn-primary w-full" data-action="save-new-board-scan">' +
+          '<svg class="w-5 h-5 inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg> ' +
+          'Create from Photos (AI fills details)</button>' +
+          '<div class="text-center text-xs text-slate-400">— or fill manually —</div>' : '') +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Board Reference</label>' +
           inputWithMic('new-board-ref', 'e.g. DB1, MSDB, Sub-DB-A', '') + '</div>' +
         '<div><label class="block text-sm font-medium text-slate-700 mb-1">Location</label>' +
           inputWithMic('new-board-location', 'e.g. Plant Room, Ground Floor Corridor', '') + '</div>' +
@@ -758,20 +763,29 @@ input,select,textarea { font-size:16px !important; }
     );
   }
 
-  function saveNewBoard() {
-    var ref = document.getElementById('new-board-ref');
-    if (!ref || !ref.value.trim()) { toast('Board reference is required', 'error'); return; }
+  function saveNewBoard(thenScan) {
+    var refEl = document.getElementById('new-board-ref');
+    var refVal = refEl ? refEl.value.trim() : '';
+    if (!thenScan && !refVal) { toast('Board reference is required', 'error'); return; }
     var body = {
-      ref: ref.value.trim(),
+      ref: refVal || 'New Board',
       location: (document.getElementById('new-board-location') || {}).value || '',
       supplied_from: (document.getElementById('new-board-supplied') || {}).value || '',
       phase: (document.getElementById('new-board-phase') || {}).value || 'single'
     };
     api('POST', '/sites/' + state.currentSite.id + '/boards', body).then(function(board) {
-      toast('Board added', 'success');
       closeSheet();
       state.boards.push(board);
-      navigate('site-detail', {currentSiteTab: 'boards'});
+      state.currentBoard = board;
+      if (thenScan) {
+        /* Go to board detail then open photo scan */
+        loadCircuits(board.id);
+        setTimeout(function() { openPhotoScan(); }, 500);
+        toast('Board created — add photos to scan', 'success');
+      } else {
+        toast('Board added', 'success');
+        navigate('site-detail', {currentSiteTab: 'boards'});
+      }
     }).catch(function(err) { toast(err.message, 'error'); });
   }
 
@@ -1087,8 +1101,21 @@ input,select,textarea { font-size:16px !important; }
     var fields = [
       {id:'ce_number', label:'Circuit #', val:c.number, placeholder:'1, L1/1, TP/1'},
       {id:'ce_description', label:'Description', val:c.description, placeholder:'Lighting, Ring Main, etc'},
-      {id:'ce_wiring_type', label:'Wiring Type', val:c.wiring_type, options:['','A','B','C','D','E','F','G','H','O']},
-      {id:'ce_ref_method', label:'Ref Method', val:c.ref_method, options:['','A','B','C','100','101','102','103']},
+      {id:'ce_wiring_type', label:'Wiring Type', val:c.wiring_type, labeledOptions:[
+        {v:'',l:'-- Select --'},{v:'A',l:'A — T&E clipped direct'},{v:'B',l:'B — T&E in conduit on wall'},
+        {v:'C',l:'C — T&E in conduit in wall'},{v:'D',l:'D — Cables in metallic trunking'},
+        {v:'E',l:'E — Cables on cable tray'},{v:'F',l:'F — SWA direct in ground/surface'},
+        {v:'G',l:'G — Cables in building void'},{v:'H',l:'H — MICC (mineral insulated)'},
+        {v:'O',l:'O — Other (specify in remarks)'}
+      ]},
+      {id:'ce_ref_method', label:'Ref Method', val:c.ref_method, labeledOptions:[
+        {v:'',l:'-- Select --'},{v:'A',l:'A — Enclosed in insulated wall'},
+        {v:'B',l:'B — In conduit / trunking on wall'},{v:'C',l:'C — Clipped direct to surface'},
+        {v:'100',l:'100 — Enclosed in thermally insulating wall'},
+        {v:'101',l:'101 — In conduit in thermally insulating wall'},
+        {v:'102',l:'102 — In conduit on wooden wall'},{v:'103',l:'103 — Clipped to non-metallic surface'},
+        {v:'E',l:'E — Free air / cable tray'},{v:'F',l:'F — Direct buried in ground'}
+      ]},
       {id:'ce_points', label:'Points/Outlets', val:c.points, type:'number'},
       {id:'ce_live_mm', label:'Live CSA (mm\u00b2)', val:c.live_mm, placeholder:'1.5, 2.5, 4, 6, 10...'},
       {id:'ce_cpc_mm', label:'CPC CSA (mm\u00b2)', val:c.cpc_mm, placeholder:'1.0, 1.5, 2.5...'},
@@ -1126,6 +1153,11 @@ input,select,textarea { font-size:16px !important; }
       html += '<div><label class="block text-sm font-medium text-slate-600 mb-1">' + f.label + '</label>';
       if (f.textarea) {
         html += textareaWithMic(f.id, f.label, f.val, 2);
+      } else if (f.labeledOptions) {
+        html += '<select id="' + f.id + '" class="select-field">' +
+          f.labeledOptions.map(function(o) {
+            return '<option value="' + esc(o.v) + '"' + (f.val === o.v ? ' selected' : '') + '>' + esc(o.l) + '</option>';
+          }).join('') + '</select>';
       } else if (f.options) {
         html += '<select id="' + f.id + '" class="select-field">' +
           f.options.map(function(o) {
@@ -1463,14 +1495,17 @@ input,select,textarea { font-size:16px !important; }
       '6. If devices are grouped under an RCD (e.g. 4-way RCBO block or RCD header), note the RCD details: rcd_bsen, rcd_type, rcd_idn on each circuit in that group.\n' +
       '7. Curve types: B (domestic/commercial), C (motors/fluorescent), D (high inrush). Read from the device label.\n' +
       '8. If a label/schedule is visible, use the descriptions shown. Common: Lighting, Sockets, Ring Main, Radial, FCU, Cooker, Immersion, Boiler, Alarm, Emergency Lighting, Mechanical Extract, Hand Dryer.\n' +
-      '9. Include wiring_type if visible at entries: A=T+E flat, B=T+E in metal conduit, C=T+E in PVC conduit, F=SWA, H=MICC.\n' +
-      '10. Extract cable_size if shown (e.g. "1.5", "2.5", "4", "6", "10", "16", "25" — just the mm² number).\n' +
-      '11. Extract reference_method if shown (e.g. "A", "B", "C", "100", "101", "102", "103" — per BS 7671 Table 4A2).\n' +
-      '12. Extract num_points if shown — the number of points or outlets served by the circuit.\n\n' +
+      '9. wiring_type — USE ONLY THE CODE LETTER, not the full description. Codes: A (T&E clipped direct), B (T&E in conduit on wall), C (T&E in conduit in wall), D (metallic trunking), E (cable tray), F (SWA), G (building void), H (MICC).\n' +
+      '10. reference_method — USE ONLY THE CODE, not description. Codes: A (enclosed in insulated wall), B (in conduit/trunking on wall), C (clipped direct), 100 (thermally insulating wall), 101 (conduit in insulating wall), 102 (conduit on wooden wall), 103 (clipped to non-metallic surface).\n' +
+      '11. cable_size — live conductor CSA in mm² (e.g. "1.5", "2.5", "4", "6", "10", "16", "25").\n' +
+      '12. cpc_size — CPC/earth conductor CSA in mm² if shown (e.g. "1.0", "1.5", "2.5", "4").\n' +
+      '13. num_points — number of points or outlets served by the circuit.\n' +
+      '14. breaking_cap — breaking capacity in kA if shown on the device (e.g. "6", "10", "15").\n' +
+      '15. FILL EVERY FIELD YOU CAN from the data visible. Do not leave fields blank if the info is available in the photo or schedule. If a schedule lists cable sizes, reference methods, or points — include them ALL.\n\n' +
       'Return ONLY valid JSON:\n' +
       '{"main_switch": {"description":"Main Switch","ocpd_bsen":"60947-3","ocpd_type":"Isolator","ocpd_rating":"100","poles":"TP&N"}, ' +
       '"board_updates": {"ref":"DB1","location":"Plant Room","dist_type":"Schneider Isobar","dist_bsen":"61439","num_phases":"3","supplied_from":"MSDB Way 3"}, ' +
-      '"updates": [{"number":"1L1","description":"Lighting","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","poles":"SP","cable_size":"1.5","reference_method":"C","num_points":"8","wiring_type":"A","rcd_bsen":"","rcd_type":"","rcd_idn":""},{"number":"2","description":"Submain to DB2","ocpd_bsen":"60898","ocpd_type":"C","ocpd_rating":"63","poles":"TP","cable_size":"16","reference_method":"B","num_points":"","wiring_type":"F","rcd_bsen":"","rcd_type":"","rcd_idn":""}]}';
+      '"updates": [{"number":"1L1","description":"Lighting","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","breaking_cap":"6","poles":"SP","cable_size":"1.5","cpc_size":"1.0","reference_method":"C","num_points":"8","wiring_type":"A","rcd_bsen":"","rcd_type":"","rcd_idn":""},{"number":"2","description":"Submain to DB2","ocpd_bsen":"60898","ocpd_type":"C","ocpd_rating":"63","breaking_cap":"10","poles":"TP","cable_size":"16","cpc_size":"4","reference_method":"B","num_points":"","wiring_type":"F","rcd_bsen":"","rcd_type":"","rcd_idn":""}]}';
 
     /* Append user hint if provided */
     var hintEl = document.getElementById('ai-scan-hint');
@@ -1618,15 +1653,27 @@ input,select,textarea { font-size:16px !important; }
     '</div>';
   }
 
+  /* Map AI scan field names to UI/DB field names */
+  function mapScanFields(u) {
+    var mapped = {};
+    var renames = { reference_method: 'ref_method', cable_size: 'live_mm', cpc_size: 'cpc_mm', num_points: 'points' };
+    Object.keys(u).forEach(function(k) {
+      var newKey = renames[k] || k;
+      mapped[newKey] = u[k];
+    });
+    return mapped;
+  }
+
   /* Apply reviewed scan results to circuits */
   function applyScanResults() {
     if (!_scanState.updates || !_scanState.updates.length) return;
     _scanState.updates.forEach(function(u) {
-      var existing = state.circuits.findIndex(function(c) { return c.number === u.number; });
+      var mapped = mapScanFields(u);
+      var existing = state.circuits.findIndex(function(c) { return c.number === mapped.number; });
       if (existing !== -1) {
-        Object.assign(state.circuits[existing], u);
+        Object.assign(state.circuits[existing], mapped);
       } else {
-        state.circuits.push(u);
+        state.circuits.push(mapped);
       }
     });
 
@@ -4224,7 +4271,10 @@ input,select,textarea { font-size:16px !important; }
         openNewBoardSheet();
         break;
       case 'save-new-board':
-        saveNewBoard();
+        saveNewBoard(false);
+        break;
+      case 'save-new-board-scan':
+        saveNewBoard(true);
         break;
       case 'open-board':
         var boardId = target.getAttribute('data-id');
