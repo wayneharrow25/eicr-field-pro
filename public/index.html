@@ -1221,10 +1221,30 @@ input,select,textarea { font-size:16px !important; }
     } else {
       Object.assign(state.circuits[idx], c);
     }
+    sortCircuitsByNumber();
     closeSheet();
     navigate('board-detail');
     /* Auto-save to server */
     autoSave('circuits');
+  }
+
+  /* Sort circuits by number: handles SP (1,2,3) and TP (1L1,1L2,1L3,2L1) */
+  function circuitSortKey(num) {
+    if (!num) return [9999, 9999];
+    var m = num.match(/^(\d+)[Ll]([123])$/);
+    if (m) return [parseInt(m[1]), parseInt(m[2])]; /* TP: way, phase */
+    var n = parseInt(num);
+    if (!isNaN(n)) return [n, 0]; /* SP: number, 0 */
+    return [9999, 9999]; /* unknown → end */
+  }
+
+  function sortCircuitsByNumber() {
+    state.circuits.sort(function(a, b) {
+      var ka = circuitSortKey(a.number);
+      var kb = circuitSortKey(b.number);
+      if (ka[0] !== kb[0]) return ka[0] - kb[0];
+      return ka[1] - kb[1];
+    });
   }
 
   function deleteCircuit(idx) {
@@ -1784,6 +1804,7 @@ input,select,textarea { font-size:16px !important; }
       api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
     }
 
+    sortCircuitsByNumber();
     closeSheet();
     navigate('board-detail');
     var msg = _scanState.updates.length + ' circuits applied';
