@@ -1240,17 +1240,17 @@ app.get('/api/sites/:id/report', (req, res, next) => {
   body { font-family: Arial, Helvetica, sans-serif; font-size: 9px; line-height: 1.3; color: #000; margin: 0; padding: 0; }
   .page { width: 100%; position: relative; page-break-after: always; }
   .page:last-child { page-break-after: auto; }
-  .page-landscape { page-break-before: always; }
+  .page-landscape { page-break-before: always; page: landscape; }
 
   /* Header bar */
-  .hdr { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #000; padding: 4px 0; margin-bottom: 6px; }
+  .hdr { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #1a365d; padding: 4px 0; margin-bottom: 6px; background: linear-gradient(to bottom, #ffffff, #f7fafc); }
   .hdr img { max-height: 50px; max-width: 150px; }
   .hdr-right { text-align: right; font-size: 8px; line-height: 1.2; }
   .hdr-title { font-size: 11px; font-weight: bold; }
 
   /* Section headers */
-  .sec-hdr { background: #000; color: #fff; font-weight: bold; font-size: 9px; padding: 3px 6px; margin: 0; border: 1px solid #000; }
-  .sec-hdr-gray { background: #666; color: #fff; font-weight: bold; font-size: 8px; padding: 2px 6px; margin: 0; border: 1px solid #000; }
+  .sec-hdr { background: #1a365d; color: #fff; font-weight: bold; font-size: 9px; padding: 3px 6px; margin: 0; border: 1px solid #1a365d; }
+  .sec-hdr-gray { background: #4a5568; color: #fff; font-weight: bold; font-size: 8px; padding: 2px 6px; margin: 0; border: 1px solid #4a5568; }
 
   /* Tables */
   table { border-collapse: collapse; width: 100%; margin: 0; }
@@ -1258,20 +1258,31 @@ app.get('/api/sites/:id/report', (req, res, next) => {
   th { background: #e0e0e0; font-weight: bold; font-size: 7.5px; text-align: center; }
   .fl { font-weight: bold; background: #f0f0f0; width: 25%; font-size: 8px; }
   .fl2 { font-weight: bold; background: #f0f0f0; font-size: 8px; }
-  .fv { font-size: 8px; min-height: 14px; }
+  .fv { font-size: 8px; min-height: 14px; background: #fafafa; }
   .fv-large { font-size: 14px; font-weight: bold; text-align: center; padding: 6px; }
   .center { text-align: center; }
   .tick { text-align: center; font-size: 12px; }
 
   /* Assessment box */
-  .assess-sat { background: #fff; font-size: 16px; font-weight: bold; text-align: center; padding: 8px; border: 3px solid #000; }
-  .assess-unsat { background: #fff; font-size: 16px; font-weight: bold; text-align: center; padding: 8px; border: 3px solid #000; }
+  .assess-sat { background: #f0fff4; font-size: 16px; font-weight: bold; text-align: center; padding: 8px; border: 3px solid #38a169; color: #22543d; }
+  .assess-unsat { background: #fff5f5; font-size: 16px; font-weight: bold; text-align: center; padding: 8px; border: 3px solid #e53e3e; color: #742a2a; }
 
   /* Observation colours */
   .obs-c1 { background: #ffcccc; } .obs-c2 { background: #ffe0b2; } .obs-c3 { background: #cce5ff; } .obs-fi { background: #e1d5f0; }
 
+  /* Alternating row shading */
+  .alt-rows tr:nth-child(even) td { background: #f7fafc; }
+
+  /* Photo evidence */
+  .photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+  .photo-card { border: 2px solid #ccc; padding: 6px; page-break-inside: avoid; }
+  .photo-card img { max-width: 300px; width: 100%; height: auto; display: block; margin: 4px auto; }
+  .photo-card .photo-label { font-size: 8px; font-weight: bold; margin-bottom: 3px; }
+  .photo-card .photo-desc { font-size: 7.5px; color: #333; margin-bottom: 4px; }
+  .photo-card.obs-c1 { border-color: #e53e3e; } .photo-card.obs-c2 { border-color: #dd6b20; } .photo-card.obs-c3 { border-color: #3182ce; } .photo-card.obs-fi { border-color: #805ad5; }
+
   /* Footer */
-  .page-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 7px; color: #333; border-top: 1px solid #000; padding: 3px 10mm; background: #fff; }
+  .page-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 7px; color: #333; border-top: 1px solid #1a365d; padding: 3px 10mm; background: #fff; }
 
   /* Signature */
   .sig-img { max-height: 30px; }
@@ -1387,32 +1398,33 @@ app.get('/api/sites/:id/report', (req, res, next) => {
   </div>`;
 
   html += `<table>
-    <tr><td class="sec-hdr" colspan="3">SECTION 7: OBSERVATIONS AND RECOMMENDATIONS FOR ACTIONS TO BE TAKEN</td></tr>
+    <tr><td class="sec-hdr" colspan="4">SECTION 7: OBSERVATIONS AND RECOMMENDATIONS FOR ACTIONS TO BE TAKEN</td></tr>
   </table>`;
 
-  html += `<table>
+  html += `<table class="alt-rows">
     <thead><tr>
       <th style="width:40px">Item No</th>
       <th>Observations<br>(See regulation numbers, where given, for further guidance)</th>
+      <th style="width:100px">Location</th>
       <th style="width:60px">Classification<br>Code</th>
     </tr></thead><tbody>`;
   if (obs.length) {
     obs.forEach((o, i) => {
       const cls = o.code === 'C1' ? 'obs-c1' : o.code === 'C2' ? 'obs-c2' : o.code === 'C3' ? 'obs-c3' : o.code === 'FI' ? 'obs-fi' : '';
-      html += `<tr class="${cls}"><td class="center">${i + 1}</td><td>${e(o.description)}${o.location ? ' [' + e(o.location) + ']' : ''}</td><td class="center"><strong>${e(o.code)}</strong></td></tr>`;
+      html += `<tr class="${cls}"><td class="center">${i + 1}</td><td>${e(o.description)}</td><td>${e(o.location || '')}</td><td class="center"><strong>${e(o.code)}</strong></td></tr>`;
     });
   } else {
-    html += `<tr><td class="center">-</td><td style="color:#666;font-style:italic">No observations recorded</td><td class="center">-</td></tr>`;
+    html += `<tr><td class="center">-</td><td style="color:#666;font-style:italic">No observations recorded</td><td>-</td><td class="center">-</td></tr>`;
   }
   html += `</tbody></table>`;
 
   // Classification legend
   html += `<table style="margin-top:6px">
-    <tr><td class="sec-hdr-gray" colspan="2">CLASSIFICATION CODE</td></tr>
-    <tr class="obs-c1"><td style="width:30px;text-align:center;font-weight:bold">C1</td><td>Danger present. Risk of injury. Immediate remedial action required.</td></tr>
-    <tr class="obs-c2"><td style="text-align:center;font-weight:bold">C2</td><td>Potentially dangerous. Urgent remedial action required.</td></tr>
-    <tr class="obs-c3"><td style="text-align:center;font-weight:bold">C3</td><td>Improvement recommended.</td></tr>
-    <tr class="obs-fi"><td style="text-align:center;font-weight:bold">FI</td><td>Further investigation required without delay.</td></tr>
+    <tr><td class="sec-hdr-gray" colspan="4">CLASSIFICATION CODE</td></tr>
+    <tr class="obs-c1"><td style="width:30px;text-align:center;font-weight:bold">C1</td><td colspan="3">Danger present. Risk of injury. Immediate remedial action required.</td></tr>
+    <tr class="obs-c2"><td style="text-align:center;font-weight:bold">C2</td><td colspan="3">Potentially dangerous. Urgent remedial action required.</td></tr>
+    <tr class="obs-c3"><td style="text-align:center;font-weight:bold">C3</td><td colspan="3">Improvement recommended.</td></tr>
+    <tr class="obs-fi"><td style="text-align:center;font-weight:bold">FI</td><td colspan="3">Further investigation required without delay.</td></tr>
   </table>`;
 
   // Summary lines
@@ -1425,6 +1437,40 @@ app.get('/api/sites/:id/report', (req, res, next) => {
 
   html += `</div>`;
 
+  // ========== PHOTOGRAPHIC EVIDENCE ==========
+  const obsWithPhotos = obs.filter(o => o.photo);
+  if (obsWithPhotos.length) {
+    // Split photos into chunks of 4 per page (2x2 grid)
+    const photoChunks = [];
+    for (let pi = 0; pi < obsWithPhotos.length; pi += 4) {
+      photoChunks.push(obsWithPhotos.slice(pi, pi + 4));
+    }
+    photoChunks.forEach((chunk, ci) => {
+      html += `<div class="page">`;
+      html += `<div class="hdr">
+        <div><img src="/logo.jpeg" alt="" onerror="this.style.display='none'"></div>
+        <div style="text-align:center;flex:1"><div style="font-size:11px;font-weight:bold">PHOTOGRAPHIC EVIDENCE</div></div>
+        <div class="hdr-right"><div>Ref: ${e(certNum)}</div></div>
+      </div>`;
+      if (ci === 0) {
+        html += `<table><tr><td class="sec-hdr" colspan="2">PHOTOGRAPHIC EVIDENCE OF OBSERVATIONS</td></tr></table>`;
+      }
+      html += `<div class="photo-grid">`;
+      chunk.forEach(o => {
+        const itemIdx = obs.indexOf(o) + 1;
+        const cls = o.code === 'C1' ? 'obs-c1' : o.code === 'C2' ? 'obs-c2' : o.code === 'C3' ? 'obs-c3' : o.code === 'FI' ? 'obs-fi' : '';
+        html += `<div class="photo-card ${cls}">
+          <div class="photo-label">Item ${itemIdx} &mdash; ${e(o.code)}</div>
+          <div class="photo-desc">${e(o.description)}</div>
+          ${o.location ? '<div class="photo-desc"><strong>Location:</strong> ' + e(o.location) + '</div>' : ''}
+          <img src="${o.photo}" alt="Observation ${itemIdx}">
+        </div>`;
+      });
+      html += `</div>`;
+      html += `</div>`;
+    });
+  }
+
   // ========== PER-DB OBSERVATIONS PAGES ==========
   for (const b of siteBoards) {
     const bObs = boardObsMap[b.id];
@@ -1435,15 +1481,16 @@ app.get('/api/sites/:id/report', (req, res, next) => {
       <div style="text-align:center;flex:1"><div style="font-size:11px;font-weight:bold">OBSERVATIONS &mdash; ${e(b.ref)} (${e(b.location || '')})</div></div>
       <div class="hdr-right"><div>Ref: ${e(certNum)}</div></div>
     </div>`;
-    html += `<table>
+    html += `<table class="alt-rows">
       <thead><tr>
         <th style="width:40px">Item No</th>
         <th>Observations</th>
+        <th style="width:100px">Location</th>
         <th style="width:60px">Code</th>
       </tr></thead><tbody>`;
     bObs.forEach((o, i) => {
       const cls = o.code === 'C1' ? 'obs-c1' : o.code === 'C2' ? 'obs-c2' : o.code === 'C3' ? 'obs-c3' : o.code === 'FI' ? 'obs-fi' : '';
-      html += `<tr class="${cls}"><td class="center">${o.item_no || (i + 1)}</td><td>${e(o.description)}${o.location ? ' [' + e(o.location) + ']' : ''}</td><td class="center"><strong>${e(o.code)}</strong></td></tr>`;
+      html += `<tr class="${cls}"><td class="center">${o.item_no || (i + 1)}</td><td>${e(o.description)}</td><td>${e(o.location || '')}</td><td class="center"><strong>${e(o.code)}</strong></td></tr>`;
     });
     html += `</tbody></table>`;
     html += `</div>`;
@@ -1673,7 +1720,7 @@ app.get('/api/sites/:id/report', (req, res, next) => {
       </tr></table>`;
     }
 
-    html += `<table class="insp-table">
+    html += `<table class="insp-table alt-rows">
       <thead><tr>
         <th style="width:35px">Ref</th>
         <th>Inspection Item</th>
@@ -1703,7 +1750,7 @@ app.get('/api/sites/:id/report', (req, res, next) => {
   for (const b of siteBoards) {
     const ccts = boardCircuits[b.id] || [];
 
-    html += `<div class="page">`;
+    html += `<div class="page page-landscape">`;
     html += `<div class="hdr">
       <div><img src="/logo.jpeg" alt="" onerror="this.style.display='none'"></div>
       <div style="text-align:center;flex:1"><div style="font-size:11px;font-weight:bold">SCHEDULE OF CIRCUIT DETAILS AND TEST RESULTS</div><div style="font-size:8px">(FORM 4)</div></div>
@@ -1922,7 +1969,7 @@ app.get('/api/sites/:id/report', (req, res, next) => {
   // Footer script for page numbers
   html += `
   <div class="page-footer">
-    This form is based on the model shown in Appendix 6 of BS 7671:2018+A2:2022. Ref: ${e(certNum)}
+    ${comp.name ? e(comp.name) + ' &mdash; ' : ''}This form is based on the model shown in Appendix 6 of BS 7671:2018+A2:2022. Ref: ${e(certNum)}
   </div>`;
 
   html += `</body></html>`;
