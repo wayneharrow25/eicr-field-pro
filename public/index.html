@@ -983,33 +983,33 @@ input,select,textarea { font-size:16px !important; }
       '<div class="scroll-wrapper">' +
         '<table class="test-table w-full' + (hasRcd ? ' show-rcd' : '') + '" id="circuit-table">' +
           '<thead><tr>' +
-            '<th data-col="number">#</th>' +
-            '<th data-col="description">Desc</th>' +
-            '<th data-col="wiring_type">WT</th>' +
-            '<th data-col="ref_method">Ref</th>' +
-            '<th data-col="points" class="desk-col">Pts</th>' +
-            '<th data-col="ocpd_bsen">BS</th>' +
-            '<th data-col="ocpd_type">Crv</th>' +
-            '<th data-col="ocpd_rating">A</th>' +
-            '<th data-col="breaking_cap">kA</th>' +
-            '<th data-col="max_zs">Zs\u2098</th>' +
-            '<th data-col="rcd_bsen" class="rcd-col">RCD</th>' +
-            '<th data-col="rcd_type" class="rcd-col">Typ</th>' +
-            '<th data-col="rcd_idn" class="rcd-col">mA</th>' +
-            '<th data-col="live_mm">L</th>' +
-            '<th data-col="cpc_mm">E</th>' +
-            '<th data-col="r1">r1</th>' +
-            '<th data-col="rn">rn</th>' +
-            '<th data-col="r1r2">R1R2</th>' +
-            '<th data-col="ir_test_v" class="desk-col">TV</th>' +
-            '<th data-col="ir_ll">L-L</th>' +
-            '<th data-col="ir_le">L-E</th>' +
-            '<th data-col="zs_measured">Zs</th>' +
-            '<th data-col="polarity">Pol</th>' +
-            '<th data-col="rcd_time_x1" class="rcd-col">x1</th>' +
-            '<th data-col="rcd_test_btn" class="rcd-col">Test Btn</th>' +
-            '<th data-col="afdd_test" class="desk-col">AFDD</th>' +
-            '<th data-col="remarks" class="desk-col">Rem</th>' +
+            '<th data-col="number" title="Circuit Number">#</th>' +
+            '<th data-col="description" title="Circuit Description">Desc</th>' +
+            '<th data-col="wiring_type" title="Wiring Type (BS 7671 code A-K)">WT</th>' +
+            '<th data-col="ref_method" title="Reference Method (Table 4A2)">Ref</th>' +
+            '<th data-col="points" class="desk-col" title="Number of Points / Outlets">Pts</th>' +
+            '<th data-col="ocpd_bsen" title="Overcurrent Device BS(EN)">BS</th>' +
+            '<th data-col="ocpd_type" title="Overcurrent Device Type / Curve">Crv</th>' +
+            '<th data-col="ocpd_rating" title="Overcurrent Device Rating (Amps)">A</th>' +
+            '<th data-col="breaking_cap" title="Breaking Capacity (kA)">kA</th>' +
+            '<th data-col="max_zs" title="Maximum Zs from BS 7671 tables">Zs\u2098</th>' +
+            '<th data-col="rcd_bsen" class="rcd-col" title="RCD BS(EN) Standard">RCD</th>' +
+            '<th data-col="rcd_type" class="rcd-col" title="RCD Type (A, AC, B, etc)">Typ</th>' +
+            '<th data-col="rcd_idn" class="rcd-col" title="RCD Rated Residual Current (mA)">mA</th>' +
+            '<th data-col="live_mm" title="Live Conductor Size (mm\u00B2)">L</th>' +
+            '<th data-col="cpc_mm" title="CPC Size (mm\u00B2)">E</th>' +
+            '<th data-col="r1" title="Ring: Line Conductor Resistance r1 (\u03A9)">r1</th>' +
+            '<th data-col="rn" title="Ring: Neutral Conductor Resistance rn (\u03A9)">rn</th>' +
+            '<th data-col="r1r2" title="Continuity R1+R2 (\u03A9)">R1R2</th>' +
+            '<th data-col="ir_test_v" class="desk-col" title="Insulation Resistance Test Voltage (V)">TV</th>' +
+            '<th data-col="ir_ll" title="Insulation Resistance Line-Line (M\u03A9)">L-L</th>' +
+            '<th data-col="ir_le" title="Insulation Resistance Line-Earth (M\u03A9)">L-E</th>' +
+            '<th data-col="zs_measured" title="Earth Fault Loop Impedance Zs Measured (\u03A9)">Zs</th>' +
+            '<th data-col="polarity" title="Polarity Correct">Pol</th>' +
+            '<th data-col="rcd_time_x1" class="rcd-col" title="RCD Operating Time at I\u0394n x1 (ms)">x1</th>' +
+            '<th data-col="rcd_test_btn" class="rcd-col" title="RCD Test Button Operated">Test Btn</th>' +
+            '<th data-col="afdd_test" class="desk-col" title="AFDD Test">AFDD</th>' +
+            '<th data-col="remarks" class="desk-col" title="Remarks / Observations">Rem</th>' +
           '</tr></thead>' +
           '<tbody id="circuit-tbody">';
 
@@ -1211,7 +1211,7 @@ input,select,textarea { font-size:16px !important; }
         {v:'102',l:'102 — In conduit on a wooden/masonry wall'},
         {v:'103',l:'103 — Clipped direct, non-metallic surface'}
       ]},
-      {id:'ce_points', label:'Points/Outlets', val:c.points, type:'number'},
+      {id:'ce_points', label:'Points/Outlets', val:c.points},
       {id:'ce_live_mm', label:'Live CSA (mm\u00b2)', val:c.live_mm, placeholder:'1.5, 2.5, 4, 6, 10...'},
       {id:'ce_cpc_mm', label:'CPC CSA (mm\u00b2)', val:c.cpc_mm, placeholder:'1.0, 1.5, 2.5...'},
       {id:'ce_ocpd_bsen', label:'OCPD BS(EN)', val:c.ocpd_bsen, options:['','60898','61009','88-2','88-3','60947-2','Other']},
@@ -1742,7 +1742,7 @@ input,select,textarea { font-size:16px !important; }
     breaking_cap: [{v:'',l:'--'},{v:'6',l:'6 kA'},{v:'10',l:'10 kA'},{v:'15',l:'15 kA'},{v:'25',l:'25 kA'}],
     live_mm:      [{v:'',l:'--'},{v:'1.0',l:'1.0'},{v:'1.5',l:'1.5'},{v:'2.5',l:'2.5'},{v:'4',l:'4'},{v:'6',l:'6'},{v:'10',l:'10'},{v:'16',l:'16'},{v:'25',l:'25'},{v:'35',l:'35'}],
     cpc_mm:       [{v:'',l:'--'},{v:'1.0',l:'1.0'},{v:'1.5',l:'1.5'},{v:'2.5',l:'2.5'},{v:'4',l:'4'},{v:'6',l:'6'},{v:'10',l:'10'},{v:'16',l:'16'}],
-    points:       [{v:'',l:'--'},{v:'1',l:'1'},{v:'2',l:'2'},{v:'3',l:'3'},{v:'4',l:'4'},{v:'5',l:'5'},{v:'6',l:'6'},{v:'8',l:'8'},{v:'10',l:'10'},{v:'12',l:'12'}],
+    points:       [{v:'',l:'--'},{v:'1',l:'1'},{v:'2',l:'2'},{v:'3',l:'3'},{v:'4',l:'4'},{v:'5',l:'5'},{v:'6',l:'6'},{v:'8',l:'8'},{v:'10',l:'10'},{v:'12',l:'12'},{v:'LIM',l:'LIM'}],
     ocpd_rating:  [{v:'',l:'--'},{v:'6',l:'6A'},{v:'10',l:'10A'},{v:'16',l:'16A'},{v:'20',l:'20A'},{v:'25',l:'25A'},{v:'32',l:'32A'},{v:'40',l:'40A'},{v:'50',l:'50A'},{v:'63',l:'63A'},{v:'80',l:'80A'},{v:'100',l:'100A'}]
   };
 
