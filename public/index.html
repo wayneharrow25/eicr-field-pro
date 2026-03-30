@@ -1101,20 +1101,35 @@ input,select,textarea { font-size:16px !important; }
     var fields = [
       {id:'ce_number', label:'Circuit #', val:c.number, placeholder:'1, L1/1, TP/1'},
       {id:'ce_description', label:'Description', val:c.description, placeholder:'Lighting, Ring Main, etc'},
-      {id:'ce_wiring_type', label:'Wiring Type', val:c.wiring_type, labeledOptions:[
-        {v:'',l:'-- Select --'},{v:'A',l:'A — T&E clipped direct'},{v:'B',l:'B — T&E in conduit on wall'},
-        {v:'C',l:'C — T&E in conduit in wall'},{v:'D',l:'D — Cables in metallic trunking'},
-        {v:'E',l:'E — Cables on cable tray'},{v:'F',l:'F — SWA direct in ground/surface'},
-        {v:'G',l:'G — Cables in building void'},{v:'H',l:'H — MICC (mineral insulated)'},
-        {v:'O',l:'O — Other (specify in remarks)'}
+      {id:'ce_wiring_type', label:'Wiring Type (cable)', val:c.wiring_type, labeledOptions:[
+        {v:'',l:'-- Select --'},
+        {v:'T+E',l:'T+E — Flat twin & earth (6242Y)'},
+        {v:'T+3E',l:'T+3E — Flat three core & earth (6243Y)'},
+        {v:'Singles/Con',l:'Singles/Con — Singles in conduit'},
+        {v:'Singles/Trk',l:'Singles/Trk — Singles in trunking'},
+        {v:'SWA',l:'SWA — Steel wire armoured'},
+        {v:'MICC',l:'MICC — Mineral insulated copper clad'},
+        {v:'FP',l:'FP — Fire performance (FP200 etc)'},
+        {v:'LSF',l:'LSF — Low smoke & fume'},
+        {v:'XLPE/SWA',l:'XLPE/SWA — Cross-linked PE armoured'},
+        {v:'Flex',l:'Flex — Flexible cable/cord'},
+        {v:'SY',l:'SY — Steel braided flex'},
+        {v:'Busbar',l:'Busbar — Busbar trunking'},
+        {v:'Other',l:'Other — Specify in remarks'}
       ]},
-      {id:'ce_ref_method', label:'Ref Method', val:c.ref_method, labeledOptions:[
-        {v:'',l:'-- Select --'},{v:'A',l:'A — Enclosed in insulated wall'},
-        {v:'B',l:'B — In conduit / trunking on wall'},{v:'C',l:'C — Clipped direct to surface'},
-        {v:'100',l:'100 — Enclosed in thermally insulating wall'},
+      {id:'ce_ref_method', label:'Ref Method (Table 4A2)', val:c.ref_method, labeledOptions:[
+        {v:'',l:'-- Select --'},
+        {v:'A',l:'A — Sheathed in thermally insulating wall'},
+        {v:'B',l:'B — In conduit or trunking on a wall'},
+        {v:'C',l:'C — Clipped direct to a surface'},
+        {v:'D',l:'D — In ducts in the ground'},
+        {v:'E',l:'E — Free air (multicore on tray/cleats)'},
+        {v:'F',l:'F — Single-core touching on tray'},
+        {v:'G',l:'G — Single-core spaced on tray'},
+        {v:'100',l:'100 — Sheathed in thermally insulating wall'},
         {v:'101',l:'101 — In conduit in thermally insulating wall'},
-        {v:'102',l:'102 — In conduit on wooden wall'},{v:'103',l:'103 — Clipped to non-metallic surface'},
-        {v:'E',l:'E — Free air / cable tray'},{v:'F',l:'F — Direct buried in ground'}
+        {v:'102',l:'102 — In conduit on a wooden/masonry wall'},
+        {v:'103',l:'103 — Clipped direct, non-metallic surface'}
       ]},
       {id:'ce_points', label:'Points/Outlets', val:c.points, type:'number'},
       {id:'ce_live_mm', label:'Live CSA (mm\u00b2)', val:c.live_mm, placeholder:'1.5, 2.5, 4, 6, 10...'},
@@ -1495,8 +1510,8 @@ input,select,textarea { font-size:16px !important; }
       '6. If devices are grouped under an RCD (e.g. 4-way RCBO block or RCD header), note the RCD details: rcd_bsen, rcd_type, rcd_idn on each circuit in that group.\n' +
       '7. Curve types: B (domestic/commercial), C (motors/fluorescent), D (high inrush). Read from the device label.\n' +
       '8. If a label/schedule is visible, use the descriptions shown. Common: Lighting, Sockets, Ring Main, Radial, FCU, Cooker, Immersion, Boiler, Alarm, Emergency Lighting, Mechanical Extract, Hand Dryer.\n' +
-      '9. wiring_type — USE ONLY THE CODE LETTER, not the full description. Codes: A (T&E clipped direct), B (T&E in conduit on wall), C (T&E in conduit in wall), D (metallic trunking), E (cable tray), F (SWA), G (building void), H (MICC).\n' +
-      '10. reference_method — USE ONLY THE CODE, not description. Codes: A (enclosed in insulated wall), B (in conduit/trunking on wall), C (clipped direct), 100 (thermally insulating wall), 101 (conduit in insulating wall), 102 (conduit on wooden wall), 103 (clipped to non-metallic surface).\n' +
+      '9. wiring_type — the CABLE TYPE, not installation method. Use these short codes: "T+E" (flat twin & earth 6242Y), "T+3E" (three core & earth 6243Y), "Singles/Con" (singles in conduit), "Singles/Trk" (singles in trunking), "SWA" (steel wire armoured), "MICC" (mineral insulated copper clad), "FP" (fire performance FP200), "LSF" (low smoke & fume), "XLPE/SWA" (cross-linked PE armoured), "Flex" (flexible cable), "Busbar" (busbar trunking).\n' +
+      '10. reference_method — the INSTALLATION METHOD per BS 7671 Table 4A2. Use ONLY the code letter/number: "A" (sheathed in thermally insulating wall), "B" (in conduit/trunking on wall), "C" (clipped direct to surface), "D" (in ducts in ground), "E" (free air/multicore on tray), "F" (single-core touching on tray), "G" (single-core spaced on tray), "100"-"103" for numbered methods.\n' +
       '11. cable_size — live conductor CSA in mm² (e.g. "1.5", "2.5", "4", "6", "10", "16", "25").\n' +
       '12. cpc_size — CPC/earth conductor CSA in mm² if shown (e.g. "1.0", "1.5", "2.5", "4").\n' +
       '13. num_points — number of points or outlets served by the circuit.\n' +
@@ -1505,7 +1520,7 @@ input,select,textarea { font-size:16px !important; }
       'Return ONLY valid JSON:\n' +
       '{"main_switch": {"description":"Main Switch","ocpd_bsen":"60947-3","ocpd_type":"Isolator","ocpd_rating":"100","poles":"TP&N"}, ' +
       '"board_updates": {"ref":"DB1","location":"Plant Room","dist_type":"Schneider Isobar","dist_bsen":"61439","num_phases":"3","supplied_from":"MSDB Way 3"}, ' +
-      '"updates": [{"number":"1L1","description":"Lighting","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","breaking_cap":"6","poles":"SP","cable_size":"1.5","cpc_size":"1.0","reference_method":"C","num_points":"8","wiring_type":"A","rcd_bsen":"","rcd_type":"","rcd_idn":""},{"number":"2","description":"Submain to DB2","ocpd_bsen":"60898","ocpd_type":"C","ocpd_rating":"63","breaking_cap":"10","poles":"TP","cable_size":"16","cpc_size":"4","reference_method":"B","num_points":"","wiring_type":"F","rcd_bsen":"","rcd_type":"","rcd_idn":""}]}';
+      '"updates": [{"number":"1L1","description":"Lighting","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","breaking_cap":"6","poles":"SP","cable_size":"1.5","cpc_size":"1.0","reference_method":"C","num_points":"8","wiring_type":"T+E","rcd_bsen":"","rcd_type":"","rcd_idn":""},{"number":"2","description":"Submain to DB2","ocpd_bsen":"60898","ocpd_type":"C","ocpd_rating":"63","breaking_cap":"10","poles":"TP","cable_size":"16","cpc_size":"4","reference_method":"B","num_points":"","wiring_type":"SWA","rcd_bsen":"","rcd_type":"","rcd_idn":""}]}';
 
     /* Append user hint if provided */
     var hintEl = document.getElementById('ai-scan-hint');
