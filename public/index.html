@@ -1529,28 +1529,54 @@ input,select,textarea { font-size:16px !important; }
       prompt += '\n\nADDITIONAL INFO FROM INSPECTOR: ' + hint;
     }
 
-    updateScanStatus('Compressing ' + _scanPhotos.length + ' photo' + (_scanPhotos.length > 1 ? 's' : '') + '...');
-    var maxW = _scanPhotos.length > 1 ? 1200 : 1600; /* smaller for multi-photo to reduce payload */
-    Promise.all(_scanPhotos.map(function(p) { return compressImage(p.file, maxW, 0.7); })).then(function(allBase64) {
+    updateScanStatus('Compressing photo 1 of ' + _scanPhotos.length + '...');
+    /* Sequential scan: send one photo at a time, each building on previous results */
+    var allBase64 = [];
+    var compressChain = Promise.resolve();
+    _scanPhotos.forEach(function(p, i) {
+      compressChain = compressChain.then(function() {
+        updateScanStatus('Compressing photo ' + (i + 1) + ' of ' + _scanPhotos.length + '...');
+        return compressImage(p.file, 1600, 0.8);
+      }).then(function(b64) { allBase64.push(b64); });
+    });
+
+    compressChain.then(function() {
       if (_scanAbort && _scanAbort.signal.aborted) throw new Error('Cancelled');
       _scanState = { base64: allBase64[0], images: allBase64, keyId: keyEl.value, history: [], updates: null, systemPrompt: systemPrompt };
-      updateScanStatus('Sending ' + allBase64.length + ' photo' + (allBase64.length > 1 ? 's' : '') + ' to AI — waiting for response...');
 
-      return api('POST', '/ai/process', {
-        key_id: keyEl.value,
-        prompt: prompt,
-        images_base64: allBase64,
-        system_prompt: systemPrompt
+      /* Send photos sequentially — first gets full prompt, rest refine */
+      var scanChain = Promise.resolve(null);
+      allBase64.forEach(function(b64, i) {
+        scanChain = scanChain.then(function(prevResult) {
+          if (_scanAbort && _scanAbort.signal.aborted) throw new Error('Cancelled');
+          var imgPrompt;
+          if (i === 0) {
+            imgPrompt = prompt;
+            updateScanStatus('Sending photo 1 of ' + allBase64.length + ' to AI...');
+          } else {
+            imgPrompt = 'Here is photo ' + (i + 1) + ' of the same board. ' +
+              'Update/merge with your previous results. Add any new circuits, fill in missing fields (cable sizes, reference methods, descriptions, wiring types, points), and correct anything wrong. ' +
+              'Return the COMPLETE updated JSON (all circuits, not just changes). Same format as before.';
+            if (prevResult) {
+              imgPrompt += '\n\nYour previous result was:\n' + prevResult;
+            }
+            updateScanStatus('Sending photo ' + (i + 1) + ' of ' + allBase64.length + ' — refining...');
+          }
+          return api('POST', '/ai/process', {
+            key_id: keyEl.value,
+            prompt: imgPrompt,
+            image_base64: b64,
+            system_prompt: systemPrompt
+          }).then(function(data) { return data.result || ''; });
+        });
       });
-    }).then(function(data) {
+      return scanChain;
+    }).then(function(result) {
       clearInterval(timer);
       _scanAbort = null;
-      var result = data.result || '';
-      /* Store conversation history for follow-ups */
-      var userParts = [{ text: prompt }];
-      _scanState.images.forEach(function(img) { userParts.push({ inlineData: { mimeType: 'image/jpeg', data: img } }); });
+      /* Store final result in history */
       _scanState.history = [
-        { role: 'user', parts: userParts },
+        { role: 'user', parts: [{ text: prompt }, { inlineData: { mimeType: 'image/jpeg', data: allBase64[0] } }] },
         { role: 'model', parts: [{ text: result }] }
       ];
 
