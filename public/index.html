@@ -1454,7 +1454,11 @@ input,select,textarea { font-size:16px !important; }
       '1. DO NOT include the main switch/isolator/incomer as a numbered circuit. The main switch is recorded in the board header, NOT in the circuit schedule. It does not get tested on the Form 4 test schedule.\n' +
       '2. Number OUTGOING circuits only, sequentially starting from 1, top of the board going down (after the main switch).\n' +
       '3. Include EVERY outgoing way/position — if a way is blank/spare, include it as {"number":"X","description":"Spare","ocpd_bsen":"","ocpd_type":"","ocpd_rating":""}\n' +
-      '4. For three-phase boards, number circuits as 1L1, 1L2, 1L3, 2L1, 2L2, 2L3 etc. The number prefix is the way, L1/L2/L3 is the phase. This is the standard UK TP&N format.\n' +
+      '4. THREE-PHASE BOARDS — circuit numbering:\n' +
+      '   - Single-phase circuits on a TP&N board: number as 1L1, 1L2, 1L3, 2L1, 2L2, 2L3 etc. The number prefix is the way, L1/L2/L3 is the phase.\n' +
+      '   - THREE-POLE (TP) MCBs/MCCBs: A 3-pole device spans all 3 phases as ONE circuit. Do NOT list it as 3 separate circuits. List it as a SINGLE circuit with the way number (e.g. "1") and add "poles":"TP" or "poles":"3P" to the JSON. Example: a 3-pole 63A Type C MCB on way 5 = {"number":"5","description":"Submain to DB2","ocpd_type":"C","ocpd_rating":"63","poles":"TP"}.\n' +
+      '   - If a schedule shows a TP MCB occupying ways 1L1, 1L2, 1L3 — combine into ONE circuit numbered "1" with poles "TP".\n' +
+      '   - Single-pole devices get individual L1/L2/L3 numbers. Triple-pole devices get ONE number with poles=TP.\n' +
       '5. MCBs = BS(EN) 60898. RCBOs = BS(EN) 61009. MCCBs = BS(EN) 60947-2. HRC Fuses = BS(EN) 88-2. RCDs = BS(EN) 61008.\n' +
       '6. If devices are grouped under an RCD (e.g. 4-way RCBO block or RCD header), note the RCD details: rcd_bsen, rcd_type, rcd_idn on each circuit in that group.\n' +
       '7. Curve types: B (domestic/commercial), C (motors/fluorescent), D (high inrush). Read from the device label.\n' +
@@ -1466,7 +1470,7 @@ input,select,textarea { font-size:16px !important; }
       'Return ONLY valid JSON:\n' +
       '{"main_switch": {"description":"Main Switch","ocpd_bsen":"60947-3","ocpd_type":"Isolator","ocpd_rating":"100","poles":"TP&N"}, ' +
       '"board_updates": {"ref":"DB1","location":"Plant Room","dist_type":"Schneider Isobar","dist_bsen":"61439","num_phases":"3","supplied_from":"MSDB Way 3"}, ' +
-      '"updates": [{"number":"1","description":"Lighting","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","cable_size":"1.5","reference_method":"C","num_points":"8","wiring_type":"A","rcd_bsen":"","rcd_type":"","rcd_idn":""}]}';
+      '"updates": [{"number":"1L1","description":"Lighting","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","poles":"SP","cable_size":"1.5","reference_method":"C","num_points":"8","wiring_type":"A","rcd_bsen":"","rcd_type":"","rcd_idn":""},{"number":"2","description":"Submain to DB2","ocpd_bsen":"60898","ocpd_type":"C","ocpd_rating":"63","poles":"TP","cable_size":"16","reference_method":"B","num_points":"","wiring_type":"F","rcd_bsen":"","rcd_type":"","rcd_idn":""}]}';
 
     /* Append user hint if provided */
     var hintEl = document.getElementById('ai-scan-hint');
@@ -1573,7 +1577,8 @@ input,select,textarea { font-size:16px !important; }
       '<div class="space-y-1" style="max-height:250px;overflow-y:auto">';
     updates.forEach(function(u, i) {
       var desc = u.description || 'Spare';
-      var prot = (u.ocpd_type || '') + (u.ocpd_rating ? u.ocpd_rating + 'A' : '');
+      var poles = (u.poles && u.poles !== 'SP') ? ' [' + u.poles + ']' : '';
+      var prot = (u.ocpd_type || '') + (u.ocpd_rating ? u.ocpd_rating + 'A' : '') + poles;
       var bsen = u.ocpd_bsen ? 'BS(EN) ' + u.ocpd_bsen : '';
       var rcd = u.rcd_idn ? ' | RCD ' + u.rcd_idn + 'mA' : '';
       var extra = [];
