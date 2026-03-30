@@ -87,7 +87,7 @@ input,select,textarea { font-size:16px !important; }
 .test-table .rcd-col { display:none; }
 .test-table.show-rcd .rcd-col { display:table-cell; }
 .scroll-wrapper { overflow-x:auto; -webkit-overflow-scrolling:touch; }
-.col-fill-popup { position:fixed; z-index:100; background:#fff; border:1px solid #e2e8f0; border-radius:.75rem; box-shadow:0 8px 24px rgba(0,0,0,.15); padding:.5rem; min-width:10rem; }
+.col-fill-popup { position:fixed; z-index:100; background:#fff; border:1px solid #e2e8f0; border-radius:.75rem; box-shadow:0 8px 24px rgba(0,0,0,.15); padding:.5rem; min-width:14rem; }
 .col-fill-popup button { display:block; width:100%; text-align:left; padding:.5rem .75rem; border:none; background:none; font-size:.875rem; cursor:pointer; border-radius:.5rem; }
 .col-fill-popup button:hover { background:#eff6ff; }
 .col-fill-popup .cfp-head { font-size:.7rem; color:#94a3b8; font-weight:600; padding:.25rem .75rem; text-transform:uppercase; }
@@ -1661,7 +1661,7 @@ input,select,textarea { font-size:16px !important; }
       h += '<button data-action="cfp-fill" data-col="' + col + '" data-val="' + esc(String(f.v)) + '">' + esc(f.l) + '</button>';
     });
     h += '<div class="cfp-head" style="margin-top:.25rem">Custom</div>';
-    h += '<div style="display:flex;gap:.375rem;padding:0 .5rem .375rem"><input type="text" class="input-field" id="cfp-custom" placeholder="Value" style="flex:1;font-size:.95rem;padding:.5rem .625rem;min-height:2.25rem"><button data-action="cfp-custom" data-col="' + col + '" class="btn btn-primary btn-sm" style="font-size:.85rem;padding:.5rem .75rem">Set</button></div>';
+    h += '<div style="display:flex;gap:.5rem;padding:.25rem .5rem .5rem;align-items:center"><input type="text" id="cfp-custom" placeholder="Type value..." style="flex:1;font-size:.9rem;padding:.5rem .625rem;min-height:2rem;border:1.5px solid #cbd5e1;border-radius:.5rem;outline:none;background:#fff;min-width:0"><button data-action="cfp-custom" data-col="' + col + '" class="btn btn-primary btn-sm" style="font-size:.85rem;padding:.5rem .75rem;white-space:nowrap">Set</button></div>';
     div.innerHTML = h;
     document.body.appendChild(div);
     setTimeout(function() { document.addEventListener('click', closeCfpOutside, true); }, 10);
