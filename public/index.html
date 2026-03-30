@@ -3303,6 +3303,13 @@ input,select,textarea { font-size:16px !important; }
       '<div class="p-3 bg-white border-b border-slate-100">' +
         '<button class="voice-action-btn insp w-full" id="voice-insp-btn" data-action="voice-inspection">' +
           '&#127908; SPEAK OUTCOMES <span class="text-xs opacity-75">(e.g. "1.1 pass, 5.17 C2")</span></button>' +
+        '<div class="flex gap-2 mt-2 items-center">' +
+          '<span class="text-xs text-slate-400 font-semibold">Fill empty:</span>' +
+          '<button class="btn btn-sm text-xs" data-action="fill-inspection-empty" data-val="Pass" style="background:#d1fae5;color:#065f46;border:1px solid #a7f3d0">Pass</button>' +
+          '<button class="btn btn-sm text-xs" data-action="fill-inspection-empty" data-val="N/A" style="background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe">N/A</button>' +
+          '<button class="btn btn-sm text-xs" data-action="fill-inspection-empty" data-val="LIM" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a">LIM</button>' +
+          '<button class="btn btn-ghost btn-sm text-xs" data-action="fill-inspection-empty" data-val="" style="color:#ef4444">Clear All</button>' +
+        '</div>' +
       '</div>';
     var currentSection = '';
 
@@ -3349,6 +3356,31 @@ input,select,textarea { font-size:16px !important; }
         navigate('site-detail', {currentSiteTab: 'inspection'});
       }
     }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  function fillInspectionEmpty(val) {
+    var selects = document.querySelectorAll('[data-action="set-inspection-outcome"]');
+    var count = 0;
+    if (val === '') {
+      /* Clear all */
+      selects.forEach(function(sel) {
+        if (sel.value) { sel.value = ''; count++; }
+        sel.className = 'outcome-select';
+      });
+      toast('Cleared ' + count + ' outcomes', 'info');
+    } else {
+      /* Fill only empty ones */
+      selects.forEach(function(sel) {
+        if (!sel.value) {
+          sel.value = val;
+          sel.className = 'outcome-select outcome-' + val.toLowerCase().replace('/', '');
+          count++;
+        }
+      });
+      toast('Filled ' + count + ' empty items with ' + val, 'success');
+    }
+    /* Auto-save */
+    saveInspections();
   }
 
   function saveInspections() {
@@ -5837,6 +5869,9 @@ input,select,textarea { font-size:16px !important; }
         break;
       case 'save-inspections':
         saveInspections();
+        break;
+      case 'fill-inspection-empty':
+        fillInspectionEmpty(target.getAttribute('data-val'));
         break;
       case 'set-inspection-outcome':
         /* Handled by change event */
