@@ -562,33 +562,58 @@ function mapCircuitFields(obj) {
 }
 
 app.put('/api/boards/:id/circuits/bulk', authMiddleware, async (req, res) => {
-  const updates = req.body; // [{id or number, ...fields}]
+  const updates = req.body; // [{id or number, ...fields}] or with ?replace=1 to delete-all-then-insert
   const boardId = req.params.id;
-  for (const raw of updates) {
-    const u = mapCircuitFields(raw);
-    if (u.id) {
+  const replaceMode = req.query.replace === '1';
+
+  if (replaceMode) {
+    // Delete all existing circuits and insert fresh — used by renumber to avoid duplication
+    await pool.query('DELETE FROM circuits WHERE board_id = $1', [boardId]);
+    for (const raw of updates) {
+      const u = mapCircuitFields(raw);
       const fields = Object.keys(u).filter(k => k !== 'id' && k !== 'board_id');
-      const sets = fields.map((f, i) => `${f} = $${i + 2}`);
-      const vals = fields.map(f => u[f]);
-      await pool.query(`UPDATE circuits SET ${sets.join(', ')} WHERE id = $1`, [u.id, ...vals]);
-    } else {
-      // Match by number or create new
-      const { rows: existing } = await pool.query('SELECT id FROM circuits WHERE board_id = $1 AND number = $2', [boardId, u.number]);
-      if (existing[0]) {
-        const fields = Object.keys(u).filter(k => k !== 'id' && k !== 'board_id' && k !== 'number');
+      const cols = ['board_id', ...fields];
+      const placeholders = cols.map((_, i) => `$${i + 1}`);
+      const vals = [boardId, ...fields.map(f => u[f])];
+      await pool.query(`INSERT INTO circuits (${cols.join(',')}) VALUES (${placeholders.join(',')})`, vals);
+    }
+  } else {
+    for (const raw of updates) {
+      const u = mapCircuitFields(raw);
+      if (u.id) {
+        const fields = Object.keys(u).filter(k => k !== 'id' && k !== 'board_id');
         const sets = fields.map((f, i) => `${f} = $${i + 2}`);
         const vals = fields.map(f => u[f]);
-        if (sets.length) await pool.query(`UPDATE circuits SET ${sets.join(', ')} WHERE id = $1`, [existing[0].id, ...vals]);
+        await pool.query(`UPDATE circuits SET ${sets.join(', ')} WHERE id = $1`, [u.id, ...vals]);
       } else {
-        const fields = Object.keys(u).filter(k => k !== 'id');
-        const cols = ['board_id', ...fields];
-        const placeholders = cols.map((_, i) => `$${i + 1}`);
-        const vals = [boardId, ...fields.map(f => u[f])];
-        await pool.query(`INSERT INTO circuits (${cols.join(',')}) VALUES (${placeholders.join(',')})`, vals);
+        // Match by number or create new
+        const { rows: existing } = await pool.query('SELECT id FROM circuits WHERE board_id = $1 AND number = $2', [boardId, u.number]);
+        if (existing[0]) {
+          const fields = Object.keys(u).filter(k => k !== 'id' && k !== 'board_id' && k !== 'number');
+          const sets = fields.map((f, i) => `${f} = $${i + 2}`);
+          const vals = fields.map(f => u[f]);
+          if (sets.length) await pool.query(`UPDATE circuits SET ${sets.join(', ')} WHERE id = $1`, [existing[0].id, ...vals]);
+        } else {
+          const fields = Object.keys(u).filter(k => k !== 'id');
+          const cols = ['board_id', ...fields];
+          const placeholders = cols.map((_, i) => `$${i + 1}`);
+          const vals = [boardId, ...fields.map(f => u[f])];
+          await pool.query(`INSERT INTO circuits (${cols.join(',')}) VALUES (${placeholders.join(',')})`, vals);
+        }
       }
     }
   }
   const { rows } = await pool.query('SELECT * FROM circuits WHERE board_id = $1 ORDER BY sort_order, id', [boardId]);
+  res.json(rows);
+});
+
+// Bulk delete circuits by ID list
+app.post('/api/boards/:id/circuits/bulk-delete', authMiddleware, async (req, res) => {
+  const ids = req.body.ids || [];
+  if (!ids.length) return res.json({ deleted: 0 });
+  const placeholders = ids.map((_, i) => `$${i + 2}`).join(',');
+  await pool.query(`DELETE FROM circuits WHERE board_id = $1 AND id IN (${placeholders})`, [req.params.id, ...ids]);
+  const { rows } = await pool.query('SELECT * FROM circuits WHERE board_id = $1 ORDER BY sort_order, id', [req.params.id]);
   res.json(rows);
 });
 

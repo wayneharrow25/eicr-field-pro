@@ -854,15 +854,13 @@ input,select,textarea { font-size:16px !important; }
             'Fill LIM</button>' +
         '</div>' +
       '</div>' +
-      (b.num_phases === 'three' || b.num_phases === '3' || b.num_phases === 'TPN' ?
       '<div class="mt-3 pt-3 border-t border-slate-100">' +
-        '<h4 class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">3-Phase Numbering</h4>' +
+        '<h4 class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Renumber Circuits</h4>' +
         '<div class="grid grid-cols-2 gap-2">' +
-          '<button class="btn btn-ghost text-xs" data-action="renumber-tp" data-mode="L">L1/1, L2/1, L3/1...</button>' +
-          '<button class="btn btn-ghost text-xs" data-action="renumber-tp" data-mode="row">1L1, 1L2, 1L3...</button>' +
+          '<button class="btn btn-ghost text-xs" data-action="renumber-circuits" data-mode="SP">1, 2, 3... (SP)</button>' +
+          '<button class="btn btn-ghost text-xs" data-action="renumber-circuits" data-mode="TP">1L1, 1L2, 1L3... (TP)</button>' +
         '</div>' +
-        '<p class="text-xs text-slate-400 mt-1">Renumbers existing circuits into 3-phase pattern</p>' +
-      '</div>' : '') +
+      '</div>' +
       '<div class="mt-3 pt-3 border-t border-slate-100">' +
         '<h4 class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Text Format</h4>' +
         '<div class="grid grid-cols-3 gap-2">' +
@@ -893,9 +891,20 @@ input,select,textarea { font-size:16px !important; }
     html += '<div class="card overflow-hidden">' +
       '<div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">' +
         '<h3 class="font-semibold text-slate-800">Test Schedule (Form 4)</h3>' +
-        '<button class="btn btn-primary btn-sm" data-action="add-circuit">' +
-          '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
-          'Add</button>' +
+        '<div class="flex gap-2">' +
+          '<button class="btn btn-ghost btn-sm" data-action="toggle-bulk-select" id="bulk-select-btn">' +
+            '<svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"/></svg>' +
+            'Select</button>' +
+          '<button class="btn btn-primary btn-sm" data-action="add-circuit">' +
+            '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+            'Add</button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="bulk-select-bar" style="display:none" class="flex items-center gap-2 px-4 py-2 bg-red-50 border-b border-red-200">' +
+        '<button class="btn btn-sm" style="background:#dbeafe;color:#2563eb" data-action="bulk-select-all">All</button>' +
+        '<button class="btn btn-sm" style="background:#dbeafe;color:#2563eb" data-action="bulk-select-none">None</button>' +
+        '<span class="flex-1 text-xs text-slate-600" id="bulk-select-count">0 selected</span>' +
+        '<button class="btn btn-danger btn-sm" data-action="bulk-delete-selected">Delete Selected</button>' +
       '</div>' +
       '<div class="scroll-wrapper">' +
         '<table class="test-table w-full">' +
@@ -1344,6 +1353,7 @@ input,select,textarea { font-size:16px !important; }
   var _scanState = { base64: null, keyId: null, history: [], updates: null, boardUpdates: null, systemPrompt: '' };
   var _scanAbort = null; /* AbortController for cancellable scans */
   var _bulkAbort = false; /* flag for cancelling bulk scan */
+  var _bulkSelectMode = false; /* flag for circuit bulk select/delete */
 
   function cancelPhotoScan() {
     if (_scanAbort) { _scanAbort.abort(); _scanAbort = null; }
@@ -2596,27 +2606,106 @@ input,select,textarea { font-size:16px !important; }
     }).catch(function(err) { toast('Spell check error: ' + err.message, 'error'); });
   }
 
-  /* ===== 3-PHASE RENUMBERING ===== */
-  function renumberTP(mode) {
-    if (!state.circuits.length) { toast('No circuits to renumber', 'error'); return; }
-    var phases = ['L1', 'L2', 'L3'];
-    var count = state.circuits.length;
-
-    state.circuits.forEach(function(c, i) {
-      var row = Math.floor(i / 3) + 1;
-      var phase = phases[i % 3];
-      if (mode === 'L') {
-        /* L1/1, L2/1, L3/1, L1/2, L2/2, L3/2 */
-        c.number = phase + '/' + row;
-      } else {
-        /* 1L1, 1L2, 1L3, 2L1, 2L2, 2L3 */
-        c.number = row + phase;
+  /* ===== BULK SELECT / DELETE CIRCUITS ===== */
+  function toggleBulkSelect() {
+    _bulkSelectMode = !_bulkSelectMode;
+    var bar = document.getElementById('bulk-select-bar');
+    var btn = document.getElementById('bulk-select-btn');
+    if (bar) bar.style.display = _bulkSelectMode ? 'flex' : 'none';
+    if (btn) {
+      btn.style.background = _bulkSelectMode ? '#fee2e2' : '';
+      btn.style.color = _bulkSelectMode ? '#dc2626' : '';
+      btn.innerHTML = _bulkSelectMode ? '&#10007; Cancel' : '<svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"/></svg> Select';
+    }
+    /* Toggle checkboxes on each row */
+    var tbody = document.getElementById('circuit-tbody');
+    if (!tbody) return;
+    var rows = tbody.querySelectorAll('tr');
+    rows.forEach(function(row, idx) {
+      var existing = row.querySelector('.bulk-check');
+      if (_bulkSelectMode && !existing) {
+        var td = document.createElement('td');
+        td.innerHTML = '<input type="checkbox" class="bulk-check" data-idx="' + idx + '" style="width:1.25rem;height:1.25rem;cursor:pointer">';
+        row.insertBefore(td, row.firstChild);
+      } else if (!_bulkSelectMode && existing) {
+        existing.parentElement.remove();
       }
     });
+    /* Also toggle header checkbox column */
+    var thead = tbody.closest('table').querySelector('thead tr');
+    if (thead) {
+      var existingTh = thead.querySelector('.bulk-check-th');
+      if (_bulkSelectMode && !existingTh) {
+        var th = document.createElement('th');
+        th.className = 'bulk-check-th';
+        th.innerHTML = '<input type="checkbox" data-action="bulk-toggle-all" style="width:1.25rem;height:1.25rem;cursor:pointer">';
+        thead.insertBefore(th, thead.firstChild);
+      } else if (!_bulkSelectMode && existingTh) {
+        existingTh.remove();
+      }
+    }
+    updateBulkCount();
+  }
 
-    saveAllCircuits(true);
-    toast(count + ' circuits renumbered to 3-phase (' + mode + ' format)', 'success');
-    navigate('board-detail');
+  function updateBulkCount() {
+    var checks = document.querySelectorAll('.bulk-check:checked');
+    var el = document.getElementById('bulk-select-count');
+    if (el) el.textContent = checks.length + ' selected';
+  }
+
+  function bulkSelectAll(selectAll) {
+    var checks = document.querySelectorAll('.bulk-check');
+    checks.forEach(function(c) { c.checked = selectAll; });
+    updateBulkCount();
+  }
+
+  function bulkDeleteSelected() {
+    var checks = document.querySelectorAll('.bulk-check:checked');
+    if (!checks.length) { toast('Select circuits first', 'error'); return; }
+    var indices = [];
+    checks.forEach(function(c) { indices.push(parseInt(c.getAttribute('data-idx'))); });
+    /* Get circuit IDs from state */
+    var ids = indices.map(function(i) { return state.circuits[i] && state.circuits[i].id; }).filter(Boolean);
+    if (!ids.length) { toast('No saved circuits selected', 'error'); return; }
+
+    api('POST', '/boards/' + state.currentBoard.id + '/circuits/bulk-delete', { ids: ids }).then(function(data) {
+      state.circuits = data.map(mapCircuitFromDB);
+      _bulkSelectMode = false;
+      toast(ids.length + ' circuits deleted', 'success');
+      navigate('board-detail');
+    }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  /* ===== CIRCUIT RENUMBERING ===== */
+  function renumberCircuits(mode) {
+    if (!state.circuits.length || !state.currentBoard) { toast('No circuits to renumber', 'error'); return; }
+    var count = state.circuits.length;
+
+    if (mode === 'SP') {
+      /* Single phase: 1, 2, 3, 4... */
+      state.circuits.forEach(function(c, i) { c.number = String(i + 1); });
+    } else {
+      /* Three phase: 1L1, 1L2, 1L3, 2L1, 2L2, 2L3... */
+      var phases = ['L1', 'L2', 'L3'];
+      state.circuits.forEach(function(c, i) {
+        var row = Math.floor(i / 3) + 1;
+        c.number = row + phases[i % 3];
+      });
+    }
+
+    /* Use replace mode to delete-all-then-insert — prevents duplication */
+    var updates = state.circuits.map(function(c) {
+      var obj = {};
+      Object.keys(c).forEach(function(k) {
+        if (k !== 'id' && k !== 'board_id') obj[k] = c[k];
+      });
+      return obj;
+    });
+    api('PUT', '/boards/' + state.currentBoard.id + '/circuits/bulk?replace=1', updates).then(function(data) {
+      state.circuits = data.map(mapCircuitFromDB);
+      toast(count + ' circuits renumbered (' + mode + ')', 'success');
+      navigate('board-detail');
+    }).catch(function(err) { toast(err.message, 'error'); });
   }
 
   /* ===== BOARD TEXT FORMATTING ===== */
@@ -4141,6 +4230,22 @@ input,select,textarea { font-size:16px !important; }
       case 'add-circuit':
         openEditCircuitSheet(-1);
         break;
+      case 'toggle-bulk-select':
+        toggleBulkSelect();
+        break;
+      case 'bulk-select-all':
+        bulkSelectAll(true);
+        break;
+      case 'bulk-select-none':
+        bulkSelectAll(false);
+        break;
+      case 'bulk-delete-selected':
+        bulkDeleteSelected();
+        break;
+      case 'bulk-toggle-all':
+        var allChecked = target.checked;
+        bulkSelectAll(allChecked);
+        break;
       case 'edit-circuit':
         var idx = parseInt(target.getAttribute('data-idx'));
         if (!isNaN(idx)) openEditCircuitSheet(idx);
@@ -4224,9 +4329,9 @@ input,select,textarea { font-size:16px !important; }
       case 'format-obs-spellcheck':
         ensureAiKeys().then(function() { formatObsSpellCheck(); });
         break;
-      case 'renumber-tp':
-        var tpMode = target.getAttribute('data-mode') || 'L';
-        renumberTP(tpMode);
+      case 'renumber-circuits':
+        var rnMode = target.getAttribute('data-mode') || 'SP';
+        renumberCircuits(rnMode);
         break;
       case 'format-board-caps':
         formatBoardAllCaps();
@@ -4428,6 +4533,10 @@ input,select,textarea { font-size:16px !important; }
   /* Handle change events for inspection outcomes — now auto-saves */
   document.addEventListener('change', function(e) {
     var target = e.target;
+    /* Bulk select checkbox count update */
+    if (target.classList && target.classList.contains('bulk-check')) {
+      updateBulkCount();
+    }
     if (target.getAttribute && target.getAttribute('data-action') === 'set-inspection-outcome') {
       var val = target.value;
       /* Update styling */
