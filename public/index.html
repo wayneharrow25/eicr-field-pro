@@ -3674,38 +3674,35 @@ input,select,textarea { font-size:16px !important; }
     });
   }
 
-  /* Actually persist the observation — uses multipart FormData (Android-proof, no JS file reading) */
+  /* Actually persist the observation — single POST with FormData (Android-proof) */
   function doSaveObservation(editId, fields, rawFile, afterSave) {
     var token = sessionStorage.getItem('token') || localStorage.getItem('token');
     var fd = new FormData();
+    /* Auth token in form body — header is unreliable with FormData on Android */
+    fd.append('_token', token);
+    /* IDs for create vs update */
+    if (editId) fd.append('edit_id', editId);
+    if (state.currentSite) fd.append('site_id', state.currentSite.id);
+    /* Fields */
     fd.append('code', fields.code || '');
     fd.append('description', fields.description || '');
     fd.append('location', fields.location || '');
     fd.append('materials', fields.materials || '');
     fd.append('qty', fields.qty || '');
 
-    /* Debug: show what we're sending */
-    var debugInfo = 'Save: ';
+    /* Attach photo: raw file from input (browser handles natively) */
+    var debugInfo = '';
     if (rawFile) {
       fd.append('photo', rawFile);
-      debugInfo += 'file=' + rawFile.name + ' (' + Math.round(rawFile.size/1024) + 'KB)';
+      debugInfo = rawFile.name + ' (' + Math.round(rawFile.size/1024) + 'KB)';
     } else if (window._obsPhotoData) {
       fd.append('photo_data', window._obsPhotoData);
-      debugInfo += 'preloaded=' + Math.round(window._obsPhotoData.length/1024) + 'KB';
-    } else {
-      debugInfo += 'no photo';
+      debugInfo = 'cached ' + Math.round(window._obsPhotoData.length/1024) + 'KB';
     }
+    toast('Saving' + (debugInfo ? ' + photo: ' + debugInfo : '...'), 'info');
 
-    var url = editId
-      ? '/api/observations/' + editId + '/upload'
-      : '/api/sites/' + state.currentSite.id + '/observations/upload';
-    var method = editId ? 'PUT' : 'POST';
-    debugInfo += ' → ' + method + ' ' + url;
-    toast(debugInfo, 'info');
-
-    fetch(url, {
-      method: method,
-      headers: { 'Authorization': 'Bearer ' + token },
+    fetch('/api/observations/save', {
+      method: 'POST',
       body: fd
     }).then(function(resp) {
       if (!resp.ok) {
