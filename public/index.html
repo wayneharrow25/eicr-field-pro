@@ -2329,16 +2329,9 @@ input,select,textarea { font-size:16px !important; }
       };
 
       r.onend = function() {
-        /* Browser killed session (Android does this) — silently restart, no UI flicker */
-        if (active) {
-          setTimeout(function() {
-            if (!active) { if (opts.onStop) opts.onStop(); return; }
-            rec = buildRec();
-            try { rec.start(); } catch(ex) { active = false; if (opts.onStop) opts.onStop(); }
-          }, 50);
-        } else {
-          if (opts.onStop) opts.onStop();
-        }
+        /* Session ended — don't auto-restart (causes Android mic permission spam) */
+        active = false;
+        if (opts.onStop) opts.onStop();
       };
 
       return r;
