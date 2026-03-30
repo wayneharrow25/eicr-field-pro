@@ -6117,34 +6117,59 @@ input,select,textarea { font-size:16px !important; }
       uploadBoardPhotos(target.files);
       target.value = '';
     }
-    /* Observation photo — read immediately on selection (file refs go stale on mobile) */
+    /* Observation photo — read with FileReader immediately (simplest, most reliable) */
     if (target.id === 'obs-photo' || target.id === 'obs-photo-cam') {
       if (target.files && target.files[0]) {
         var obsFile = target.files[0];
+        /* Show preview */
         var obsPreview = document.getElementById('obs-photo-preview');
         if (obsPreview) {
-          var obsUrl = URL.createObjectURL(obsFile);
-          obsPreview.innerHTML = '<img src="' + obsUrl + '" style="max-height:120px;border-radius:.5rem;margin-top:.5rem">';
+          try {
+            var obsUrl = URL.createObjectURL(obsFile);
+            obsPreview.innerHTML = '<img src="' + obsUrl + '" style="max-height:120px;border-radius:.5rem;margin-top:.5rem">';
+          } catch(e) { /* ignore preview error */ }
         }
-        /* Read and compress NOW — store base64 for save time */
+        /* Read raw with FileReader immediately — most reliable method */
         window._obsPhotoData = null;
-        console.log('[obs-photo] Reading file immediately:', obsFile.name, obsFile.size, 'bytes');
-        compressImage(obsFile).then(function(base64) {
-          window._obsPhotoData = 'data:image/jpeg;base64,' + base64;
-          console.log('[obs-photo] Pre-compressed OK:', window._obsPhotoData.length, 'chars');
-        }).catch(function(err) {
-          console.warn('[obs-photo] compressImage failed, trying raw:', err);
-          var reader = new FileReader();
-          reader.onload = function() {
-            window._obsPhotoData = reader.result;
-            console.log('[obs-photo] Raw read OK:', window._obsPhotoData.length, 'chars');
+        console.log('[obs-photo] Reading file:', obsFile.name, obsFile.size, 'bytes, type:', obsFile.type);
+        var obsReader = new FileReader();
+        obsReader.onload = function() {
+          var rawData = obsReader.result;
+          console.log('[obs-photo] FileReader OK:', rawData.length, 'chars');
+          /* Try to compress via canvas to reduce size */
+          var img = new Image();
+          img.onload = function() {
+            try {
+              var maxW = 1600;
+              var scale = Math.min(1, maxW / img.width);
+              var canvas = document.createElement('canvas');
+              canvas.width = img.width * scale;
+              canvas.height = img.height * scale;
+              canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+              var compressed = canvas.toDataURL('image/jpeg', 0.8);
+              if (compressed && compressed.length > 50) {
+                window._obsPhotoData = compressed;
+                console.log('[obs-photo] Compressed:', compressed.length, 'chars (from', rawData.length, ')');
+              } else {
+                window._obsPhotoData = rawData;
+              }
+            } catch(e) {
+              console.warn('[obs-photo] Canvas compress failed, using raw:', e);
+              window._obsPhotoData = rawData;
+            }
           };
-          reader.onerror = function() {
-            console.error('[obs-photo] Could not read file at all');
-            toast('Could not read photo file', 'error');
+          img.onerror = function() {
+            /* Can't decode as image — just store raw data URI */
+            console.warn('[obs-photo] Image decode failed, storing raw data');
+            window._obsPhotoData = rawData;
           };
-          reader.readAsDataURL(obsFile);
-        });
+          img.src = rawData;
+        };
+        obsReader.onerror = function() {
+          console.error('[obs-photo] FileReader failed:', obsReader.error);
+          toast('Could not read photo — please try again', 'error');
+        };
+        obsReader.readAsDataURL(obsFile);
       }
     }
     /* Accumulate photos when selected (camera or gallery) */
