@@ -111,25 +111,10 @@ input,select,textarea { font-size:16px !important; }
 .offline-banner { position:fixed; top:0; left:0; right:0; z-index:300; background:#f59e0b; color:#000; text-align:center; padding:.5rem; font-size:.813rem; font-weight:600; display:none; }
 .offline-banner.show { display:block; }
 
-/* ===== DESKTOP LAYOUT ===== */
+/* ===== DESKTOP LAYOUT — full width for schedule visibility ===== */
 @media (min-width: 768px) {
-  body { padding-bottom: 0; background: #e2e8f0; }
-  #app { max-width: 520px; margin: 0 auto; min-height: 100vh; background: #f1f5f9; box-shadow: 0 0 40px rgba(0,0,0,.1); position: relative; }
-  .nav-bottom { max-width: 520px; left: 50%; transform: translateX(-50%); border-radius: 1rem 1rem 0 0; }
-  .bottom-sheet { max-width: 520px; left: 50%; transform: translateX(-50%) translateY(100%); }
-  .bottom-sheet.active { transform: translateX(-50%) translateY(0); }
-  .bottom-sheet-overlay { background: rgba(0,0,0,.5); }
-  .toast-container { max-width: 520px; left: 50%; right: auto; transform: translateX(-50%); width: 100%; }
-  .offline-banner { max-width: 520px; left: 50%; transform: translateX(-50%); border-radius: 0 0 .5rem .5rem; }
-}
-
-/* Wider desktop — show as app with sidebar-style chrome */
-@media (min-width: 1024px) {
-  body { display: flex; justify-content: center; align-items: flex-start; }
-  #app { max-width: 480px; border-radius: 1.5rem; margin: 2rem auto; min-height: calc(100vh - 4rem); overflow: hidden; box-shadow: 0 8px 60px rgba(0,0,0,.12), 0 0 0 1px rgba(0,0,0,.05); }
-  .nav-bottom { max-width: 480px; border-radius: 0 0 1.5rem 1.5rem; position: fixed; bottom: 2rem; }
   body { padding-bottom: 0; }
-  .test-table { font-size: .8rem; }
+  .test-table { font-size: .85rem; }
   .test-table td, .test-table th { padding: .5rem .625rem; }
 }
 </style>
@@ -1839,8 +1824,25 @@ input,select,textarea { font-size:16px !important; }
       else clearInterval(refineTimer);
     }, 1000);
 
+    /* Include current circuit data so AI can see the schedule */
+    var currentData = (_scanState.updates || []).map(function(u) {
+      var parts = [u.number, u.description || ''];
+      if (u.ocpd_bsen) parts.push('BS' + u.ocpd_bsen);
+      if (u.ocpd_type) parts.push(u.ocpd_type);
+      if (u.ocpd_rating) parts.push(u.ocpd_rating + 'A');
+      if (u.rcd_bsen) parts.push('RCD BS' + u.rcd_bsen);
+      if (u.rcd_type) parts.push('RCD Type ' + u.rcd_type);
+      if (u.rcd_idn) parts.push(u.rcd_idn + 'mA');
+      if (u.wiring_type) parts.push('WT:' + u.wiring_type);
+      if (u.cable_size || u.live_mm) parts.push((u.cable_size || u.live_mm) + 'mm²');
+      if (u.reference_method || u.ref_method) parts.push('Ref:' + (u.reference_method || u.ref_method));
+      if (u.poles && u.poles !== 'SP') parts.push(u.poles);
+      return parts.join(' | ');
+    }).join('\n');
+
     var refinePrompt = 'The user says: "' + correction + '"\n\n' +
-      'Based on this correction, update the circuit list and board header if relevant. Return the FULL updated JSON with ALL circuits (not just the changed ones). ' +
+      'CURRENT CIRCUIT SCHEDULE:\n' + currentData + '\n\n' +
+      'Based on this instruction, update the circuit list. Return the FULL updated JSON with ALL circuits (not just the changed ones). ' +
       'Return ONLY valid JSON: {"board_updates": {...}, "updates": [...]}';
 
     api('POST', '/ai/process', {
