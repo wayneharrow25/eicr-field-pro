@@ -754,14 +754,14 @@ KEY KNOWLEDGE:
 - Classification codes: C1 (danger present), C2 (potentially dangerous), C3 (improvement recommended), FI (further investigation required)
 - Test readings: Ze (external earth fault loop impedance), Zs (earth fault loop impedance), R1+R2 (continuity), Insulation resistance (IR in MΩ), RCD trip times (ms)
 - Max Zs values use 80% rule for on-site measurements
-- Wiring types (ALWAYS use short BS 7671 codes): T+E (twin & earth), SWA (steel wire armoured), MICC (mineral insulated), Singles (in conduit/trunking), Flex, FP200, SY, XLPE
+- Wiring types (LETTER CODES ONLY): A=PVC/PVC(T+E), B=PVC metallic conduit, C=PVC plastic conduit, D=PVC metallic trunking, E=PVC plastic trunking, F=PVC/SWA, G=XLPE/SWA, H=MICC, I=FP200, J=Flex, K=Busbar
 - Installation reference methods (BS 7671 Table 4A2): A (insulating wall), B (conduit/trunking on wall), C (clipped direct), D (underground duct), E (tray touching), F (tray spaced), G (free air/ladder)
 - Common CSA sizes: 1.0, 1.5, 2.5, 4.0, 6.0, 10.0, 16.0, 25.0mm²
 - Circuit numbering: SP boards = 1,2,3,4...; TP boards = L1:1,4,7... L2:2,5,8... L3:3,6,9...
 - "CCT" = circuit. "CCT 5" = circuit number 5.
 - Spare ways: description="Spare", all other fields="--"
 
-CRITICAL: Always use SHORT codes for wiring types (T+E not "Flat twin and earth") and reference methods (C not "Clipped direct"). All work is to BS 7671:2018+A2:2022.`;
+CRITICAL: Always use LETTER CODES for wiring types (A not "PVC/PVC" or "T+E") and reference methods (C not "Clipped direct"). All work is to BS 7671:2018+A2:2022.`;
 
 app.post('/api/ai/process', authMiddleware, async (req, res) => {
   const { key_id, prompt, image_base64, images_base64, system_prompt } = req.body;

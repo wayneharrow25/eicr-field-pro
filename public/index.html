@@ -1101,20 +1101,19 @@ input,select,textarea { font-size:16px !important; }
     var fields = [
       {id:'ce_number', label:'Circuit #', val:c.number, placeholder:'1, L1/1, TP/1'},
       {id:'ce_description', label:'Description', val:c.description, placeholder:'Lighting, Ring Main, etc'},
-      {id:'ce_wiring_type', label:'Wiring Type (cable)', val:c.wiring_type, labeledOptions:[
+      {id:'ce_wiring_type', label:'Wiring Type', val:c.wiring_type, labeledOptions:[
         {v:'',l:'-- Select --'},
-        {v:'T+E',l:'T+E — Flat twin & earth (6242Y)'},
-        {v:'T+3E',l:'T+3E — Flat three core & earth (6243Y)'},
-        {v:'Singles/Con',l:'Singles/Con — Singles in conduit'},
-        {v:'Singles/Trk',l:'Singles/Trk — Singles in trunking'},
-        {v:'SWA',l:'SWA — Steel wire armoured'},
-        {v:'MICC',l:'MICC — Mineral insulated copper clad'},
-        {v:'FP',l:'FP — Fire performance (FP200 etc)'},
-        {v:'LSF',l:'LSF — Low smoke & fume'},
-        {v:'XLPE/SWA',l:'XLPE/SWA — Cross-linked PE armoured'},
-        {v:'Flex',l:'Flex — Flexible cable/cord'},
-        {v:'SY',l:'SY — Steel braided flex'},
-        {v:'Busbar',l:'Busbar — Busbar trunking'},
+        {v:'A',l:'A — PVC/PVC cables (flat twin & earth)'},
+        {v:'B',l:'B — PVC cables in metallic conduit'},
+        {v:'C',l:'C — PVC cables in non-metallic conduit'},
+        {v:'D',l:'D — PVC cables in metallic trunking'},
+        {v:'E',l:'E — PVC cables in non-metallic trunking'},
+        {v:'F',l:'F — PVC/SWA (steel wire armoured)'},
+        {v:'G',l:'G — XLPE/SWA cables'},
+        {v:'H',l:'H — MICC (mineral insulated copper clad)'},
+        {v:'I',l:'I — FP200 / fire performance cable'},
+        {v:'J',l:'J — Flexible cord/cable'},
+        {v:'K',l:'K — Busbar trunking'},
         {v:'Other',l:'Other — Specify in remarks'}
       ]},
       {id:'ce_ref_method', label:'Ref Method (Table 4A2)', val:c.ref_method, labeledOptions:[
@@ -1328,7 +1327,7 @@ input,select,textarea { font-size:16px !important; }
     ocpd_type:    [{v:'B',l:'B'},{v:'C',l:'C'},{v:'D',l:'D'}],
     ocpd_bsen:    [{v:'60898',l:'60898 MCB'},{v:'61009',l:'61009 RCBO'},{v:'88-2',l:'88-2 Fuse'}],
     ir_test_v:    [{v:'500',l:'500V'},{v:'250',l:'250V'},{v:'1000',l:'1000V'}],
-    wiring_type:  [{v:'T+E',l:'T+E'},{v:'SWA',l:'SWA'},{v:'Singles/Con',l:'Singles/Con'},{v:'FP',l:'FP200'}],
+    wiring_type:  [{v:'A',l:'A — PVC/PVC'},{v:'B',l:'B — Met conduit'},{v:'C',l:'C — Plas conduit'},{v:'D',l:'D — Met trunk'},{v:'E',l:'E — Plas trunk'},{v:'F',l:'F — PVC/SWA'},{v:'G',l:'G — XLPE/SWA'},{v:'H',l:'H — MICC'}],
     live_mm:      [{v:'1.5',l:'1.5'},{v:'2.5',l:'2.5'},{v:'4',l:'4'},{v:'6',l:'6'},{v:'10',l:'10'}],
     cpc_mm:       [{v:'1.0',l:'1.0'},{v:'1.5',l:'1.5'},{v:'2.5',l:'2.5'},{v:'4',l:'4'}],
     r1:           [{v:'N/A',l:'N/A'}],
@@ -1341,12 +1340,18 @@ input,select,textarea { font-size:16px !important; }
   /* ===== INLINE CELL EDIT CONFIG ===== */
   var CELL_OPTIONS = {
     wiring_type: [
-      {v:'',l:'--'},{v:'T+E',l:'T+E — Flat twin & earth'},{v:'T+3E',l:'T+3E — 3 core & earth'},
-      {v:'Singles/Con',l:'Singles/Con — In conduit'},{v:'Singles/Trk',l:'Singles/Trk — In trunking'},
-      {v:'SWA',l:'SWA — Steel wire armoured'},{v:'MICC',l:'MICC — Mineral insulated'},
-      {v:'FP',l:'FP — Fire performance'},{v:'LSF',l:'LSF — Low smoke & fume'},
-      {v:'XLPE/SWA',l:'XLPE/SWA — Cross-linked armoured'},{v:'Flex',l:'Flex — Flexible cord'},
-      {v:'Busbar',l:'Busbar — Busbar trunking'}
+      {v:'',l:'--'},
+      {v:'A',l:'A — PVC/PVC cables (T+E)'},
+      {v:'B',l:'B — PVC in metallic conduit'},
+      {v:'C',l:'C — PVC in non-metallic conduit'},
+      {v:'D',l:'D — PVC in metallic trunking'},
+      {v:'E',l:'E — PVC in non-metallic trunking'},
+      {v:'F',l:'F — PVC/SWA cables'},
+      {v:'G',l:'G — XLPE/SWA cables'},
+      {v:'H',l:'H — MICC cables'},
+      {v:'I',l:'I — FP200 / fire performance'},
+      {v:'J',l:'J — Flexible cord'},
+      {v:'K',l:'K — Busbar trunking'}
     ],
     ref_method: [
       {v:'',l:'--'},{v:'A',l:'A — Enclosed in insulating wall'},
@@ -4305,17 +4310,23 @@ input,select,textarea { font-size:16px !important; }
       'ocpd_type: "B" (general 3-5x), "C" (motors 5-10x), "D" (transformers 10-20x), "gG" (fuse general purpose)\n' +
       'breaking_cap: "6" (domestic), "10" (commercial standard), "16" (industrial). "kA" = breaking_cap.\n' +
       'ir_test_v: "250", "500" (standard), "1000"\n\n' +
-      'WIRING TYPES — use SHORT BS 7671 codes ONLY, never full English names:\n' +
-      '  "T+E" = flat twin & earth (most common domestic/commercial)\n' +
-      '  "SWA" = steel wire armoured cable\n' +
-      '  "MICC" = mineral insulated copper clad\n' +
-      '  "Singles" = single core cables in conduit/trunking\n' +
-      '  "Flex" = flexible cord/cable\n' +
-      '  "SY" = screened flexible cable\n' +
-      '  "FP200" = fire performance cable\n' +
-      '  "XLPE" = cross-linked polyethylene\n' +
-      '  "Cat5" / "Cat6" = data cable (if applicable)\n' +
-      '  NEVER output "Flat twin and earth" — output "T+E". NEVER "Steel wire armoured" — output "SWA".\n\n' +
+      'WIRING TYPES — use LETTER CODES ONLY on the schedule, never full descriptions:\n' +
+      '  "A" = PVC/PVC cables (flat twin & earth, T+E)\n' +
+      '  "B" = PVC cables in metallic conduit\n' +
+      '  "C" = PVC cables in non-metallic conduit\n' +
+      '  "D" = PVC cables in metallic trunking\n' +
+      '  "E" = PVC cables in non-metallic trunking\n' +
+      '  "F" = PVC/SWA (steel wire armoured)\n' +
+      '  "G" = XLPE/SWA cables\n' +
+      '  "H" = MICC (mineral insulated copper clad)\n' +
+      '  "I" = FP200 / fire performance cable\n' +
+      '  "J" = Flexible cord/cable\n' +
+      '  "K" = Busbar trunking\n' +
+      '  When user says "twin and earth" or "T+E" → wiring_type: "A"\n' +
+      '  When user says "SWA" → wiring_type: "F"\n' +
+      '  When user says "armoured" → wiring_type: "F" (PVC/SWA) or "G" (XLPE/SWA)\n' +
+      '  When user says "conduit" → wiring_type: "B" (metallic) or "C" (plastic)\n' +
+      '  ALWAYS output the single letter code. NEVER output full descriptions or trade names.\n\n' +
       'INSTALLATION REFERENCE METHODS — use BS 7671 Table 4A2 letter codes:\n' +
       '  "A" = enclosed in thermally insulating wall\n' +
       '  "B" = in conduit or trunking on a wall\n' +
@@ -4353,8 +4364,8 @@ input,select,textarea { font-size:16px !important; }
       '- NEVER add circuits that the user did not describe. Only update circuits the user specifically refers to.\n' +
       '- When adding observations, ALWAYS also add inspection_updates for the related items\n' +
       '- Rewrite observation descriptions professionally\n' +
-      '- Use ONLY BS 7671 short codes for wiring types (T+E, SWA, MICC, Singles, Flex) — NEVER full English\n' +
-      '- Use ONLY BS 7671 letter codes for ref methods (A, B, C, D, E, F, G) — NEVER full descriptions\n\n' +
+      '- Use ONLY BS 7671 letter codes for wiring types (A, B, C, D, E, F, G, H, I, J, K) — NEVER trade names like T+E or SWA\n' +
+      '- Use ONLY BS 7671 letter codes for ref methods (A, B, C, D, E, F, G, 100, 101, 102, 103) — NEVER full descriptions\n\n' +
       'RETURN FORMAT (valid JSON only):\n' +
       '{"updates":[...], "delete":[...], "renumber":true, "board_updates":{...}, "inspection_updates":[...], "observations":[...], "message":"..."}';
   }
