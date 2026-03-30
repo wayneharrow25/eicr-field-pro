@@ -111,6 +111,11 @@ input,select,textarea { font-size:16px !important; }
 .offline-banner { position:fixed; top:0; left:0; right:0; z-index:300; background:#f59e0b; color:#000; text-align:center; padding:.5rem; font-size:.813rem; font-weight:600; display:none; }
 .offline-banner.show { display:block; }
 
+/* ===== AI CHAT BAR ===== */
+.ai-chat-bar { position:sticky; bottom:0; left:0; right:0; z-index:30; background:#fff; border-top:2px solid #3b82f6; padding:.5rem; display:flex; gap:.5rem; align-items:center; box-shadow:0 -4px 12px rgba(0,0,0,.08); }
+.ai-chat-bar .mic-btn { width:2.25rem; height:2.25rem; font-size:1rem; }
+.ai-chat-response { background:#eff6ff; border:1px solid #bfdbfe; border-radius:.5rem; padding:.5rem .75rem; margin:.5rem; font-size:.8rem; color:#1e40af; }
+
 /* ===== DESKTOP LAYOUT — full width for schedule visibility ===== */
 @media (min-width: 768px) {
   body { padding-bottom: 0; }
@@ -976,6 +981,14 @@ input,select,textarea { font-size:16px !important; }
       '<div class="p-3 border-t border-slate-100 flex gap-2">' +
         '<button class="btn btn-primary btn-sm flex-1" data-action="save-circuits">Save All Circuits</button>' +
       '</div>' +
+    '</div>' +
+    /* Floating AI chat bar */
+    '<div id="ai-chat-bar" class="ai-chat-bar">' +
+      '<div class="input-with-mic" style="flex:1">' +
+        '<input type="text" id="ai-chat-input" class="input-field input-mic-field" placeholder="Ask AI about circuits..." style="font-size:14px;padding:.5rem .75rem;border-radius:2rem">' +
+        micBtn('ai-chat-input') +
+      '</div>' +
+      '<button class="btn btn-primary btn-sm" data-action="ai-chat-send" style="border-radius:2rem;padding:.5rem 1rem">Send</button>' +
     '</div>';
 
     html += '</div></div>';
@@ -3956,6 +3969,103 @@ input,select,textarea { font-size:16px !important; }
     });
   }
 
+  /* ===== AI CHAT BAR (board detail) ===== */
+  function getSelectedCircuitIndices() {
+    var checks = document.querySelectorAll('.bulk-check:checked');
+    var indices = [];
+    checks.forEach(function(c) { indices.push(parseInt(c.getAttribute('data-idx'))); });
+    return indices;
+  }
+
+  function buildCircuitSummary(circ) {
+    var p = ['#' + (circ.number || '?'), circ.description || ''];
+    if (circ.wiring_type) p.push('WT:' + circ.wiring_type);
+    if (circ.ref_method) p.push('Ref:' + circ.ref_method);
+    if (circ.live_mm) p.push(circ.live_mm + 'mm²');
+    if (circ.cpc_mm) p.push('CPC:' + circ.cpc_mm);
+    if (circ.ocpd_bsen) p.push('BS' + circ.ocpd_bsen);
+    if (circ.ocpd_type) p.push(circ.ocpd_type);
+    if (circ.ocpd_rating) p.push(circ.ocpd_rating + 'A');
+    if (circ.breaking_cap) p.push(circ.breaking_cap + 'kA');
+    if (circ.poles && circ.poles !== 'SP') p.push(circ.poles);
+    if (circ.rcd_bsen) p.push('RCD BS' + circ.rcd_bsen);
+    if (circ.rcd_type) p.push('RCD:' + circ.rcd_type);
+    if (circ.rcd_idn) p.push(circ.rcd_idn + 'mA');
+    if (circ.points) p.push(circ.points + 'pts');
+    if (circ.zs_measured) p.push('Zs=' + circ.zs_measured);
+    if (circ.max_zs) p.push('MaxZs=' + circ.max_zs);
+    if (circ.ir_ll || circ.ir_le) p.push('IR:' + (circ.ir_ll || '-') + '/' + (circ.ir_le || '-'));
+    if (circ.remarks) p.push('Rem:' + circ.remarks);
+    return p.join(' | ');
+  }
+
+  function aiChatSend() {
+    var input = document.getElementById('ai-chat-input');
+    if (!input || !input.value.trim()) { toast('Type or speak an instruction', 'error'); return; }
+    var userText = input.value.trim();
+    input.value = '';
+
+    /* Build context — selected circuits or all */
+    var selectedIdx = getSelectedCircuitIndices();
+    var targetCircuits = selectedIdx.length > 0
+      ? selectedIdx.map(function(i) { return state.circuits[i]; }).filter(Boolean)
+      : state.circuits;
+    var selLabel = selectedIdx.length > 0 ? selectedIdx.length + ' SELECTED circuits' : 'ALL ' + state.circuits.length + ' circuits';
+
+    var circuitData = targetCircuits.map(buildCircuitSummary).join('\n');
+
+    var prompt = 'User instruction: "' + userText + '"\n\n' +
+      'Applies to ' + selLabel + ':\n' + circuitData + '\n\n' +
+      buildAIContext() + '\n\n' +
+      'Apply the instruction to the specified circuits. Return ONLY valid JSON:\n' +
+      '{"updates":[{"number":"...","field":"value",...}], "message":"summary of changes"}';
+
+    /* Show loading in response area */
+    var bar = document.getElementById('ai-chat-bar');
+    var existingResp = document.getElementById('ai-chat-response');
+    if (existingResp) existingResp.remove();
+    bar.insertAdjacentHTML('beforebegin', '<div id="ai-chat-response" class="ai-chat-response"><div class="loading-spinner" style="display:inline-block;width:16px;height:16px"></div> AI thinking...</div>');
+
+    sendToAI(prompt, {}, function(result, err) {
+      var respEl = document.getElementById('ai-chat-response');
+      if (err) {
+        if (respEl) respEl.innerHTML = '<span style="color:#dc2626">Error: ' + esc(err) + '</span>';
+        return;
+      }
+      try {
+        var jsonMatch = result.match(/\{[\s\S]*\}/);
+        var parsed = JSON.parse(jsonMatch[0]);
+        if (parsed.updates && parsed.updates.length) {
+          parsed.updates.forEach(function(u) {
+            var circ = state.circuits.find(function(c) { return c.number === u.number; });
+            if (circ) {
+              Object.keys(u).forEach(function(k) {
+                if (k !== 'number') circ[k] = u[k];
+              });
+            }
+          });
+          sortCircuitsByNumber();
+          saveAllCircuits(true);
+          navigate('board-detail');
+          var msg = parsed.message || (parsed.updates.length + ' circuits updated');
+          if (respEl) respEl.innerHTML = '<strong style="color:#16a34a">\u2713</strong> ' + esc(msg);
+          setTimeout(function() { if (respEl) respEl.remove(); }, 5000);
+        } else {
+          if (respEl) respEl.innerHTML = esc(parsed.message || 'No changes made');
+        }
+      } catch(e) {
+        if (respEl) respEl.innerHTML = esc(result.substring(0, 200));
+      }
+    });
+  }
+
+  /* Also handle Enter key in AI chat input */
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && document.activeElement && document.activeElement.id === 'ai-chat-input') {
+      aiChatSend();
+    }
+  });
+
   /* ===== END UNIFIED AI ===== */
 
   var _voiceRec = null;
@@ -4461,6 +4571,9 @@ input,select,textarea { font-size:16px !important; }
         break;
       case 'bulk-delete-selected':
         bulkDeleteSelected();
+        break;
+      case 'ai-chat-send':
+        aiChatSend();
         break;
       case 'bulk-toggle-all':
         var allChecked = target.checked;
