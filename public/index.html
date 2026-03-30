@@ -132,9 +132,18 @@ input,select,textarea { font-size:16px !important; }
 /* ===== DESKTOP LAYOUT — full width for schedule visibility ===== */
 @media (min-width: 768px) {
   body { padding-bottom: 0; }
-  .test-table { font-size: .85rem; }
-  .test-table td, .test-table th { padding: .5rem .625rem; }
+  .test-table { font-size: .8rem; }
+  .test-table td, .test-table th { padding: .375rem .5rem; }
 }
+/* Desktop spreadsheet mode */
+@media (min-width: 1024px) {
+  .test-table { font-size: .8rem; }
+  .test-table td, .test-table th { padding: .25rem .375rem; }
+  .test-table .desk-col { display: table-cell !important; }
+  .test-table .rcd-col { display: table-cell !important; }
+  .board-photos-grid { grid-template-columns: repeat(6, 1fr) !important; }
+}
+.desk-col { display: none; }
 </style>
 </head>
 <body>
@@ -849,7 +858,10 @@ input,select,textarea { font-size:16px !important; }
       '<div class="grid grid-cols-2 gap-2">' +
         '<button class="btn btn-primary" data-action="ai-photo-scan">' +
           '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>' +
-          'Photo Scan</button>' +
+          'New Photo Scan</button>' +
+        '<button class="btn btn-primary" data-action="scan-board-photos" style="background:#7c3aed">' +
+          '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>' +
+          'Scan Board Photos</button>' +
         '<button class="btn btn-primary" data-action="ai-voice-input">' +
           '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>' +
           'AI Assistant</button>' +
@@ -940,6 +952,7 @@ input,select,textarea { font-size:16px !important; }
             '<th data-col="description">Desc</th>' +
             '<th data-col="wiring_type">WT</th>' +
             '<th data-col="ref_method">Ref</th>' +
+            '<th data-col="points" class="desk-col">Pts</th>' +
             '<th data-col="ocpd_bsen">BS</th>' +
             '<th data-col="ocpd_type">Crv</th>' +
             '<th data-col="ocpd_rating">A</th>' +
@@ -953,12 +966,15 @@ input,select,textarea { font-size:16px !important; }
             '<th data-col="r1">r1</th>' +
             '<th data-col="rn">rn</th>' +
             '<th data-col="r1r2">R1R2</th>' +
+            '<th data-col="ir_test_v" class="desk-col">TV</th>' +
             '<th data-col="ir_ll">L-L</th>' +
             '<th data-col="ir_le">L-E</th>' +
             '<th data-col="zs_measured">Zs</th>' +
             '<th data-col="polarity">Pol</th>' +
             '<th data-col="rcd_time_x1" class="rcd-col">x1</th>' +
             '<th data-col="rcd_test_btn" class="rcd-col">Btn</th>' +
+            '<th data-col="afdd_test" class="desk-col">AFDD</th>' +
+            '<th data-col="remarks" class="desk-col">Rem</th>' +
           '</tr></thead>' +
           '<tbody id="circuit-tbody">';
 
@@ -979,6 +995,7 @@ input,select,textarea { font-size:16px !important; }
           '<td data-col="description" style="max-width:6rem;overflow:hidden;text-overflow:ellipsis">' + esc(c.description || '') + '</td>' +
           '<td data-col="wiring_type">' + esc(c.wiring_type || '') + '</td>' +
           '<td data-col="ref_method">' + esc(c.ref_method || '') + '</td>' +
+          '<td data-col="points" class="desk-col">' + esc(c.points || '') + '</td>' +
           '<td data-col="ocpd_bsen">' + esc(c.ocpd_bsen || '') + '</td>' +
           '<td data-col="ocpd_type">' + esc(c.ocpd_type || '') + '</td>' +
           '<td data-col="ocpd_rating">' + esc(c.ocpd_rating || '') + '</td>' +
@@ -992,12 +1009,15 @@ input,select,textarea { font-size:16px !important; }
           '<td data-col="r1">' + esc(c.r1 || '') + '</td>' +
           '<td data-col="rn">' + esc(c.rn || '') + '</td>' +
           '<td data-col="r1r2">' + esc(c.r1r2 || '') + '</td>' +
+          '<td data-col="ir_test_v" class="desk-col">' + esc(c.ir_test_v || '') + '</td>' +
           '<td data-col="ir_ll">' + esc(c.ir_ll || '') + '</td>' +
           '<td data-col="ir_le">' + esc(c.ir_le || '') + '</td>' +
           '<td data-col="zs_measured" class="' + zsClass + '">' + esc(c.zs_measured || '') + '</td>' +
           '<td data-col="polarity">' + (c.polarity ? '\u2713' : '') + '</td>' +
           '<td data-col="rcd_time_x1" class="rcd-col">' + esc(c.rcd_time_x1 || '') + '</td>' +
           '<td data-col="rcd_test_btn" class="rcd-col">' + (c.rcd_test_btn ? '\u2713' : '') + '</td>' +
+          '<td data-col="afdd_test" class="desk-col">' + (c.afdd_test === true ? '\u2713' : esc(c.afdd_test || '')) + '</td>' +
+          '<td data-col="remarks" class="desk-col" style="max-width:5rem;overflow:hidden;text-overflow:ellipsis">' + esc(c.remarks || '') + '</td>' +
         '</tr>';
       });
     }
@@ -1362,7 +1382,9 @@ input,select,textarea { font-size:16px !important; }
     ir_test_v:    ['','250','500','1000'],
     breaking_cap: ['','6','10','15','25'],
     live_mm:      ['','1.0','1.5','2.5','4','6','10','16','25','35'],
-    cpc_mm:       ['','1.0','1.5','2.5','4','6','10','16']
+    cpc_mm:       ['','1.0','1.5','2.5','4','6','10','16'],
+    points:       ['','1','2','3','4','5','6','8','10','12'],
+    ocpd_rating:  ['','6','10','16','20','25','32','40','50','63','80','100']
   };
 
   function closePopups() {
@@ -1585,6 +1607,115 @@ input,select,textarea { font-size:16px !important; }
           toast('Max Zs not found for this combination', 'error');
         }
       }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
+  /* ===== SCAN FROM STORED BOARD PHOTOS ===== */
+  function scanBoardPhotos() {
+    if (!state.currentBoard) return;
+    if (state.aiKeys.length === 0) { toast('Add an AI key in Settings first', 'error'); return; }
+
+    toast('Loading board photos...', 'info');
+    api('GET', '/boards/' + state.currentBoard.id + '/photos').then(function(photos) {
+      if (!photos.length) { toast('No board photos to scan. Take photos first.', 'error'); return; }
+
+      /* Fetch full base64 for each photo */
+      var fetches = photos.map(function(p) {
+        return api('GET', '/board-photos/' + p.id);
+      });
+      Promise.all(fetches).then(function(fullPhotos) {
+        var keyOpts = state.aiKeys.map(function(k) {
+          return '<option value="' + k.id + '">' + esc(k.label) + ' (' + esc(k.provider) + ')</option>';
+        }).join('');
+        var preferred = localStorage.getItem('eicr_preferred_model');
+
+        /* Show selection sheet with photo thumbnails */
+        var html = '<h3 class="text-lg font-bold text-slate-800 mb-3">Scan Board Photos</h3>' +
+          '<p class="text-sm text-slate-500 mb-3">Select which photos to scan with AI. The AI will extract circuit details.</p>' +
+          '<div class="mb-3"><label class="block text-sm font-medium text-slate-700 mb-1">AI Model</label>' +
+            '<select id="bp-scan-key" class="select-field">' + keyOpts + '</select></div>' +
+          '<div class="grid grid-cols-3 gap-2 mb-3" id="bp-photo-grid">';
+
+        fullPhotos.forEach(function(p, i) {
+          html += '<label class="relative cursor-pointer" style="aspect-ratio:1;overflow:hidden;border-radius:.5rem;background:#f1f5f9;display:block">' +
+            '<input type="checkbox" class="bp-photo-check" data-idx="' + i + '" checked style="position:absolute;top:.25rem;left:.25rem;z-index:2;width:1.25rem;height:1.25rem">' +
+            '<img src="' + esc(p.photo) + '" style="width:100%;height:100%;object-fit:cover">' +
+          '</label>';
+        });
+
+        html += '</div>' +
+          '<button class="btn btn-primary w-full" data-action="run-bp-scan">Scan Selected Photos</button>' +
+          '<div id="bp-scan-result" class="text-sm text-slate-600 mt-2"></div>';
+
+        openSheet(html);
+        if (preferred) {
+          var sel = document.getElementById('bp-scan-key');
+          if (sel) sel.value = preferred;
+        }
+
+        /* Store photos for use by run handler */
+        window._bpPhotos = fullPhotos;
+      }).catch(function(err) { toast('Failed to load photos: ' + err.message, 'error'); });
+    }).catch(function(err) { toast('Failed to load photos: ' + err.message, 'error'); });
+  }
+
+  function runBoardPhotoScan() {
+    var keyEl = document.getElementById('bp-scan-key');
+    var resultEl = document.getElementById('bp-scan-result');
+    if (!keyEl || !window._bpPhotos) return;
+
+    /* Get selected photo indices */
+    var checks = document.querySelectorAll('.bp-photo-check:checked');
+    if (!checks.length) { toast('Select at least one photo', 'error'); return; }
+
+    var selectedPhotos = [];
+    checks.forEach(function(c) {
+      var idx = parseInt(c.getAttribute('data-idx'));
+      if (window._bpPhotos[idx]) selectedPhotos.push(window._bpPhotos[idx]);
+    });
+
+    resultEl.innerHTML = '<div class="flex items-center gap-2 py-4"><div class="loading-spinner"></div><span>Scanning ' + selectedPhotos.length + ' photo(s)...</span></div>';
+
+    /* Extract base64 data from photos and use the existing scan pipeline */
+    var images_base64 = selectedPhotos.map(function(p) {
+      return p.photo.replace(/^data:image\/[^;]+;base64,/, '');
+    });
+
+    /* Send first photo with full prompt, then chain remaining */
+    _scanState = { base64: null, images: [], keyId: keyEl.value, history: [], updates: null, boardUpdates: null, systemPrompt: '' };
+
+    var scanPrompt = 'You are an EICR Form 4 circuit schedule extractor. Extract circuit details from these distribution board photos.\n' +
+      'Return JSON: {"updates":[{circuit fields}], "board_updates":{ref, location, supplied_from, num_phases}}\n' +
+      'Circuit fields: number, description, wiring_type (use codes: T+E, SWA, MICC, FP, Singles/Con), ' +
+      'ref_method (A-G, 100-103), points, live_mm, cpc_mm, ocpd_bsen (60898/61009/88-2), ' +
+      'ocpd_type (B/C/D), ocpd_rating, rcd_bsen, rcd_type, rcd_idn.\n' +
+      'ONLY include circuits you can actually see. Do NOT make up data.';
+
+    api('POST', '/ai/send', {
+      keyId: keyEl.value,
+      message: scanPrompt,
+      images_base64: images_base64
+    }).then(function(data) {
+      var result = data.response || data.text || '';
+      try {
+        var jsonMatch = result.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('No JSON in response');
+        var parsed = JSON.parse(jsonMatch[0]);
+        _scanState.updates = parsed.updates || [];
+        _scanState.boardUpdates = parsed.board_updates || null;
+        var count = _scanState.updates.length;
+        resultEl.innerHTML = '<div class="p-3 bg-green-50 border border-green-200 rounded-lg">' +
+          '<p class="font-semibold text-green-800">Found ' + count + ' circuit(s)</p>' +
+          '<div class="flex gap-2 mt-2">' +
+            '<button class="btn btn-primary btn-sm flex-1" data-action="apply-scan-results">Apply to Schedule</button>' +
+            '<button class="btn btn-ghost btn-sm" data-action="discard-scan-results">Discard</button>' +
+          '</div></div>';
+      } catch(e) {
+        resultEl.innerHTML = '<div class="p-3 bg-red-50 rounded-lg text-sm text-red-700">' +
+          '<p>Could not parse AI response. Raw:</p><p class="mt-1 text-xs">' + esc(result.substring(0, 300)) + '</p></div>';
+      }
+    }).catch(function(err) {
+      resultEl.innerHTML = '<p class="text-red-500">Error: ' + esc(err.message || String(err)) + '</p>';
+    });
   }
 
   /* ===== AI PHOTO SCAN ===== */
@@ -4961,6 +5092,12 @@ input,select,textarea { font-size:16px !important; }
         break;
       case 'ai-photo-scan':
         ensureAiKeys().then(function() { openPhotoScan(); });
+        break;
+      case 'scan-board-photos':
+        ensureAiKeys().then(function() { scanBoardPhotos(); });
+        break;
+      case 'run-bp-scan':
+        runBoardPhotoScan();
         break;
       case 'ai-voice-input':
         ensureAiKeys().then(function() { openVoiceInput(); });
