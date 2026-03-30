@@ -3676,7 +3676,7 @@ input,select,textarea { font-size:16px !important; }
 
   /* Actually persist the observation — single POST with FormData (Android-proof) */
   function doSaveObservation(editId, fields, rawFile, afterSave) {
-    var token = sessionStorage.getItem('token') || localStorage.getItem('token');
+    var token = state.token || localStorage.getItem('eicr_token');
     var fd = new FormData();
     /* IDs for create vs update */
     if (editId) fd.append('edit_id', editId);
@@ -3699,10 +3699,10 @@ input,select,textarea { font-size:16px !important; }
       fd.append('photo_data', window._obsPhotoData);
       debugInfo = 'cached ' + Math.round(window._obsPhotoData.length/1024) + 'KB';
     }
-    toast('Saving' + (debugInfo ? ' + photo: ' + debugInfo : '...'), 'info');
+    toast('Saving' + (debugInfo ? ' + photo ' + debugInfo : '...'), 'info');
 
     /* Token in URL query param — most reliable auth method for multipart on Android */
-    fetch('/api/observations/save?token=' + encodeURIComponent(token), {
+    fetch('/api/observations/save?token=' + encodeURIComponent(token || ''), {
       method: 'POST',
       body: fd
     }).then(function(resp) {
