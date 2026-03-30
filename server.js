@@ -1077,6 +1077,59 @@ app.post('/api/upload-photo', authMiddleware, photoUpload.single('photo'), (req,
   res.json({ photo: dataUri, size: dataUri.length });
 });
 
+// ---- OBSERVATION SAVE WITH PHOTO (multipart — Android-proof) ----
+// Accepts FormData: text fields + optional photo file in ONE request
+// No client-side FileReader needed — browser native multipart handles the file
+app.post('/api/sites/:id/observations/upload', authMiddleware, photoUpload.single('photo'), async (req, res) => {
+  try {
+    const d = req.body; // text fields from FormData
+    let photoDataUri = d.photo_data || null; // pre-uploaded data URI if available
+    // If a raw file was sent, convert to data URI server-side
+    if (req.file) {
+      const mime = req.file.mimetype || 'image/jpeg';
+      const b64 = req.file.buffer.toString('base64');
+      photoDataUri = `data:${mime};base64,${b64}`;
+    }
+    const { rows: maxRow } = await pool.query('SELECT COALESCE(MAX(item_no), 0) + 1 as next FROM observations WHERE site_id = $1', [req.params.id]);
+    const { rows } = await pool.query(
+      `INSERT INTO observations (site_id, board_id, item_no, description, code, location, photo, materials, qty, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [req.params.id, d.board_id || null, d.item_no || maxRow[0].next, d.description, d.code || 'C2', d.location || null, photoDataUri, d.materials || null, d.qty || null, req.user.id]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('POST observations/upload error:', err.message);
+    res.status(500).json({ error: 'Failed to save observation: ' + err.message });
+  }
+});
+
+app.put('/api/observations/:id/upload', authMiddleware, photoUpload.single('photo'), async (req, res) => {
+  try {
+    const d = req.body;
+    let photoDataUri = d.photo_data || undefined; // pre-uploaded data URI
+    if (req.file) {
+      const mime = req.file.mimetype || 'image/jpeg';
+      const b64 = req.file.buffer.toString('base64');
+      photoDataUri = `data:${mime};base64,${b64}`;
+    }
+    const fields = {};
+    if (d.description !== undefined) fields.description = d.description;
+    if (d.code !== undefined) fields.code = d.code;
+    if (d.location !== undefined) fields.location = d.location;
+    if (d.materials !== undefined) fields.materials = d.materials;
+    if (d.qty !== undefined) fields.qty = d.qty;
+    if (photoDataUri !== undefined) fields.photo = photoDataUri;
+    const keys = Object.keys(fields);
+    if (!keys.length) return res.json({ ok: true });
+    const sets = keys.map((f, i) => `${f} = $${i + 2}`);
+    const vals = keys.map(f => fields[f]);
+    const { rows } = await pool.query(`UPDATE observations SET ${sets.join(', ')} WHERE id = $1 RETURNING *`, [req.params.id, ...vals]);
+    res.json(rows[0] || { ok: true });
+  } catch (err) {
+    console.error('PUT observations/:id/upload error:', err.message);
+    res.status(500).json({ error: 'Failed to update observation: ' + err.message });
+  }
+});
+
 // ---- REPORT GENERATION ----
 // Report accepts token via query param (for new tab/PDF download)
 app.get('/api/sites/:id/report', (req, res, next) => {

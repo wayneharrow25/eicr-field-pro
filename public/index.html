@@ -3587,24 +3587,20 @@ input,select,textarea { font-size:16px !important; }
     var materials = (document.getElementById('obs-materials') || {}).value || '';
     var qty = (document.getElementById('obs-qty') || {}).value || '';
 
-    /* Get photo — use pre-read data (read on file select, not at save time) */
-    var getPhoto = function(cb) {
-      if (window._obsPhotoData) {
-        console.log('[obs-photo] Using pre-read photo data:', window._obsPhotoData.length, 'chars');
-        cb(window._obsPhotoData);
-      } else {
-        cb(null);
-      }
-    };
+    /* Get raw file from input (if user selected one) — NO JavaScript file reading */
+    var rawFile = null;
+    var galInput = document.getElementById('obs-photo');
+    var camInput = document.getElementById('obs-photo-cam');
+    if (galInput && galInput.files && galInput.files[0]) rawFile = galInput.files[0];
+    if (!rawFile && camInput && camInput.files && camInput.files[0]) rawFile = camInput.files[0];
 
     /* If not using AI, or no AI key — just save directly */
     var provider = useAI ? getSelectedProvider() : null;
     if (!provider) {
-      getPhoto(function(photo) {
-        var body = { code: obsCode, description: rawDesc, location: location, materials: materials, qty: qty };
-        if (photo) body.photo = photo;
-        doSaveObservation(editId, body);
-      });
+      doSaveObservation(editId, {
+        code: obsCode, description: rawDesc, location: location,
+        materials: materials, qty: qty
+      }, rawFile);
       return;
     }
 
@@ -3620,11 +3616,10 @@ input,select,textarea { font-size:16px !important; }
     sendToAI(aiPrompt, {}, function(result, err) {
       if (err) {
         /* Fallback: save raw */
-        getPhoto(function(photo) {
-          var body = { code: obsCode, description: rawDesc, location: location, materials: materials, qty: qty };
-          if (photo) body.photo = photo;
-          doSaveObservation(editId, body);
-        });
+        doSaveObservation(editId, {
+          code: obsCode, description: rawDesc, location: location,
+          materials: materials, qty: qty
+        }, rawFile);
         if (aiBtn) { aiBtn.disabled = false; aiBtn.textContent = '★ Save + AI Review'; }
         return;
       }
@@ -3642,24 +3637,21 @@ input,select,textarea { font-size:16px !important; }
           finalDesc = parsed.description;
         }
 
-        /* Read photo BEFORE closing sheet (file inputs get destroyed) */
-        getPhoto(function(photo) {
-          closeSheet();
-          var body = { code: obsCode, description: finalDesc, location: location, materials: materials, qty: qty };
-          if (photo) body.photo = photo;
-
-          doSaveObservation(editId, body, function() {
-            /* Update inspection schedule */
-            var inspItems = parsed.inspection_updates || [];
-            if (parsed.refs) {
-              inspItems = parsed.refs.map(function(r) { return { item_ref: r, outcome: obsCode }; });
-            }
-            if (inspItems.length > 0 && state.currentSite) {
-              api('PUT', '/sites/' + state.currentSite.id + '/inspections', inspItems).then(function(data) {
-                state.inspections = data;
-              }).catch(function() {});
-            }
-          });
+        closeSheet();
+        doSaveObservation(editId, {
+          code: obsCode, description: finalDesc, location: location,
+          materials: materials, qty: qty
+        }, rawFile, function() {
+          /* Update inspection schedule */
+          var inspItems = parsed.inspection_updates || [];
+          if (parsed.refs) {
+            inspItems = parsed.refs.map(function(r) { return { item_ref: r, outcome: obsCode }; });
+          }
+          if (inspItems.length > 0 && state.currentSite) {
+            api('PUT', '/sites/' + state.currentSite.id + '/inspections', inspItems).then(function(data) {
+              state.inspections = data;
+            }).catch(function() {});
+          }
         });
 
         /* Show result */
@@ -3673,34 +3665,60 @@ input,select,textarea { font-size:16px !important; }
         showAIBanner(aiResult, rawDesc, parsed);
 
       } catch(e) {
-        getPhoto(function(photo) {
-          var body = { code: obsCode, description: rawDesc, location: location, materials: materials, qty: qty };
-          if (photo) body.photo = photo;
-          doSaveObservation(editId, body);
-        });
+        doSaveObservation(editId, {
+          code: obsCode, description: rawDesc, location: location,
+          materials: materials, qty: qty
+        }, rawFile);
         if (aiBtn) { aiBtn.disabled = false; aiBtn.textContent = '★ Save + AI Review'; }
       }
     });
   }
 
-  /* Actually persist the observation to the API */
-  function doSaveObservation(editId, body, afterSave) {
-    if (editId) {
-      api('PUT', '/observations/' + editId, body).then(function(updated) {
-        var idx = state.observations.findIndex(function(o) { return String(o.id) === String(editId); });
-        if (idx !== -1) Object.assign(state.observations[idx], body, updated);
-        closeSheet();
-        navigate('site-detail', {currentSiteTab: 'observations'});
-        if (afterSave) afterSave();
-      }).catch(function(err) { toast(err.message, 'error'); });
-    } else {
-      api('POST', '/sites/' + state.currentSite.id + '/observations', body).then(function(obs) {
-        state.observations.push(obs);
-        closeSheet();
-        navigate('site-detail', {currentSiteTab: 'observations'});
-        if (afterSave) afterSave();
-      }).catch(function(err) { toast(err.message, 'error'); });
+  /* Actually persist the observation — uses multipart FormData (Android-proof, no JS file reading) */
+  function doSaveObservation(editId, fields, rawFile, afterSave) {
+    var token = sessionStorage.getItem('token') || localStorage.getItem('token');
+    var fd = new FormData();
+    fd.append('code', fields.code || '');
+    fd.append('description', fields.description || '');
+    fd.append('location', fields.location || '');
+    fd.append('materials', fields.materials || '');
+    fd.append('qty', fields.qty || '');
+
+    /* Attach photo: prefer raw file (sent as multipart), fall back to pre-uploaded data URI */
+    if (rawFile) {
+      fd.append('photo', rawFile);
+      console.log('[obs-save] Sending raw file:', rawFile.name, rawFile.size, 'bytes');
+    } else if (window._obsPhotoData) {
+      fd.append('photo_data', window._obsPhotoData);
+      console.log('[obs-save] Sending pre-uploaded data URI:', window._obsPhotoData.length, 'chars');
     }
+
+    var url = editId
+      ? '/api/observations/' + editId + '/upload'
+      : '/api/sites/' + state.currentSite.id + '/observations/upload';
+    var method = editId ? 'PUT' : 'POST';
+
+    fetch(url, {
+      method: method,
+      headers: { 'Authorization': 'Bearer ' + token },
+      body: fd
+    }).then(function(resp) {
+      if (!resp.ok) throw new Error('Save failed: ' + resp.status);
+      return resp.json();
+    }).then(function(result) {
+      if (editId) {
+        var idx = state.observations.findIndex(function(o) { return String(o.id) === String(editId); });
+        if (idx !== -1) Object.assign(state.observations[idx], fields, result);
+      } else {
+        state.observations.push(result);
+      }
+      closeSheet();
+      navigate('site-detail', {currentSiteTab: 'observations'});
+      if (afterSave) afterSave();
+    }).catch(function(err) {
+      console.error('[obs-save] Error:', err);
+      toast('Save failed: ' + err.message, 'error');
+    });
   }
 
   /* Legacy stub — mapping is now handled inline in saveObservation() */
