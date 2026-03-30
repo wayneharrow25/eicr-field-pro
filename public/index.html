@@ -1278,11 +1278,12 @@ input,select,textarea { font-size:16px !important; }
     var updates = state.circuits.map(function(c) {
       var obj = {};
       Object.keys(c).forEach(function(k) {
-        if (k !== 'id' && k !== 'board_id') obj[k] = c[k];
+        if (k !== 'board_id') obj[k] = c[k]; /* keep id for fast updates */
       });
       return obj;
     });
-    api('PUT', '/boards/' + state.currentBoard.id + '/circuits/bulk', updates).then(function(data) {
+    /* Use replace mode — delete all + batch insert is fastest and avoids match-by-number overhead */
+    api('PUT', '/boards/' + state.currentBoard.id + '/circuits/bulk?replace=1', updates).then(function(data) {
       state.circuits = data.map(mapCircuitFromDB);
       if (!silent) {
         toast('All circuits saved', 'success');
@@ -1500,12 +1501,13 @@ input,select,textarea { font-size:16px !important; }
       'CRITICAL RULES:\n' +
       '1. DO NOT include the main switch/isolator/incomer as a numbered circuit. The main switch is recorded in the board header, NOT in the circuit schedule. It does not get tested on the Form 4 test schedule.\n' +
       '2. Number OUTGOING circuits only, sequentially starting from 1, top of the board going down (after the main switch).\n' +
-      '3. Include EVERY outgoing way/position — if a way is blank/spare, include it as {"number":"X","description":"Spare","ocpd_bsen":"","ocpd_type":"","ocpd_rating":""}\n' +
+      '3. Only include ways you can ACTUALLY SEE in the photo or schedule. Do NOT invent or guess circuits to fill gaps. If a way is visibly blank/spare, include it as Spare. If you cannot see a way, do NOT include it.\n' +
       '4. THREE-PHASE BOARDS — circuit numbering:\n' +
       '   - Single-phase circuits on a TP&N board: number as 1L1, 1L2, 1L3, 2L1, 2L2, 2L3 etc. The number prefix is the way, L1/L2/L3 is the phase.\n' +
-      '   - THREE-POLE (TP) MCBs/MCCBs: A 3-pole device spans all 3 phases as ONE circuit. Do NOT list it as 3 separate circuits. List it as a SINGLE circuit with the way number (e.g. "1") and add "poles":"TP" or "poles":"3P" to the JSON. Example: a 3-pole 63A Type C MCB on way 5 = {"number":"5","description":"Submain to DB2","ocpd_type":"C","ocpd_rating":"63","poles":"TP"}.\n' +
-      '   - If a schedule shows a TP MCB occupying ways 1L1, 1L2, 1L3 — combine into ONE circuit numbered "1" with poles "TP".\n' +
-      '   - Single-pole devices get individual L1/L2/L3 numbers. Triple-pole devices get ONE number with poles=TP.\n' +
+      '   - THREE-POLE (TP) MCBs/MCCBs: A 3-pole device spans all 3 phases as ONE circuit. Do NOT list it as 3 separate L1/L2/L3 circuits. Return a SINGLE entry with just the way number and "poles":"TP". Example: 3-pole 63A Type C on way 5 = {"number":"5","description":"Submain","ocpd_type":"C","ocpd_rating":"63","poles":"TP"}.\n' +
+      '   - CRITICAL: If a schedule shows the SAME description, rating and type across L1, L2, L3 of a way — that is a TP device. Combine into ONE circuit with poles=TP.\n' +
+      '   - If a schedule shows DIFFERENT descriptions/ratings across L1, L2, L3 — those are separate single-pole circuits, keep them as individual L1/L2/L3 entries.\n' +
+      '   - Common TP loads: submains, motors, cookers, distribution feeds, 3-phase heaters. These are ALWAYS one circuit, not three.\n' +
       '5. MCBs = BS(EN) 60898. RCBOs = BS(EN) 61009. MCCBs = BS(EN) 60947-2. HRC Fuses = BS(EN) 88-2. RCDs = BS(EN) 61008.\n' +
       '6. If devices are grouped under an RCD (e.g. 4-way RCBO block or RCD header), note the RCD details: rcd_bsen, rcd_type, rcd_idn on each circuit in that group.\n' +
       '7. Curve types: B (domestic/commercial), C (motors/fluorescent), D (high inrush). Read from the device label.\n' +
@@ -1695,7 +1697,39 @@ input,select,textarea { font-size:16px !important; }
     '</div>';
   }
 
-  /* Map AI scan field names to UI/DB field names */
+  /* Map AI scan field names to UI/DB field names + normalize values */
+  var WIRING_TYPE_MAP = {
+    'twin and earth':'T+E','twin & earth':'T+E','t&e':'T+E','6242y':'T+E','flat twin':'T+E',
+    'thermoplastic':'T+E','pvc/pvc':'T+E','pvc sheathed':'T+E','2 core & earth':'T+E',
+    'three core':'T+3E','3 core':'T+3E','6243y':'T+3E','3c+e':'T+3E',
+    'singles in conduit':'Singles/Con','pvc in conduit':'Singles/Con','conduit':'Singles/Con',
+    'singles in trunking':'Singles/Trk','trunking':'Singles/Trk',
+    'steel wire':'SWA','armoured':'SWA','swa/xlpe':'SWA','xlpe/swa':'XLPE/SWA',
+    'mineral':'MICC','pyro':'MICC','mineral insulated':'MICC',
+    'fire performance':'FP','fp200':'FP','fire resistant':'FP',
+    'low smoke':'LSF','lsf/lszh':'LSF','lszh':'LSF',
+    'flexible':'Flex','flex cable':'Flex',
+    'steel braided':'SY','sy cable':'SY',
+    'busbar':'Busbar','bus bar':'Busbar'
+  };
+
+  function normalizeWiringType(val) {
+    if (!val) return '';
+    var v = val.trim();
+    /* Already a valid code? */
+    var validCodes = ['T+E','T+3E','Singles/Con','Singles/Trk','SWA','MICC','FP','LSF','XLPE/SWA','Flex','SY','Busbar'];
+    for (var i = 0; i < validCodes.length; i++) {
+      if (v.toUpperCase() === validCodes[i].toUpperCase()) return validCodes[i];
+    }
+    /* Try matching against known descriptions */
+    var lower = v.toLowerCase();
+    var keys = Object.keys(WIRING_TYPE_MAP);
+    for (var j = 0; j < keys.length; j++) {
+      if (lower.indexOf(keys[j]) !== -1) return WIRING_TYPE_MAP[keys[j]];
+    }
+    return v; /* return as-is if no match */
+  }
+
   function mapScanFields(u) {
     var mapped = {};
     var renames = { reference_method: 'ref_method', cable_size: 'live_mm', cpc_size: 'cpc_mm', num_points: 'points' };
@@ -1703,6 +1737,8 @@ input,select,textarea { font-size:16px !important; }
       var newKey = renames[k] || k;
       mapped[newKey] = u[k];
     });
+    /* Normalize wiring type from full English to code */
+    if (mapped.wiring_type) mapped.wiring_type = normalizeWiringType(mapped.wiring_type);
     return mapped;
   }
 
