@@ -3678,11 +3678,11 @@ input,select,textarea { font-size:16px !important; }
   function doSaveObservation(editId, fields, rawFile, afterSave) {
     var token = sessionStorage.getItem('token') || localStorage.getItem('token');
     var fd = new FormData();
-    /* Auth token in form body — header is unreliable with FormData on Android */
-    fd.append('_token', token);
     /* IDs for create vs update */
     if (editId) fd.append('edit_id', editId);
     if (state.currentSite) fd.append('site_id', state.currentSite.id);
+    /* Also put token in form as backup */
+    fd.append('_token', token);
     /* Fields */
     fd.append('code', fields.code || '');
     fd.append('description', fields.description || '');
@@ -3701,7 +3701,8 @@ input,select,textarea { font-size:16px !important; }
     }
     toast('Saving' + (debugInfo ? ' + photo: ' + debugInfo : '...'), 'info');
 
-    fetch('/api/observations/save', {
+    /* Token in URL query param — most reliable auth method for multipart on Android */
+    fetch('/api/observations/save?token=' + encodeURIComponent(token), {
       method: 'POST',
       body: fd
     }).then(function(resp) {

@@ -1083,13 +1083,15 @@ app.post('/api/upload-photo', authMiddleware, photoUpload.single('photo'), (req,
 // Auth: reads token from form field as fallback (Authorization header unreliable with FormData on mobile)
 app.post('/api/observations/save', photoUpload.single('photo'), async (req, res) => {
   try {
-    // Auth: try header first, then form field fallback
+    // Auth: try query param first (most reliable), then header, then form field
+    const queryToken = req.query.token;
     const headerToken = req.headers.authorization?.replace('Bearer ', '');
-    const formToken = req.body._token;
-    const token = headerToken || formToken;
-    if (!token) return res.status(401).json({ error: 'No token' });
+    const formToken = req.body?._token;
+    const token = queryToken || headerToken || formToken;
+    console.log('[obs-save] auth sources: query=' + (queryToken ? 'yes' : 'no') + ' header=' + (headerToken ? 'yes' : 'no') + ' form=' + (formToken ? 'yes' : 'no'));
+    if (!token) return res.status(401).json({ error: 'No token (none found in query/header/form)' });
     let user;
-    try { user = jwt.verify(token, JWT_SECRET); } catch { return res.status(401).json({ error: 'Invalid token' }); }
+    try { user = jwt.verify(token, JWT_SECRET); } catch(e) { console.log('[obs-save] JWT error:', e.message); return res.status(401).json({ error: 'Invalid token: ' + e.message }); }
 
     const d = req.body;
     let photoDataUri = d.photo_data || null;
