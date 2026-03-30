@@ -1018,6 +1018,7 @@ input,select,textarea { font-size:16px !important; }
   function loadCircuits(boardId) {
     api('GET', '/boards/' + boardId + '/circuits').then(function(data) {
       state.circuits = data.map(mapCircuitFromDB);
+      _lastKnownCircuitCount = state.circuits.length;
       navigate('board-detail');
       loadBoardPhotos(boardId);
     }).catch(function(err) { toast(err.message, 'error'); });
@@ -1294,8 +1295,18 @@ input,select,textarea { font-size:16px !important; }
     autoSave('circuits');
   }
 
+  var _lastKnownCircuitCount = 0; /* safety: track how many circuits the board had */
+
   function saveAllCircuits(silent) {
     if (!state.currentBoard) return;
+
+    /* Safety: refuse to replace-save 0 circuits if the board previously had data.
+       This prevents AI wipes or bugs from deleting all circuits from the database. */
+    if (state.circuits.length === 0 && _lastKnownCircuitCount > 0) {
+      if (!silent) toast('Save blocked — circuits appear empty. Use undo to restore.', 'error');
+      return;
+    }
+
     var updates = state.circuits.map(function(c) {
       var obj = {};
       Object.keys(c).forEach(function(k) {
@@ -1306,6 +1317,7 @@ input,select,textarea { font-size:16px !important; }
     /* Use replace mode — delete all + batch insert is fastest and avoids match-by-number overhead */
     api('PUT', '/boards/' + state.currentBoard.id + '/circuits/bulk?replace=1', updates).then(function(data) {
       state.circuits = data.map(mapCircuitFromDB);
+      _lastKnownCircuitCount = state.circuits.length;
       if (!silent) {
         toast('All circuits saved', 'success');
         navigate('board-detail');
