@@ -1003,7 +1003,7 @@ input,select,textarea { font-size:16px !important; }
             '<th data-col="zs_measured">Zs</th>' +
             '<th data-col="polarity">Pol</th>' +
             '<th data-col="rcd_time_x1" class="rcd-col">x1</th>' +
-            '<th data-col="rcd_test_btn" class="rcd-col">Btn</th>' +
+            '<th data-col="rcd_test_btn" class="rcd-col">Test Btn</th>' +
             '<th data-col="afdd_test" class="desk-col">AFDD</th>' +
             '<th data-col="remarks" class="desk-col">Rem</th>' +
           '</tr></thead>' +
@@ -1044,9 +1044,9 @@ input,select,textarea { font-size:16px !important; }
           '<td data-col="ir_ll">' + esc(c.ir_ll || '') + '</td>' +
           '<td data-col="ir_le">' + esc(c.ir_le || '') + '</td>' +
           '<td data-col="zs_measured" class="' + zsClass + '">' + esc(c.zs_measured || '') + '</td>' +
-          '<td data-col="polarity">' + (c.polarity ? '\u2713' : '') + '</td>' +
+          '<td data-col="polarity">' + (c.polarity === true || c.polarity === 'true' ? '\u2713' : (c.polarity === false || c.polarity === 'false' ? '\u2717' : '')) + '</td>' +
           '<td data-col="rcd_time_x1" class="rcd-col">' + esc(c.rcd_time_x1 || '') + '</td>' +
-          '<td data-col="rcd_test_btn" class="rcd-col">' + (c.rcd_test_btn ? '\u2713' : '') + '</td>' +
+          '<td data-col="rcd_test_btn" class="rcd-col">' + (c.rcd_test_btn === true || c.rcd_test_btn === 'true' ? '\u2713' : (c.rcd_test_btn === false || c.rcd_test_btn === 'false' ? '\u2717' : '')) + '</td>' +
           '<td data-col="afdd_test" class="desk-col">' + (c.afdd_test === true ? '\u2713' : esc(c.afdd_test || '')) + '</td>' +
           '<td data-col="remarks" class="desk-col" style="max-width:5rem;overflow:hidden;text-overflow:ellipsis">' + esc(c.remarks || '') + '</td>' +
         '</tr>';
@@ -1610,7 +1610,7 @@ input,select,textarea { font-size:16px !important; }
       h += '<button data-action="cfp-fill" data-col="' + col + '" data-val="' + esc(String(f.v)) + '">' + esc(f.l) + '</button>';
     });
     h += '<div class="cfp-head" style="margin-top:.25rem">Custom</div>';
-    h += '<div style="display:flex;gap:.25rem;padding:0 .5rem .25rem"><input type="text" class="input-field" id="cfp-custom" placeholder="Value" style="flex:1;font-size:.8rem;padding:.375rem"><button data-action="cfp-custom" data-col="' + col + '" class="btn btn-primary btn-sm" style="font-size:.7rem">Set</button></div>';
+    h += '<div style="display:flex;gap:.375rem;padding:0 .5rem .375rem"><input type="text" class="input-field" id="cfp-custom" placeholder="Value" style="flex:1;font-size:.95rem;padding:.5rem .625rem;min-height:2.25rem"><button data-action="cfp-custom" data-col="' + col + '" class="btn btn-primary btn-sm" style="font-size:.85rem;padding:.5rem .75rem">Set</button></div>';
     div.innerHTML = h;
     document.body.appendChild(div);
     setTimeout(function() { document.addEventListener('click', closeCfpOutside, true); }, 10);
@@ -1705,8 +1705,8 @@ input,select,textarea { font-size:16px !important; }
       c[k] = '--';
     });
     /* Boolean fields */
-    c.polarity = false;
-    c.rcd_test_btn = false;
+    c.polarity = '';
+    c.rcd_test_btn = '';
     c.afdd_test = '--';
   }
 
