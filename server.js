@@ -695,26 +695,8 @@ app.put('/api/observations/:id', authMiddleware, async (req, res) => {
   if (!fields.length) return res.json({ ok: true });
   const sets = fields.map((f, i) => `${f} = $${i + 2}`);
   const vals = fields.map(f => d[f]);
-  await pool.query(`UPDATE observations SET ${sets.join(', ')} WHERE id = $1`, [req.params.id, ...vals]);
-  res.json({ ok: true });
-});
-
-app.put('/api/observations/:id', authMiddleware, async (req, res) => {
-  const { code, description, location, photo } = req.body;
-  const fields = [];
-  const vals = [];
-  let idx = 1;
-  if (code !== undefined) { fields.push('code = $' + idx++); vals.push(code); }
-  if (description !== undefined) { fields.push('description = $' + idx++); vals.push(description); }
-  if (location !== undefined) { fields.push('location = $' + idx++); vals.push(location); }
-  if (photo !== undefined) { fields.push('photo = $' + idx++); vals.push(photo); }
-  if (!fields.length) return res.json(req.body);
-  vals.push(req.params.id);
-  const { rows } = await pool.query(
-    'UPDATE observations SET ' + fields.join(', ') + ' WHERE id = $' + idx + ' RETURNING *',
-    vals
-  );
-  res.json(rows[0] || {});
+  const { rows } = await pool.query(`UPDATE observations SET ${sets.join(', ')} WHERE id = $1 RETURNING *`, [req.params.id, ...vals]);
+  res.json(rows[0] || { ok: true });
 });
 
 app.delete('/api/observations/:id', authMiddleware, async (req, res) => {

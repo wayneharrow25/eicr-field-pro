@@ -3598,10 +3598,9 @@ input,select,textarea { font-size:16px !important; }
           finalDesc = parsed.description;
         }
 
-        /* Close sheet and save */
-        closeSheet();
-
+        /* Read photo BEFORE closing sheet (file inputs get destroyed) */
         getPhoto(function(photo) {
+          closeSheet();
           var body = { code: obsCode, description: finalDesc, location: location, materials: materials, qty: qty };
           if (photo) body.photo = photo;
 
