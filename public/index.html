@@ -881,6 +881,7 @@ input,select,textarea { font-size:16px !important; }
           '<button class="btn btn-ghost btn-sm" data-action="toggle-bulk-select" id="bulk-select-btn">' +
             '<svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"/></svg>' +
             'Select</button>' +
+          '<button class="btn btn-ghost btn-sm" data-action="setup-board-size" style="color:#0d9488">&#9881; Setup</button>' +
           '<button class="btn btn-primary btn-sm" data-action="add-circuit">' +
             '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
             'Add</button>' +
@@ -1248,6 +1249,101 @@ input,select,textarea { font-size:16px !important; }
       if (ka[0] !== kb[0]) return ka[0] - kb[0];
       return ka[1] - kb[1];
     });
+  }
+
+  /* ===== BOARD SIZE SETUP ===== */
+  function openBoardSetupSheet() {
+    var currentWays = state.circuits.length;
+    openSheet(
+      '<h3 class="text-lg font-bold text-slate-800 mb-4">Setup Board Size</h3>' +
+      '<p class="text-sm text-slate-500 mb-3">Select board type and number of ways. This pre-fills the schedule with blank circuits numbered correctly.' +
+        (currentWays > 0 ? ' <strong class="text-amber-600">Warning: ' + currentWays + ' circuits already exist — this will replace them.</strong>' : '') + '</p>' +
+      '<div class="space-y-3">' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Board Type</label>' +
+          '<div class="grid grid-cols-2 gap-2">' +
+            '<button class="btn btn-sm border-2 border-blue-500 text-blue-500 bg-blue-50" id="bs-sp" data-action="select-board-type" data-type="SP" style="opacity:1">Single Phase (SP)</button>' +
+            '<button class="btn btn-sm border-2 border-purple-500 text-purple-500 bg-purple-50" id="bs-tp" data-action="select-board-type" data-type="TP" style="opacity:0.4">Three Phase (TP)</button>' +
+          '</div>' +
+          '<input type="hidden" id="bs-type" value="SP">' +
+        '</div>' +
+        '<div><label class="block text-sm font-medium text-slate-700 mb-1">Number of Ways</label>' +
+          '<div class="grid grid-cols-4 gap-2">' +
+            '<button class="btn btn-ghost btn-sm" data-action="select-board-ways" data-ways="6">6W</button>' +
+            '<button class="btn btn-ghost btn-sm" data-action="select-board-ways" data-ways="8">8W</button>' +
+            '<button class="btn btn-ghost btn-sm" data-action="select-board-ways" data-ways="12">12W</button>' +
+            '<button class="btn btn-ghost btn-sm" data-action="select-board-ways" data-ways="16">16W</button>' +
+            '<button class="btn btn-ghost btn-sm" data-action="select-board-ways" data-ways="18">18W</button>' +
+            '<button class="btn btn-ghost btn-sm" data-action="select-board-ways" data-ways="20">20W</button>' +
+            '<button class="btn btn-ghost btn-sm" data-action="select-board-ways" data-ways="24">24W</button>' +
+            '<button class="btn btn-ghost btn-sm" data-action="select-board-ways" data-ways="32">32W</button>' +
+          '</div>' +
+          '<input type="hidden" id="bs-ways" value="">' +
+        '</div>' +
+        '<div id="bs-preview" class="text-sm text-slate-500 min-h-[1.5rem]"></div>' +
+        '<button class="btn btn-primary w-full mt-2" data-action="apply-board-size" disabled>Apply</button>' +
+      '</div>'
+    );
+  }
+
+  function updateBoardSizePreview() {
+    var pre = document.getElementById('bs-preview');
+    if (!pre) return;
+    var type = (document.getElementById('bs-type') || {}).value || 'SP';
+    var ways = parseInt((document.getElementById('bs-ways') || {}).value || '0');
+    if (!ways) { pre.textContent = 'Select number of ways'; return; }
+    if (type === 'TP') {
+      pre.textContent = ways + ' way TP board — circuits 1-' + ways + ' (L1,L2,L3 rotation)';
+    } else {
+      pre.textContent = ways + ' way SP board — circuits 1-' + ways;
+    }
+  }
+
+  function applyBoardSize() {
+    var type = (document.getElementById('bs-type') || {}).value || 'SP';
+    var ways = parseInt((document.getElementById('bs-ways') || {}).value || '0');
+    if (!ways || ways < 1) { toast('Select number of ways', 'error'); return; }
+
+    snapshotCircuits();
+    state.circuits = [];
+
+    if (type === 'TP') {
+      /* TP: numbered L1=1,4,7... L2=2,5,8... L3=3,6,9... */
+      for (var i = 1; i <= ways; i++) {
+        var phase = ((i - 1) % 3);
+        var phaseLabel = phase === 0 ? 'L1' : phase === 1 ? 'L2' : 'L3';
+        state.circuits.push({
+          number: String(i),
+          description: 'Spare',
+          board_id: state.currentBoard.id,
+          sort_order: i
+        });
+        clearCircuitAsSpare(state.circuits[state.circuits.length - 1]);
+        state.circuits[state.circuits.length - 1].number = String(i);
+        state.circuits[state.circuits.length - 1].description = 'Spare';
+      }
+      /* Update board phases */
+      state.currentBoard.num_phases = '3';
+    } else {
+      /* SP: numbered 1,2,3... */
+      for (var j = 1; j <= ways; j++) {
+        state.circuits.push({
+          number: String(j),
+          description: 'Spare',
+          board_id: state.currentBoard.id,
+          sort_order: j
+        });
+        clearCircuitAsSpare(state.circuits[state.circuits.length - 1]);
+        state.circuits[state.circuits.length - 1].number = String(j);
+        state.circuits[state.circuits.length - 1].description = 'Spare';
+      }
+      state.currentBoard.num_phases = '1';
+    }
+
+    api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
+    saveAllCircuits(true);
+    closeSheet();
+    navigate('board-detail');
+    toast(ways + 'W ' + type + ' board created with ' + ways + ' spare circuits', 'success');
   }
 
   function deleteCircuit(idx) {
@@ -4430,17 +4526,26 @@ input,select,textarea { font-size:16px !important; }
       actions.push('Renumbered 1-' + state.circuits.length);
     }
 
-    /* Circuit updates */
+    /* Circuit updates — only update EXISTING circuits by number, never add extras */
     if (parsed.updates && parsed.updates.length > 0) {
+      var updated = 0, skipped = 0;
       parsed.updates.forEach(function(u) {
-        var existing = state.circuits.findIndex(function(c) { return String(c.number) === String(u.number); });
+        var num = String(u.number || '').trim();
+        var existing = state.circuits.findIndex(function(c) {
+          return String(c.number || '').trim() === num ||
+                 String(c.number || '').trim().toUpperCase() === num.toUpperCase();
+        });
         if (existing !== -1) {
-          Object.assign(state.circuits[existing], u);
+          /* Merge: only overwrite non-empty fields from AI */
+          Object.keys(u).forEach(function(k) {
+            if (u[k] !== '' && u[k] !== undefined && u[k] !== null) state.circuits[existing][k] = u[k];
+          });
+          updated++;
         } else {
-          state.circuits.push(u);
+          skipped++;
         }
       });
-      actions.push('Updated ' + parsed.updates.length + ' circuit(s)');
+      actions.push('Updated ' + updated + ' circuit(s)' + (skipped ? ' (skipped ' + skipped + ' unmatched)' : ''));
     }
 
     /* Save circuits if any circuit changes were made */
@@ -5224,6 +5329,34 @@ input,select,textarea { font-size:16px !important; }
         break;
       case 'add-circuit':
         openEditCircuitSheet(-1);
+        break;
+      case 'setup-board-size':
+        openBoardSetupSheet();
+        break;
+      case 'apply-board-size':
+        applyBoardSize();
+        break;
+      case 'select-board-type':
+        var bsType = target.getAttribute('data-type');
+        var bsTypeEl = document.getElementById('bs-type');
+        if (bsTypeEl) bsTypeEl.value = bsType;
+        var sp = document.getElementById('bs-sp');
+        var tp = document.getElementById('bs-tp');
+        if (sp) sp.style.opacity = bsType === 'SP' ? '1' : '0.4';
+        if (tp) tp.style.opacity = bsType === 'TP' ? '1' : '0.4';
+        updateBoardSizePreview();
+        break;
+      case 'select-board-ways':
+        var bsWays = target.getAttribute('data-ways');
+        var bsWaysEl = document.getElementById('bs-ways');
+        if (bsWaysEl) bsWaysEl.value = bsWays;
+        document.querySelectorAll('[data-action="select-board-ways"]').forEach(function(b) {
+          b.style.background = b.getAttribute('data-ways') === bsWays ? '#3b82f6' : '';
+          b.style.color = b.getAttribute('data-ways') === bsWays ? '#fff' : '';
+        });
+        var applyBtn = document.querySelector('[data-action="apply-board-size"]');
+        if (applyBtn) applyBtn.disabled = false;
+        updateBoardSizePreview();
         break;
       case 'toggle-bulk-select':
         toggleBulkSelect();

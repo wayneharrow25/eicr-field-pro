@@ -1103,6 +1103,7 @@ app.get('/api/sites/:id/report', (req, res, next) => {
   }
 
   const e = (s) => (s || '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const v = (s) => { const t = e(s); return t.trim() ? t : '--'; }; // form value — never empty
   const tick = (v) => (v === 'true' || v === true || v === 'Yes' || v === 'yes') ? '&#10003;' : '';
   const earthTick = (type, val) => (site.earthing_type || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(type.toLowerCase().replace(/[^a-z0-9]/g, '')) ? '&#10003;' : '';
   const hasC1C2FI = obs.some(o => ['C1', 'C2', 'FI'].includes(o.code));
@@ -1339,44 +1340,44 @@ app.get('/api/sites/:id/report', (req, res, next) => {
   // Section 1
   html += `<table>
     <tr><td class="sec-hdr" colspan="4">SECTION 1: DETAILS OF THE PERSON ORDERING THE REPORT</td></tr>
-    <tr><td class="fl" style="width:20%">Client:</td><td class="fv" colspan="3">${e(site.client_name)}</td></tr>
-    <tr><td class="fl">Address:</td><td class="fv" colspan="3">${e(site.client_address || site.address)} ${e(site.postcode)}</td></tr>
+    <tr><td class="fl" style="width:20%">Client:</td><td class="fv" colspan="3">${v(site.client_name)}</td></tr>
+    <tr><td class="fl">Address:</td><td class="fv" colspan="3">${v((site.client_address || site.address || '') + (site.postcode ? ' ' + site.postcode : ''))}</td></tr>
   </table>`;
 
   // Section 2
   html += `<table>
     <tr><td class="sec-hdr" colspan="4">SECTION 2: REASON FOR PRODUCING THIS REPORT</td></tr>
-    <tr><td class="fl" style="width:20%">Reason:</td><td class="fv" colspan="3">${e(site.purpose)}</td></tr>
-    <tr><td class="fl">Date(s) of inspection:</td><td class="fv">${e(site.inspector_date || '')}</td><td class="fl" style="width:20%">Report Ref:</td><td class="fv">${e(certNum)}</td></tr>
+    <tr><td class="fl" style="width:20%">Reason:</td><td class="fv" colspan="3">${v(site.purpose)}</td></tr>
+    <tr><td class="fl">Date(s) of inspection:</td><td class="fv">${v(site.inspector_date || '')}</td><td class="fl" style="width:20%">Report Ref:</td><td class="fv">${v(certNum)}</td></tr>
   </table>`;
 
   // Section 3
   html += `<table>
     <tr><td class="sec-hdr" colspan="6">SECTION 3: DETAILS OF THE INSTALLATION</td></tr>
-    <tr><td class="fl" style="width:20%">Installation Address:</td><td class="fv" colspan="5">${e(site.address)} ${e(site.postcode)}</td></tr>
+    <tr><td class="fl" style="width:20%">Installation Address:</td><td class="fv" colspan="5">${v((site.address || '') + (site.postcode ? ' ' + site.postcode : ''))}</td></tr>
     <tr>
       <td class="fl">Description of Premises:</td>
       <td class="fv" style="width:15%">Domestic <span class="tick">${chk('domestic')}</span></td>
       <td class="fv" style="width:15%">Commercial <span class="tick">${chk('commercial')}</span></td>
       <td class="fv" style="width:15%">Industrial <span class="tick">${chk('industrial')}</span></td>
       <td class="fv" style="width:15%">Other <span class="tick">${chk('other')}</span></td>
-      <td class="fv">${e(site.description)}</td>
+      <td class="fv">${v(site.description)}</td>
     </tr>
     <tr>
-      <td class="fl">Estimated age of the<br>electrical installation (years):</td><td class="fv">${e(site.wiring_age)}${site.wiring_age ? '' : ''}</td>
-      <td class="fl2">Evidence of additions<br>or alterations:</td><td class="fv">${e(site.additions)}${site.additions_age ? ' (' + e(site.additions_age) + ' years est.)' : ''}</td>
-      <td class="fl2">Installation records<br>available:</td><td class="fv">${e(site.records_available)}</td>
+      <td class="fl">Estimated age of the<br>electrical installation (years):</td><td class="fv">${v(site.wiring_age)}${site.wiring_age ? '' : ''}</td>
+      <td class="fl2">Evidence of additions<br>or alterations:</td><td class="fv">${v(site.additions)}${site.additions_age ? ' (' + e(site.additions_age) + ' years est.)' : ''}</td>
+      <td class="fl2">Installation records<br>available:</td><td class="fv">${v(site.records_available)}</td>
     </tr>
-    <tr><td class="fl">Date of last inspection:</td><td class="fv" colspan="5">${e(site.last_inspection_date)}</td></tr>
+    <tr><td class="fl">Date of last inspection:</td><td class="fv" colspan="5">${v(site.last_inspection_date)}</td></tr>
   </table>`;
 
   // Section 4
   html += `<table>
     <tr><td class="sec-hdr" colspan="2">SECTION 4: EXTENT AND LIMITATIONS OF THE INSPECTION AND TESTING</td></tr>
-    <tr><td class="fl" style="width:20%">Extent of the installation covered<br>by this report:</td><td class="fv">${e(site.extent)}</td></tr>
-    <tr><td class="fl">Agreed limitations including<br>reasons (see also Section 12):</td><td class="fv">${e(site.agreed_limitations)}</td></tr>
-    <tr><td class="fl">Agreed with:</td><td class="fv">${e(site.agreed_with)}</td></tr>
-    <tr><td class="fl">Operational limitations including<br>reasons (see also Section 12):</td><td class="fv">${e(site.operational_limitations)}</td></tr>
+    <tr><td class="fl" style="width:20%">Extent of the installation covered<br>by this report:</td><td class="fv">${v(site.extent)}</td></tr>
+    <tr><td class="fl">Agreed limitations including<br>reasons (see also Section 12):</td><td class="fv">${v(site.agreed_limitations)}</td></tr>
+    <tr><td class="fl">Agreed with:</td><td class="fv">${v(site.agreed_with)}</td></tr>
+    <tr><td class="fl">Operational limitations including<br>reasons (see also Section 12):</td><td class="fv">${v(site.operational_limitations)}</td></tr>
     <tr><td colspan="2" style="font-size:7px;padding:3px">The inspection and testing has been carried out in accordance with BS 7671: 2018+A2:2022 as amended. The inspection and testing detailed within this report, and described within the limitations given in Section 12, has been carried out in a manner intended to identify, so far as is reasonably practicable, any damage, deterioration, defects, dangerous conditions and non-compliances with the requirements of BS 7671 that may give rise to danger.</td></tr>
   </table>`;
 
@@ -1389,7 +1390,7 @@ app.get('/api/sites/:id/report', (req, res, next) => {
         <div class="assess-${hasC1C2FI ? 'unsat' : 'sat'}">${hasC1C2FI ? 'UNSATISFACTORY' : 'SATISFACTORY'}</div>
       </td>
       <td class="fl" style="width:20%">Date of next inspection<br>(recommended):</td>
-      <td class="fv" style="font-size:11px;font-weight:bold">${e(site.next_inspection || site.next_inspection_date)}</td>
+      <td class="fv" style="font-size:11px;font-weight:bold">${v(site.next_inspection || site.next_inspection_date)}</td>
     </tr>
   </table>`;
 
@@ -1477,7 +1478,7 @@ app.get('/api/sites/:id/report', (req, res, next) => {
   // Section 8
   html += `<table>
     <tr><td class="sec-hdr" colspan="2">SECTION 8: GENERAL CONDITION OF THE INSTALLATION</td></tr>
-    <tr><td class="fl" style="width:30%">General condition of the installation<br>(in terms of electrical safety):</td><td class="fv">${e(site.general_condition)}</td></tr>
+    <tr><td class="fl" style="width:30%">General condition of the installation<br>(in terms of electrical safety):</td><td class="fv">${v(site.general_condition)}</td></tr>
     <tr><td class="fl">Overall assessment:</td><td class="fv" style="font-size:12px;font-weight:bold">${hasC1C2FI ? 'UNSATISFACTORY' : 'SATISFACTORY'}</td></tr>
   </table>`;
 
@@ -1489,18 +1490,18 @@ app.get('/api/sites/:id/report', (req, res, next) => {
 
   // Contractor details
   html += `<table>
-    <tr><td class="fl" style="width:25%">Trading title:</td><td class="fv" style="width:25%">${e(comp.name || '')}</td><td class="fl" style="width:25%">Registration number:</td><td class="fv" style="width:25%">${e(comp.registration_number || '')}</td></tr>
-    <tr><td class="fl">Address:</td><td class="fv" colspan="3">${e(comp.address || '')} ${e(comp.postcode || '')}</td></tr>
-    <tr><td class="fl">Telephone:</td><td class="fv">${e(comp.tel || '')}</td><td class="fl">Registration body:</td><td class="fv">${e(comp.registration_body || '')}</td></tr>
+    <tr><td class="fl" style="width:25%">Trading title:</td><td class="fv" style="width:25%">${v(comp.name || '')}</td><td class="fl" style="width:25%">Registration number:</td><td class="fv" style="width:25%">${v(comp.registration_number || '')}</td></tr>
+    <tr><td class="fl">Address:</td><td class="fv" colspan="3">${v((comp.address || '') + (comp.postcode ? ' ' + comp.postcode : ''))}</td></tr>
+    <tr><td class="fl">Telephone:</td><td class="fv">${v(comp.tel || '')}</td><td class="fl">Registration body:</td><td class="fv">${v(comp.registration_body || '')}</td></tr>
   </table>`;
 
   // QS signature
   if (qs.name) {
     html += `<table style="margin-top:6px">
       <tr><td class="sec-hdr-gray" colspan="4">QUALIFIED SUPERVISOR</td></tr>
-      <tr><td class="fl" style="width:25%">Name:</td><td class="fv" style="width:25%">${e(qs.name)}</td><td class="fl" style="width:25%">Position:</td><td class="fv" style="width:25%">${e(qs.position || 'Qualified Supervisor')}</td></tr>`;
+      <tr><td class="fl" style="width:25%">Name:</td><td class="fv" style="width:25%">${v(qs.name)}</td><td class="fl" style="width:25%">Position:</td><td class="fv" style="width:25%">${v(qs.position || 'Qualified Supervisor')}</td></tr>`;
     const qNum = qs.napit_number || qs.niceic_number || qs.ecs_number || qs.jib_number || qs.other_qual || '';
-    html += `<tr><td class="fl">Qualification/Registration No:</td><td class="fv">${e(qNum)}</td><td class="fl">Date:</td><td class="fv">${e(qs.date_signed || '')}</td></tr>`;
+    html += `<tr><td class="fl">Qualification/Registration No:</td><td class="fv">${v(qNum)}</td><td class="fl">Date:</td><td class="fv">${v(qs.date_signed || '')}</td></tr>`;
     html += `<tr><td class="fl">Signature:</td><td colspan="3">${qs.signature_data ? '<img class="sig-img" src="' + qs.signature_data + '">' : ''}</td></tr>`;
     html += `</table>`;
   }
@@ -1509,9 +1510,9 @@ app.get('/api/sites/:id/report', (req, res, next) => {
   testers.forEach(t => {
     html += `<table style="margin-top:4px">
       <tr><td class="sec-hdr-gray" colspan="4">INSPECTOR / TESTER</td></tr>
-      <tr><td class="fl" style="width:25%">Name:</td><td class="fv" style="width:25%">${e(t.name)}</td><td class="fl" style="width:25%">Position:</td><td class="fv" style="width:25%">${e(t.position || 'Electrician')}</td></tr>`;
+      <tr><td class="fl" style="width:25%">Name:</td><td class="fv" style="width:25%">${v(t.name)}</td><td class="fl" style="width:25%">Position:</td><td class="fv" style="width:25%">${v(t.position || 'Electrician')}</td></tr>`;
     const tNum = t.napit_number || t.niceic_number || t.ecs_number || t.jib_number || t.other_qual || '';
-    html += `<tr><td class="fl">Qualification/Registration No:</td><td class="fv">${e(tNum)}</td><td class="fl">Date:</td><td class="fv">${e(t.date_signed || '')}</td></tr>`;
+    html += `<tr><td class="fl">Qualification/Registration No:</td><td class="fv">${v(tNum)}</td><td class="fl">Date:</td><td class="fv">${v(t.date_signed || '')}</td></tr>`;
     html += `<tr><td class="fl">Signature:</td><td colspan="3">${t.signature_data ? '<img class="sig-img" src="' + t.signature_data + '">' : ''}</td></tr>`;
     html += `</table>`;
   });
@@ -1552,21 +1553,21 @@ app.get('/api/sites/:id/report', (req, res, next) => {
       <td class="fl2">TT <span class="tick">${earthTick('TT', site.earthing_type)}</span></td>
       <td class="fl2">TN-C <span class="tick">${earthTick('TNC', site.earthing_type)}</span></td>
       <td class="fl2">IT <span class="tick">${earthTick('IT', site.earthing_type)}</span></td>
-      <td class="fv">${e(site.earthing_type)}</td>
+      <td class="fv">${v(site.earthing_type)}</td>
     </tr>
   </table>`;
 
   // Supply details
   html += `<table>
-    <tr><td class="fl" style="width:25%">Nominal voltage, U / U<sub>0</sub> (V):</td><td class="fv" style="width:25%">${e(site.nominal_voltage)}</td><td class="fl" style="width:25%">Nominal frequency, f (Hz):</td><td class="fv" style="width:25%">${e(site.nominal_frequency)}</td></tr>
-    <tr><td class="fl">Prospective fault current,<br>Ipf (kA):</td><td class="fv">${e(site.ipf_at_origin)}</td><td class="fl">External loop impedance,<br>Ze (&Omega;):</td><td class="fv">${e(site.ze_at_origin)}</td></tr>
+    <tr><td class="fl" style="width:25%">Nominal voltage, U / U<sub>0</sub> (V):</td><td class="fv" style="width:25%">${v(site.nominal_voltage)}</td><td class="fl" style="width:25%">Nominal frequency, f (Hz):</td><td class="fv" style="width:25%">${v(site.nominal_frequency)}</td></tr>
+    <tr><td class="fl">Prospective fault current,<br>Ipf (kA):</td><td class="fv">${v(site.ipf_at_origin)}</td><td class="fl">External loop impedance,<br>Ze (&Omega;):</td><td class="fv">${v(site.ze_at_origin)}</td></tr>
   </table>`;
 
   // Supply protective device
   html += `<table>
     <tr><td class="sec-hdr-gray" colspan="6">Supply Protective Device</td></tr>
-    <tr><td class="fl" style="width:20%">BS (EN):</td><td class="fv" style="width:15%">${e(site.supply_device_bsen)}</td><td class="fl" style="width:15%">Type:</td><td class="fv" style="width:15%">${e(site.supply_device_type)}</td><td class="fl" style="width:15%">Rating (A):</td><td class="fv" style="width:20%">${e(site.supply_device_rating)}</td></tr>
-    <tr><td class="fl">Number of supplies:</td><td class="fv" colspan="5">${e(site.num_supplies || '1')}</td></tr>
+    <tr><td class="fl" style="width:20%">BS (EN):</td><td class="fv" style="width:15%">${v(site.supply_device_bsen)}</td><td class="fl" style="width:15%">Type:</td><td class="fv" style="width:15%">${v(site.supply_device_type)}</td><td class="fl" style="width:15%">Rating (A):</td><td class="fv" style="width:20%">${v(site.supply_device_rating)}</td></tr>
+    <tr><td class="fl">Number of supplies:</td><td class="fv" colspan="5">${v(site.num_supplies || '1')}</td></tr>
   </table>`;
 
   html += `</div>`;
@@ -1598,9 +1599,9 @@ app.get('/api/sites/:id/report', (req, res, next) => {
   html += `<table>
     <tr><td class="sec-hdr-gray" colspan="6">Earth Electrode (where applicable)</td></tr>
     <tr>
-      <td class="fl" style="width:20%">Type:</td><td class="fv" style="width:15%">${e(site.earth_electrode_type)}</td>
-      <td class="fl" style="width:15%">Location:</td><td class="fv" style="width:15%">${e(site.earth_electrode_location)}</td>
-      <td class="fl" style="width:15%">Resistance (&Omega;):</td><td class="fv" style="width:20%">${e(site.earth_electrode_resistance)}</td>
+      <td class="fl" style="width:20%">Type:</td><td class="fv" style="width:15%">${v(site.earth_electrode_type)}</td>
+      <td class="fl" style="width:15%">Location:</td><td class="fv" style="width:15%">${v(site.earth_electrode_location)}</td>
+      <td class="fl" style="width:15%">Resistance (&Omega;):</td><td class="fv" style="width:20%">${v(site.earth_electrode_resistance)}</td>
     </tr>
   </table>`;
 
@@ -1608,19 +1609,19 @@ app.get('/api/sites/:id/report', (req, res, next) => {
   html += `<table>
     <tr><td class="sec-hdr-gray" colspan="6">Main Switch / Switch-fuse / RCD / RCBO</td></tr>
     <tr>
-      <td class="fl" style="width:20%">Location:</td><td class="fv" style="width:15%">${e(site.main_switch_location)}</td>
-      <td class="fl" style="width:15%">BS (EN):</td><td class="fv" style="width:15%">${e(site.main_switch_bsen)}</td>
-      <td class="fl" style="width:15%">No. of poles:</td><td class="fv" style="width:20%">${e(site.main_switch_poles)}</td>
+      <td class="fl" style="width:20%">Location:</td><td class="fv" style="width:15%">${v(site.main_switch_location)}</td>
+      <td class="fl" style="width:15%">BS (EN):</td><td class="fv" style="width:15%">${v(site.main_switch_bsen)}</td>
+      <td class="fl" style="width:15%">No. of poles:</td><td class="fv" style="width:20%">${v(site.main_switch_poles)}</td>
     </tr>
     <tr>
-      <td class="fl">Current rating (A):</td><td class="fv">${e(site.main_switch_current_rating)}</td>
-      <td class="fl">Fuse/device rating (A):</td><td class="fv">${e(site.main_switch_fuse_rating)}</td>
-      <td class="fl">Voltage rating (V):</td><td class="fv">${e(site.main_switch_voltage_rating)}</td>
+      <td class="fl">Current rating (A):</td><td class="fv">${v(site.main_switch_current_rating)}</td>
+      <td class="fl">Fuse/device rating (A):</td><td class="fv">${v(site.main_switch_fuse_rating)}</td>
+      <td class="fl">Voltage rating (V):</td><td class="fv">${v(site.main_switch_voltage_rating)}</td>
     </tr>
     <tr>
-      <td class="fl">RCD type (if applicable):</td><td class="fv">${e(site.main_switch_rcd_type)}</td>
-      <td class="fl">RCD I&Delta;n (mA):</td><td class="fv">${e(site.main_switch_rcd_idn)}</td>
-      <td class="fl">RCD operating time (ms):</td><td class="fv">${e(site.main_switch_rcd_time)}</td>
+      <td class="fl">RCD type (if applicable):</td><td class="fv">${v(site.main_switch_rcd_type)}</td>
+      <td class="fl">RCD I&Delta;n (mA):</td><td class="fv">${v(site.main_switch_rcd_idn)}</td>
+      <td class="fl">RCD operating time (ms):</td><td class="fv">${v(site.main_switch_rcd_time)}</td>
     </tr>
   </table>`;
 
@@ -1731,29 +1732,29 @@ app.get('/api/sites/:id/report', (req, res, next) => {
     html += `<table>
       <tr><td class="sec-hdr" colspan="6">DISTRIBUTION BOARD: ${e(b.ref)}</td></tr>
       <tr>
-        <td class="fl" style="width:18%">DB reference:</td><td class="fv" style="width:15%">${e(b.ref)}</td>
-        <td class="fl" style="width:18%">Location:</td><td class="fv" style="width:15%">${e(b.location)}</td>
-        <td class="fl" style="width:18%">Supplied from:</td><td class="fv" style="width:16%">${e(b.supplied_from)}</td>
+        <td class="fl" style="width:18%">DB reference:</td><td class="fv" style="width:15%">${v(b.ref)}</td>
+        <td class="fl" style="width:18%">Location:</td><td class="fv" style="width:15%">${v(b.location)}</td>
+        <td class="fl" style="width:18%">Supplied from:</td><td class="fv" style="width:16%">${v(b.supplied_from)}</td>
       </tr>
     </table>`;
 
     html += `<table>
       <tr><td class="sec-hdr-gray" colspan="8">Distribution circuit OCPD &amp; DB details</td></tr>
       <tr>
-        <td class="fl2" style="width:12%">BS (EN):</td><td class="fv" style="width:13%">${e(b.dist_bsen)}</td>
-        <td class="fl2" style="width:12%">Type:</td><td class="fv" style="width:13%">${e(b.dist_type)}</td>
-        <td class="fl2" style="width:12%">Rating (A):</td><td class="fv" style="width:13%">${e(b.dist_rating)}</td>
-        <td class="fl2" style="width:12%">No. of phases:</td><td class="fv" style="width:13%">${e(b.num_phases || '1')}</td>
+        <td class="fl2" style="width:12%">BS (EN):</td><td class="fv" style="width:13%">${v(b.dist_bsen)}</td>
+        <td class="fl2" style="width:12%">Type:</td><td class="fv" style="width:13%">${v(b.dist_type)}</td>
+        <td class="fl2" style="width:12%">Rating (A):</td><td class="fv" style="width:13%">${v(b.dist_rating)}</td>
+        <td class="fl2" style="width:12%">No. of phases:</td><td class="fv" style="width:13%">${v(b.num_phases || '1')}</td>
       </tr>
       <tr>
-        <td class="fl2">SPD type(s):</td><td class="fv">${e(b.spd_types)}</td>
-        <td class="fl2">SPD status:</td><td class="fv">${e(b.spd_status)}</td>
+        <td class="fl2">SPD type(s):</td><td class="fv">${v(b.spd_types)}</td>
+        <td class="fl2">SPD status:</td><td class="fv">${v(b.spd_status)}</td>
         <td class="fl2">Supply polarity confirmed:</td><td class="fv tick">${tick(b.supply_polarity)}</td>
-        <td class="fl2">Phase sequence:</td><td class="fv">${e(b.phase_sequence)}</td>
+        <td class="fl2">Phase sequence:</td><td class="fv">${v(b.phase_sequence)}</td>
       </tr>
       <tr>
-        <td class="fl2">Zs at DB (&Omega;):</td><td class="fv">${e(b.ze)}</td>
-        <td class="fl2">Ipf at DB (kA):</td><td class="fv" colspan="5">${e(b.ipf)}</td>
+        <td class="fl2">Zs at DB (&Omega;):</td><td class="fv">${v(b.ze)}</td>
+        <td class="fl2">Ipf at DB (kA):</td><td class="fv" colspan="5">${v(b.ipf)}</td>
       </tr>
     </table>`;
 
@@ -1810,38 +1811,38 @@ app.get('/api/sites/:id/report', (req, res, next) => {
         const zsNum = parseFloat(c.zs_measured);
         const maxNum = parseFloat(c.max_zs);
         const zsFail = zsNum && maxNum && zsNum > maxNum * 0.8;
-        const polTick = (c.polarity === 'true' || c.polarity === true) ? '&#10003;' : e(c.polarity);
-        const rcdBtnTick = (c.rcd_test_button === 'true' || c.rcd_test_button === true) ? '&#10003;' : e(c.rcd_test_button);
-        const afddTick = (c.afdd_test === 'true' || c.afdd_test === true) ? '&#10003;' : e(c.afdd_test);
+        const polTick = (c.polarity === 'true' || c.polarity === true) ? '&#10003;' : v(c.polarity);
+        const rcdBtnTick = (c.rcd_test_button === 'true' || c.rcd_test_button === true) ? '&#10003;' : v(c.rcd_test_button);
+        const afddTick = (c.afdd_test === 'true' || c.afdd_test === true) ? '&#10003;' : v(c.afdd_test);
 
         html += `<tr>
-          <td>${e(c.number)}</td>
-          <td style="text-align:left">${e(c.description)}</td>
-          <td>${e(c.wiring_type)}</td>
-          <td>${e(c.ref_method)}</td>
-          <td>${e(c.num_points)}</td>
-          <td>${e(c.live_mm)}</td>
-          <td>${e(c.cpc_mm)}</td>
-          <td>${e(c.max_disconnect)}</td>
-          <td>${e(c.ocpd_bsen)}</td>
-          <td>${e(c.ocpd_type)}</td>
-          <td>${e(c.ocpd_rating)}</td>
-          <td>${e(c.ocpd_breaking_cap)}</td>
-          <td>${e(c.max_zs)}</td>
-          <td>${e(c.rcd_bsen)}</td>
-          <td>${e(c.rcd_type)}</td>
-          <td>${e(c.rcd_idn)}</td>
-          <td>${e(c.rcd_rating_a)}</td>
-          <td>${e(c.r1)}</td>
-          <td>${e(c.rn)}</td>
-          <td>${e(c.r2)}</td>
-          <td>${e(c.r1r2)}</td>
-          <td>${e(c.r2_ring)}</td>
-          <td>${e(c.ir_ll)}</td>
-          <td>${e(c.ir_le)}</td>
+          <td>${v(c.number)}</td>
+          <td style="text-align:left">${v(c.description)}</td>
+          <td>${v(c.wiring_type)}</td>
+          <td>${v(c.ref_method)}</td>
+          <td>${v(c.num_points)}</td>
+          <td>${v(c.live_mm)}</td>
+          <td>${v(c.cpc_mm)}</td>
+          <td>${v(c.max_disconnect)}</td>
+          <td>${v(c.ocpd_bsen)}</td>
+          <td>${v(c.ocpd_type)}</td>
+          <td>${v(c.ocpd_rating)}</td>
+          <td>${v(c.ocpd_breaking_cap)}</td>
+          <td>${v(c.max_zs)}</td>
+          <td>${v(c.rcd_bsen)}</td>
+          <td>${v(c.rcd_type)}</td>
+          <td>${v(c.rcd_idn)}</td>
+          <td>${v(c.rcd_rating_a)}</td>
+          <td>${v(c.r1)}</td>
+          <td>${v(c.rn)}</td>
+          <td>${v(c.r2)}</td>
+          <td>${v(c.r1r2)}</td>
+          <td>${v(c.r2_ring)}</td>
+          <td>${v(c.ir_ll)}</td>
+          <td>${v(c.ir_le)}</td>
           <td>${polTick}</td>
-          <td style="${zsFail ? 'font-weight:bold' : ''}">${e(c.zs_measured)}</td>
-          <td>${e(c.rcd_time_x1)}</td>
+          <td style="${zsFail ? 'font-weight:bold' : ''}">${v(c.zs_measured)}</td>
+          <td>${v(c.rcd_time_x1)}</td>
           <td>${rcdBtnTick}</td>
           <td>${afddTick}</td>
         </tr>`;
@@ -1873,9 +1874,9 @@ app.get('/api/sites/:id/report', (req, res, next) => {
     // Test instruments block
     html += `<table style="margin-top:4px">
       <tr><td class="sec-hdr-gray" colspan="4">TEST INSTRUMENTS USED (serial numbers)</td></tr>
-      <tr><td class="fl2" style="width:25%">Multi-functional:</td><td class="fv" style="width:25%">${e(b.instruments_multi)}</td><td class="fl2" style="width:25%">Insulation resistance:</td><td class="fv" style="width:25%">${e(b.instruments_ir)}</td></tr>
-      <tr><td class="fl2">Continuity:</td><td class="fv">${e(b.instruments_cont)}</td><td class="fl2">Earth electrode resistance:</td><td class="fv">${e(b.instruments_earth)}</td></tr>
-      <tr><td class="fl2">Earth fault loop impedance:</td><td class="fv">${e(b.instruments_loop)}</td><td class="fl2">RCD:</td><td class="fv">${e(b.instruments_rcd)}</td></tr>
+      <tr><td class="fl2" style="width:25%">Multi-functional:</td><td class="fv" style="width:25%">${v(b.instruments_multi)}</td><td class="fl2" style="width:25%">Insulation resistance:</td><td class="fv" style="width:25%">${v(b.instruments_ir)}</td></tr>
+      <tr><td class="fl2">Continuity:</td><td class="fv">${v(b.instruments_cont)}</td><td class="fl2">Earth electrode resistance:</td><td class="fv">${v(b.instruments_earth)}</td></tr>
+      <tr><td class="fl2">Earth fault loop impedance:</td><td class="fv">${v(b.instruments_loop)}</td><td class="fl2">RCD:</td><td class="fv">${v(b.instruments_rcd)}</td></tr>
     </table>`;
 
     // Tested by
@@ -1883,8 +1884,8 @@ app.get('/api/sites/:id/report', (req, res, next) => {
     if (boardTester.name) {
       html += `<table style="margin-top:4px">
         <tr><td class="sec-hdr-gray" colspan="4">TESTED BY</td></tr>
-        <tr><td class="fl2" style="width:15%">Name:</td><td class="fv" style="width:35%">${e(boardTester.name)}</td><td class="fl2" style="width:15%">Position:</td><td class="fv" style="width:35%">${e(boardTester.position || '')}</td></tr>
-        <tr><td class="fl2">Signature:</td><td>${boardTester.signature_data ? '<img class="sig-img" src="' + boardTester.signature_data + '">' : ''}</td><td class="fl2">Date:</td><td class="fv">${e(boardTester.date_signed || '')}</td></tr>
+        <tr><td class="fl2" style="width:15%">Name:</td><td class="fv" style="width:35%">${v(boardTester.name)}</td><td class="fl2" style="width:15%">Position:</td><td class="fv" style="width:35%">${v(boardTester.position || '')}</td></tr>
+        <tr><td class="fl2">Signature:</td><td>${boardTester.signature_data ? '<img class="sig-img" src="' + boardTester.signature_data + '">' : ''}</td><td class="fl2">Date:</td><td class="fv">${v(boardTester.date_signed || '')}</td></tr>
       </table>`;
     }
 
