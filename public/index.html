@@ -2001,17 +2001,17 @@ input,select,textarea { font-size:16px !important; }
 
     var scanPrompt = 'You are an EICR Form 4 circuit schedule extractor. Extract circuit details from these distribution board photos.\n' +
       'Return JSON: {"updates":[{circuit fields}], "board_updates":{ref, location, supplied_from, num_phases}}\n' +
-      'Circuit fields: number, description, wiring_type (use codes: T+E, SWA, MICC, FP, Singles/Con), ' +
-      'ref_method (A-G, 100-103), points, live_mm, cpc_mm, ocpd_bsen (60898/61009/88-2), ' +
-      'ocpd_type (B/C/D), ocpd_rating, rcd_bsen, rcd_type, rcd_idn.\n' +
-      'ONLY include circuits you can actually see. Do NOT make up data.';
+      'Circuit fields: number, description, wiring_type (BS 7671 letter codes: A=T+E, B=metallic conduit, C=plastic conduit, D=metallic trunking, E=plastic trunking, F=PVC/SWA, G=XLPE/SWA, H=MICC, I=FP200, J=Flex, K=Busbar), ' +
+      'ref_method (A-G, 100-103), points, live_mm, cpc_mm, ocpd_bsen (60898/61009/88-2/3036/60947-2), ' +
+      'ocpd_type (B/C/D), ocpd_rating, breaking_cap, rcd_bsen, rcd_type, rcd_idn.\n' +
+      'ONLY include circuits you can actually see. Do NOT make up or fabricate data.';
 
-    api('POST', '/ai/send', {
-      keyId: keyEl.value,
-      message: scanPrompt,
+    api('POST', '/ai/process', {
+      key_id: keyEl.value,
+      prompt: scanPrompt,
       images_base64: images_base64
     }).then(function(data) {
-      var result = data.response || data.text || '';
+      var result = data.result || '';
       try {
         var jsonMatch = result.match(/\{[\s\S]*\}/);
         if (!jsonMatch) throw new Error('No JSON in response');
