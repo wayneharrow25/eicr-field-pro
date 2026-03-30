@@ -978,10 +978,12 @@ input,select,textarea { font-size:16px !important; }
             'Add</button>' +
         '</div>' +
       '</div>' +
-      '<div id="bulk-select-bar" style="display:none" class="flex items-center gap-2 px-4 py-2 bg-red-50 border-b border-red-200">' +
+      '<div id="bulk-select-bar" style="display:none" class="flex items-center gap-2 px-4 py-2 bg-blue-50 border-b border-blue-200 flex-wrap">' +
         '<button class="btn btn-sm" style="background:#dbeafe;color:#2563eb" data-action="bulk-select-all">All</button>' +
         '<button class="btn btn-sm" style="background:#dbeafe;color:#2563eb" data-action="bulk-select-none">None</button>' +
-        '<span class="flex-1 text-xs text-slate-600" id="bulk-select-count">0 selected</span>' +
+        '<span class="text-xs text-slate-600" id="bulk-select-count">0 selected</span>' +
+        '<span class="flex-1"></span>' +
+        '<span class="text-xs text-slate-500">Tap column header to set value</span>' +
         '<button class="btn btn-sm" style="background:#fef3c7;color:#92400e" data-action="bulk-clear-selected">Clear</button>' +
         '<button class="btn btn-danger btn-sm" data-action="bulk-delete-selected">Delete</button>' +
       '</div>';
@@ -1708,15 +1710,26 @@ input,select,textarea { font-size:16px !important; }
     polarity:     [{v:true,l:'Yes ✓'},{v:false,l:'No'}],
     rcd_test_btn: [{v:true,l:'Yes ✓'},{v:false,l:'No'}],
     afdd_test:    [{v:'N/A',l:'N/A'},{v:true,l:'Yes ✓'},{v:false,l:'No'}],
-    ocpd_type:    [{v:'B',l:'B'},{v:'C',l:'C'},{v:'D',l:'D'}],
-    ocpd_bsen:    [{v:'60898',l:'60898 MCB'},{v:'61009',l:'61009 RCBO'},{v:'88-2',l:'88-2 Fuse'}],
+    ocpd_type:    [{v:'B',l:'B'},{v:'C',l:'C'},{v:'D',l:'D'},{v:'gG',l:'gG'},{v:'aM',l:'aM'}],
+    ocpd_bsen:    [{v:'60898',l:'60898 MCB'},{v:'61009',l:'61009 RCBO'},{v:'61008',l:'61008 RCD'},{v:'88-2',l:'88-2 Fuse'},{v:'3036',l:'3036 Rewireable'},{v:'60947-2',l:'MCCB'}],
+    ocpd_rating:  [{v:'6',l:'6A'},{v:'10',l:'10A'},{v:'16',l:'16A'},{v:'20',l:'20A'},{v:'25',l:'25A'},{v:'32',l:'32A'},{v:'40',l:'40A'},{v:'50',l:'50A'},{v:'63',l:'63A'},{v:'80',l:'80A'},{v:'100',l:'100A'}],
+    breaking_cap: [{v:'6',l:'6 kA'},{v:'10',l:'10 kA'},{v:'15',l:'15 kA'},{v:'25',l:'25 kA'}],
     ir_test_v:    [{v:'500',l:'500V'},{v:'250',l:'250V'},{v:'1000',l:'1000V'}],
     wiring_type:  [{v:'A',l:'A — PVC/PVC'},{v:'B',l:'B — Met conduit'},{v:'C',l:'C — Plas conduit'},{v:'D',l:'D — Met trunk'},{v:'E',l:'E — Plas trunk'},{v:'F',l:'F — PVC/SWA'},{v:'G',l:'G — XLPE/SWA'},{v:'H',l:'H — MICC'}],
-    live_mm:      [{v:'1.5',l:'1.5'},{v:'2.5',l:'2.5'},{v:'4',l:'4'},{v:'6',l:'6'},{v:'10',l:'10'}],
-    cpc_mm:       [{v:'1.0',l:'1.0'},{v:'1.5',l:'1.5'},{v:'2.5',l:'2.5'},{v:'4',l:'4'}],
+    ref_method:   [{v:'A',l:'A'},{v:'B',l:'B'},{v:'C',l:'C'},{v:'100',l:'100'},{v:'101',l:'101'},{v:'102',l:'102'},{v:'103',l:'103'}],
+    live_mm:      [{v:'1.0',l:'1.0'},{v:'1.5',l:'1.5'},{v:'2.5',l:'2.5'},{v:'4',l:'4'},{v:'6',l:'6'},{v:'10',l:'10'},{v:'16',l:'16'},{v:'25',l:'25'}],
+    cpc_mm:       [{v:'1.0',l:'1.0'},{v:'1.5',l:'1.5'},{v:'2.5',l:'2.5'},{v:'4',l:'4'},{v:'6',l:'6'},{v:'10',l:'10'}],
+    points:       [{v:'1',l:'1'},{v:'2',l:'2'},{v:'3',l:'3'},{v:'4',l:'4'},{v:'5',l:'5'},{v:'6',l:'6'},{v:'8',l:'8'},{v:'10',l:'10'},{v:'LIM',l:'LIM'}],
+    rcd_bsen:     [{v:'61008',l:'61008 RCD'},{v:'61009',l:'61009 RCBO'},{v:'N/A',l:'N/A'}],
+    rcd_type:     [{v:'AC',l:'AC'},{v:'A',l:'A'},{v:'B',l:'B'},{v:'S',l:'S'},{v:'N/A',l:'N/A'}],
+    rcd_idn:      [{v:'30',l:'30 mA'},{v:'100',l:'100 mA'},{v:'300',l:'300 mA'},{v:'N/A',l:'N/A'}],
     r1:           [{v:'N/A',l:'N/A'}],
     rn:           [{v:'N/A',l:'N/A'}],
+    r2:           [{v:'N/A',l:'N/A'}],
     r1r2:         [{v:'N/A',l:'N/A'}],
+    r2_ring:      [{v:'N/A',l:'N/A'}],
+    ir_ll:        [{v:'>200',l:'>200'},{v:'N/A',l:'N/A'}],
+    ir_le:        [{v:'>200',l:'>200'},{v:'N/A',l:'N/A'}],
     zs_measured:  [{v:'N/A',l:'N/A'}],
     rcd_time_x1:  [{v:'N/A',l:'N/A'}]
   };
@@ -1779,7 +1792,8 @@ input,select,textarea { font-size:16px !important; }
     div.style.left = Math.min(rect.left, window.innerWidth - 180) + 'px';
     div.style.top = (rect.bottom + 4) + 'px';
 
-    var h = '<div class="cfp-head">Fill all circuits</div>';
+    var selCount = _bulkSelectMode ? document.querySelectorAll('.bulk-check:checked').length : 0;
+    var h = '<div class="cfp-head">' + (selCount > 0 ? 'Fill ' + selCount + ' selected' : 'Fill all circuits') + '</div>';
     fills.forEach(function(f) {
       h += '<button data-action="cfp-fill" data-col="' + col + '" data-val="' + esc(String(f.v)) + '">' + esc(f.l) + '</button>';
     });
