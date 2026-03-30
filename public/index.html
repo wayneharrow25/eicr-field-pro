@@ -910,6 +910,7 @@ input,select,textarea { font-size:16px !important; }
         '<span class="flex-1 text-xs text-slate-600" id="bulk-select-count">0 selected</span>' +
         '<button class="btn btn-sm" style="background:#fef3c7;color:#92400e" data-action="bulk-clear-selected">Clear</button>' +
         '<button class="btn btn-danger btn-sm" data-action="bulk-delete-selected">Delete</button>' +
+        '<button class="btn btn-sm" style="background:#e0e7ff;color:#4338ca" data-action="undo-circuits" title="Undo last destructive action">&#8630; Undo</button>' +
       '</div>' +
       '<div class="scroll-wrapper">' +
         '<table class="test-table w-full">' +
@@ -1424,6 +1425,20 @@ input,select,textarea { font-size:16px !important; }
   var _scanAbort = null; /* AbortController for cancellable scans */
   var _bulkAbort = false; /* flag for cancelling bulk scan */
   var _bulkSelectMode = false; /* flag for circuit bulk select/delete */
+  var _circuitUndoStack = []; /* snapshots for undo */
+
+  function snapshotCircuits() {
+    _circuitUndoStack.push(JSON.parse(JSON.stringify(state.circuits)));
+    if (_circuitUndoStack.length > 10) _circuitUndoStack.shift(); /* cap at 10 */
+  }
+
+  function undoCircuits() {
+    if (!_circuitUndoStack.length) { toast('Nothing to undo', 'info'); return; }
+    state.circuits = _circuitUndoStack.pop();
+    saveAllCircuits(true);
+    navigate('board-detail');
+    toast('Undo — circuits restored', 'success');
+  }
 
   /* Track accumulated scan photos (file objects) */
   var _scanPhotos = []; /* array of { file, url } */
@@ -1764,6 +1779,7 @@ input,select,textarea { font-size:16px !important; }
   /* Apply reviewed scan results to circuits */
   function applyScanResults() {
     if (!_scanState.updates || !_scanState.updates.length) return;
+    snapshotCircuits();
     /* Deduplicate scan results first — keep last entry per number */
     var deduped = {};
     _scanState.updates.forEach(function(u) {
@@ -2257,31 +2273,63 @@ input,select,textarea { font-size:16px !important; }
     scanNext();
   }
 
+  var _dictationRec = null;
+
   function startDictation() {
     var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) { toast('Speech recognition not supported', 'error'); return; }
+
+    var btn = document.querySelector('[data-action="start-dictation"]');
+
+    /* Toggle off if already running */
+    if (_dictationRec) {
+      try { _dictationRec.stop(); } catch(ex) {}
+      _dictationRec = null;
+      if (btn) { btn.style.background = ''; btn.innerHTML = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>Tap to Speak'; }
+      return;
+    }
+
     var recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-GB';
+    _dictationRec = recognition;
 
     var textArea = document.getElementById('ai-voice-text');
     if (!textArea) return;
 
+    /* Keep existing text so we append to it */
+    var baseText = textArea.value ? textArea.value.trimEnd() : '';
+
     recognition.onresult = function(event) {
-      var transcript = '';
+      var finalText = '';
+      var interimText = '';
       for (var i = 0; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalText += event.results[i][0].transcript;
+        } else {
+          interimText += event.results[i][0].transcript;
+        }
       }
-      textArea.value = transcript;
+      var combined = finalText + interimText;
+      textArea.value = baseText ? baseText + ' ' + combined.trim() : combined.trim();
     };
     recognition.onerror = function(e) {
+      _dictationRec = null;
+      if (btn) { btn.style.background = ''; btn.innerHTML = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>Tap to Speak'; }
       if (e.error === 'aborted' || e.error === 'no-speech') return;
       toast('Speech: ' + e.error, 'error');
     };
-    recognition.onend = function() { toast('Dictation ended — tap Parse', 'info'); };
-    try { recognition.start(); toast('Listening... speak your readings', 'info'); }
-    catch(ex) { toast('Mic busy — try again', 'error'); }
+    recognition.onend = function() {
+      _dictationRec = null;
+      if (btn) { btn.style.background = ''; btn.innerHTML = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>Tap to Speak'; }
+      toast('Dictation ended — tap Send to AI', 'info');
+    };
+    try {
+      recognition.start();
+      if (btn) { btn.style.background = '#ef4444'; btn.innerHTML = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Tap to Stop'; }
+      toast('Listening...', 'info');
+    } catch(ex) { _dictationRec = null; toast('Mic busy — try again', 'error'); }
   }
 
   function runVoiceParse() {
@@ -2892,6 +2940,7 @@ input,select,textarea { font-size:16px !important; }
   function bulkClearSelected() {
     var checks = document.querySelectorAll('.bulk-check:checked');
     if (!checks.length) { toast('Select circuits first', 'error'); return; }
+    snapshotCircuits();
     var keepFields = ['id','board_id','number','sort_order','created_at'];
     checks.forEach(function(c) {
       var idx = parseInt(c.getAttribute('data-idx'));
@@ -2909,6 +2958,7 @@ input,select,textarea { font-size:16px !important; }
   function bulkDeleteSelected() {
     var checks = document.querySelectorAll('.bulk-check:checked');
     if (!checks.length) { toast('Select circuits first', 'error'); return; }
+    snapshotCircuits();
     var indices = [];
     checks.forEach(function(c) { indices.push(parseInt(c.getAttribute('data-idx'))); });
     /* Get circuit IDs from state */
@@ -2958,8 +3008,9 @@ input,select,textarea { font-size:16px !important; }
   /* ===== BOARD TEXT FORMATTING ===== */
   function formatBoardAllCaps() {
     if (!state.circuits.length && !state.currentBoard) return;
-    /* Format circuit descriptions */
+    /* Format circuit fields including numbers (1l1 → 1L1) */
     state.circuits.forEach(function(c) {
+      if (c.number) c.number = c.number.toUpperCase();
       if (c.description) c.description = c.description.toUpperCase();
       if (c.location) c.location = c.location.toUpperCase();
     });
@@ -2978,6 +3029,7 @@ input,select,textarea { font-size:16px !important; }
   function formatBoardProperCase() {
     if (!state.circuits.length && !state.currentBoard) return;
     state.circuits.forEach(function(c) {
+      if (c.number) c.number = c.number.toUpperCase();
       if (c.description) c.description = toProperCase(c.description);
       if (c.location) c.location = toProperCase(c.location);
     });
@@ -4024,6 +4076,7 @@ input,select,textarea { font-size:16px !important; }
   function aiChatSend() {
     var input = document.getElementById('ai-chat-input');
     if (!input || !input.value.trim()) { toast('Type or speak an instruction', 'error'); return; }
+    snapshotCircuits(); /* save state before AI changes */
     var userText = input.value.trim();
     input.value = '';
 
@@ -4150,6 +4203,9 @@ input,select,textarea { font-size:16px !important; }
     if (!field) return;
     var btn = document.querySelector('[data-voice-for="' + fieldId + '"]');
 
+    /* AI chat input gets continuous mode — speak until you stop */
+    var isChatInput = (fieldId === 'ai-chat-input');
+
     /* Stop any existing recognition first */
     if (_voiceActive && _voiceRec) {
       try { _voiceRec.stop(); } catch(ex) {}
@@ -4159,12 +4215,29 @@ input,select,textarea { font-size:16px !important; }
     }
 
     _voiceRec = new SR();
-    _voiceRec.continuous = false;
-    _voiceRec.interimResults = false;
+    _voiceRec.continuous = isChatInput;
+    _voiceRec.interimResults = isChatInput;
     _voiceRec.lang = 'en-GB';
     var startVal = field.value || '';
 
     _voiceRec.onresult = function(e) {
+      if (isChatInput) {
+        /* Continuous mode — separate final vs interim to avoid duplication */
+        var finalText = '';
+        var interimText = '';
+        for (var i = 0; i < e.results.length; i++) {
+          if (e.results[i].isFinal) {
+            finalText += e.results[i][0].transcript;
+          } else {
+            interimText += e.results[i][0].transcript;
+          }
+        }
+        var combined = (finalText + interimText).trim();
+        field.value = startVal ? startVal + ' ' + combined : combined;
+        return; /* No AI processing during dictation — user sends when ready */
+      }
+
+      /* Single-shot mode for regular fields */
       var transcript = '';
       for (var i = 0; i < e.results.length; i++) transcript += e.results[i][0].transcript;
 
@@ -4192,9 +4265,7 @@ input,select,textarea { font-size:16px !important; }
         if (err) { if (btn) { btn.style.background = ''; btn.textContent = '🎤'; } return; }
         var cleaned = (result || '').replace(/^["']|["']$/g, '').replace(/```/g, '').trim();
         if (cleaned && cleaned.length < 500) {
-          /* If user had existing text and is appending, handle smartly */
           if (startVal) {
-            /* AI might return just the new part or the whole thing — check */
             if (cleaned.toLowerCase().indexOf(startVal.toLowerCase()) === 0) {
               field.value = cleaned;
             } else {
@@ -4204,9 +4275,7 @@ input,select,textarea { font-size:16px !important; }
             field.value = cleaned;
           }
         }
-        /* else keep raw transcript */
         if (btn) { btn.style.background = ''; btn.textContent = '🎤'; }
-        /* Trigger autosave */
         field.dispatchEvent(new Event('input', { bubbles: true }));
         field.dispatchEvent(new Event('change', { bubbles: true }));
       });
@@ -4214,12 +4283,12 @@ input,select,textarea { font-size:16px !important; }
     _voiceRec.onerror = function(ev) {
       _voiceActive = false;
       if (btn) { btn.style.background = ''; btn.textContent = '🎤'; }
-      if (ev.error === 'aborted' || ev.error === 'no-speech') return; /* Silent failures */
+      if (ev.error === 'aborted' || ev.error === 'no-speech') return;
       toast('Voice: ' + ev.error, 'error');
     };
     _voiceRec.onend = function() {
       _voiceActive = false;
-      /* Don't reset button here — AI might still be processing (blue spinner) */
+      if (isChatInput && btn) { btn.style.background = ''; btn.textContent = '🎤'; }
     };
 
     try {
@@ -4593,6 +4662,9 @@ input,select,textarea { font-size:16px !important; }
         break;
       case 'bulk-delete-selected':
         bulkDeleteSelected();
+        break;
+      case 'undo-circuits':
+        undoCircuits();
         break;
       case 'ai-chat-send':
         aiChatSend();
