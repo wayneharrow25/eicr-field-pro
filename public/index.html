@@ -896,6 +896,8 @@ input,select,textarea { font-size:16px !important; }
       '<div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">' +
         '<h3 class="font-semibold text-slate-800">Test Schedule (Form 4)</h3>' +
         '<div class="flex gap-2">' +
+          '<button class="btn btn-ghost btn-sm" data-action="undo-circuits" id="undo-circuits-btn" title="Undo last AI/bulk action" style="color:#4338ca">' +
+            '&#8630; Undo</button>' +
           '<button class="btn btn-ghost btn-sm" data-action="toggle-bulk-select" id="bulk-select-btn">' +
             '<svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"/></svg>' +
             'Select</button>' +
@@ -910,7 +912,6 @@ input,select,textarea { font-size:16px !important; }
         '<span class="flex-1 text-xs text-slate-600" id="bulk-select-count">0 selected</span>' +
         '<button class="btn btn-sm" style="background:#fef3c7;color:#92400e" data-action="bulk-clear-selected">Clear</button>' +
         '<button class="btn btn-danger btn-sm" data-action="bulk-delete-selected">Delete</button>' +
-        '<button class="btn btn-sm" style="background:#e0e7ff;color:#4338ca" data-action="undo-circuits" title="Undo last destructive action">&#8630; Undo</button>' +
       '</div>' +
       '<div class="scroll-wrapper">' +
         '<table class="test-table w-full">' +
@@ -2320,6 +2321,7 @@ input,select,textarea { font-size:16px !important; }
       };
 
       r.onerror = function(e) {
+        /* no-speech and aborted are normal during pauses — silently restart */
         if (e.error === 'aborted' || e.error === 'no-speech') return;
         active = false;
         if (opts.onStop) opts.onStop();
@@ -2327,10 +2329,13 @@ input,select,textarea { font-size:16px !important; }
       };
 
       r.onend = function() {
-        /* Browser killed session (Android does this) — auto-restart if still active */
+        /* Browser killed session (Android does this) — silently restart, no UI flicker */
         if (active) {
-          rec = buildRec();
-          try { rec.start(); } catch(ex) { active = false; if (opts.onStop) opts.onStop(); }
+          setTimeout(function() {
+            if (!active) { if (opts.onStop) opts.onStop(); return; }
+            rec = buildRec();
+            try { rec.start(); } catch(ex) { active = false; if (opts.onStop) opts.onStop(); }
+          }, 50);
         } else {
           if (opts.onStop) opts.onStop();
         }
@@ -2392,6 +2397,7 @@ input,select,textarea { font-size:16px !important; }
       return;
     }
     resultEl.innerHTML = '<div class="flex items-center gap-2 py-4"><div class="loading-spinner"></div><span>AI processing...</span></div>';
+    snapshotCircuits(); /* save state before AI changes */
 
     /* Use unified AI brain */
     var userText = textEl.value;
@@ -5088,6 +5094,8 @@ input,select,textarea { font-size:16px !important; }
 
   /* Table row click delegation for circuit editing */
   document.addEventListener('click', function(e) {
+    if (_bulkSelectMode) return; /* Don't open edit when in select mode */
+    if (e.target.classList && e.target.classList.contains('bulk-check')) return; /* Ignore checkbox clicks */
     var row = e.target.closest('tr[data-action="edit-circuit"]');
     if (row) {
       var idx = parseInt(row.getAttribute('data-idx'));
