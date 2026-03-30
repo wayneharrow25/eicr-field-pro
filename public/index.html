@@ -3500,6 +3500,7 @@ input,select,textarea { font-size:16px !important; }
   }
 
   function openNewObservationSheet(existingId) {
+    window._obsPhotoData = null; /* Clear any stale photo data */
     var o = {};
     if (existingId) {
       o = state.observations.find(function(x) { return String(x.id) === String(existingId); }) || {};
@@ -3586,34 +3587,14 @@ input,select,textarea { font-size:16px !important; }
     var materials = (document.getElementById('obs-materials') || {}).value || '';
     var qty = (document.getElementById('obs-qty') || {}).value || '';
 
-    /* Get photo data first — check camera input then gallery */
-    var photoInput = document.getElementById('obs-photo');
-    var photoCam = document.getElementById('obs-photo-cam');
+    /* Get photo — use pre-read data (read on file select, not at save time) */
     var getPhoto = function(cb) {
-      var fileInput = (photoCam && photoCam.files && photoCam.files[0]) ? photoCam :
-                      (photoInput && photoInput.files && photoInput.files[0]) ? photoInput : null;
-      if (fileInput) {
-        var theFile = fileInput.files[0];
-        console.log('[obs-photo] Compressing file:', theFile.name, theFile.size + ' bytes');
-        compressImage(theFile).then(function(base64) {
-          console.log('[obs-photo] Compressed to', base64.length, 'chars');
-          cb('data:image/jpeg;base64,' + base64);
-        }).catch(function(err) {
-          console.error('[obs-photo] compressImage failed, trying raw FileReader:', err);
-          /* Fallback: read raw without compression */
-          var reader = new FileReader();
-          reader.onload = function() {
-            console.log('[obs-photo] Raw FileReader succeeded:', reader.result.length, 'chars');
-            cb(reader.result);
-          };
-          reader.onerror = function() {
-            console.error('[obs-photo] Raw FileReader also failed');
-            toast('Could not read photo — try a different image', 'error');
-            cb(null);
-          };
-          reader.readAsDataURL(theFile);
-        });
-      } else { cb(null); }
+      if (window._obsPhotoData) {
+        console.log('[obs-photo] Using pre-read photo data:', window._obsPhotoData.length, 'chars');
+        cb(window._obsPhotoData);
+      } else {
+        cb(null);
+      }
     };
 
     /* If not using AI, or no AI key — just save directly */
@@ -5956,6 +5937,7 @@ input,select,textarea { font-size:16px !important; }
         if (galIn) galIn.click();
         break;
       case 'remove-obs-photo':
+        window._obsPhotoData = null;
         var existingPhotoDiv = document.getElementById('obs-existing-photo');
         if (existingPhotoDiv) existingPhotoDiv.remove();
         /* Mark for removal on save */
@@ -6135,14 +6117,34 @@ input,select,textarea { font-size:16px !important; }
       uploadBoardPhotos(target.files);
       target.value = '';
     }
-    /* Observation photo preview (camera or gallery) */
+    /* Observation photo — read immediately on selection (file refs go stale on mobile) */
     if (target.id === 'obs-photo' || target.id === 'obs-photo-cam') {
       if (target.files && target.files[0]) {
+        var obsFile = target.files[0];
         var obsPreview = document.getElementById('obs-photo-preview');
         if (obsPreview) {
-          var obsUrl = URL.createObjectURL(target.files[0]);
+          var obsUrl = URL.createObjectURL(obsFile);
           obsPreview.innerHTML = '<img src="' + obsUrl + '" style="max-height:120px;border-radius:.5rem;margin-top:.5rem">';
         }
+        /* Read and compress NOW — store base64 for save time */
+        window._obsPhotoData = null;
+        console.log('[obs-photo] Reading file immediately:', obsFile.name, obsFile.size, 'bytes');
+        compressImage(obsFile).then(function(base64) {
+          window._obsPhotoData = 'data:image/jpeg;base64,' + base64;
+          console.log('[obs-photo] Pre-compressed OK:', window._obsPhotoData.length, 'chars');
+        }).catch(function(err) {
+          console.warn('[obs-photo] compressImage failed, trying raw:', err);
+          var reader = new FileReader();
+          reader.onload = function() {
+            window._obsPhotoData = reader.result;
+            console.log('[obs-photo] Raw read OK:', window._obsPhotoData.length, 'chars');
+          };
+          reader.onerror = function() {
+            console.error('[obs-photo] Could not read file at all');
+            toast('Could not read photo file', 'error');
+          };
+          reader.readAsDataURL(obsFile);
+        });
       }
     }
     /* Accumulate photos when selected (camera or gallery) */
