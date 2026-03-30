@@ -288,6 +288,12 @@ async function initDB() {
       await client.query(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS ${col}`).catch(() => {});
     }
 
+    // Add missing columns to circuits table
+    const circuitColumns = ['poles TEXT'];
+    for (const col of circuitColumns) {
+      await client.query(`ALTER TABLE circuits ADD COLUMN IF NOT EXISTS ${col}`).catch(() => {});
+    }
+
     // Add missing columns to observations table
     const obsColumns = ['materials TEXT'];
     for (const col of obsColumns) {
@@ -544,6 +550,15 @@ app.put('/api/circuits/:id', authMiddleware, async (req, res) => {
 });
 
 // Map frontend field names to actual DB column names
+// Valid circuit DB columns — anything not in this set gets stripped before INSERT/UPDATE
+const VALID_CIRCUIT_COLS = new Set([
+  'number','description','wiring_type','ref_method','num_points','live_mm','cpc_mm',
+  'max_disconnect','ocpd_bsen','ocpd_type','ocpd_rating','ocpd_breaking_cap','max_zs',
+  'rcd_bsen','rcd_type','rcd_idn','rcd_rating_a','r1','rn','r2','r1r2','r1r2_or_r2','r2_ring',
+  'test_voltage','ir_ll','ir_le','polarity','zs_measured','rcd_time_x1','rcd_time_x5',
+  'rcd_test_button','afdd_test','remarks','sort_order','poles'
+]);
+
 const CIRCUIT_FIELD_MAP = {
   points: 'num_points',
   breaking_cap: 'ocpd_breaking_cap',
@@ -556,7 +571,7 @@ function mapCircuitFields(obj) {
   const mapped = {};
   for (const [k, v] of Object.entries(obj)) {
     const dbCol = CIRCUIT_FIELD_MAP[k] || k;
-    mapped[dbCol] = v;
+    if (VALID_CIRCUIT_COLS.has(dbCol)) mapped[dbCol] = v; /* only valid DB columns */
   }
   return mapped;
 }
