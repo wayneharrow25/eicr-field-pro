@@ -1118,7 +1118,7 @@ app.post('/api/observations/save', photoUpload.single('photo'), async (req, res)
       if (d.location !== undefined) fields.location = d.location;
       if (d.materials !== undefined) fields.materials = d.materials;
       if (d.qty !== undefined) fields.qty = d.qty;
-      if (photoDataUri !== undefined) fields.photo = photoDataUri;
+      if (photoDataUri) fields.photo = photoDataUri; /* only overwrite photo if a new one was uploaded */
       const keys = Object.keys(fields);
       if (!keys.length) return res.json({ ok: true });
       const sets = keys.map((f, i) => `${f} = $${i + 2}`);

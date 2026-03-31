@@ -1130,7 +1130,8 @@ input,select,textarea { font-size:16px !important; }
     html += '</tbody></table></div>' +
       '<div class="p-3 border-t border-slate-100 flex gap-2 flex-wrap">' +
         '<button class="btn btn-primary btn-sm flex-1" data-action="save-circuits">Save All Circuits</button>' +
-        '<button class="btn btn-ghost btn-sm" data-action="renumber-popup" style="color:#2563eb" title="Re-number circuits">&#35; Re-number</button>' +
+        '<button class="btn btn-ghost btn-sm" data-action="renumber-circuits" data-mode="SP" style="color:#2563eb" title="Re-number as single phase 1,2,3...">&#35; SP</button>' +
+        '<button class="btn btn-ghost btn-sm" data-action="renumber-circuits" data-mode="TP" style="color:#6d28d9" title="Re-number as three phase 1L1,1L2,1L3...">&#35; TP</button>' +
       '</div>' +
     '</div>' +
     /* Floating AI chat bar */
