@@ -2208,11 +2208,12 @@ input,select,textarea { font-size:16px !important; }
       return;
     }
 
-    var updates = state.circuits.map(function(c) {
+    var updates = state.circuits.map(function(c, i) {
       var obj = {};
       Object.keys(c).forEach(function(k) {
         if (k !== 'board_id') obj[k] = c[k]; /* keep id for fast updates */
       });
+      obj.sort_order = i; /* preserve array order in DB */
       return obj;
     });
     /* Use replace mode — delete all + batch insert is fastest and avoids match-by-number overhead */
