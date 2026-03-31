@@ -562,11 +562,17 @@ const VALID_CIRCUIT_COLS = new Set([
 
 const CIRCUIT_FIELD_MAP = {
   points: 'num_points',
+  num_points: 'num_points',
   breaking_cap: 'ocpd_breaking_cap',
+  breaking_capacity: 'ocpd_breaking_cap',
   rcd_rating: 'rcd_rating_a',
   r2_measured: 'r1r2_or_r2',
   ir_test_v: 'test_voltage',
-  rcd_test_btn: 'rcd_test_button'
+  rcd_test_btn: 'rcd_test_button',
+  cable_size: 'live_mm',
+  cpc_size: 'cpc_mm',
+  reference_method: 'ref_method',
+  max_zs_table: 'max_zs'
 };
 function mapCircuitFields(obj) {
   const mapped = {};

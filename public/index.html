@@ -2449,11 +2449,26 @@ input,select,textarea { font-size:16px !important; }
       '12. cpc_size — CPC/earth conductor CSA in mm² if shown (e.g. "1.0", "1.5", "2.5", "4").\n' +
       '13. num_points — number of points or outlets served by the circuit.\n' +
       '14. breaking_cap — breaking capacity in kA if shown on the device (e.g. "6", "10", "15").\n' +
-      '15. FILL EVERY FIELD YOU CAN from the data visible. Do not leave fields blank if the info is available in the photo or schedule. If a schedule lists cable sizes, reference methods, or points — include them ALL.\n\n' +
+      '15. FILL EVERY FIELD YOU CAN from the data visible. Do not leave fields blank if the info is available in the photo or schedule. If a schedule lists cable sizes, reference methods, or points — include them ALL.\n' +
+      '16. TEST RESULTS — If the photo shows a completed test schedule/certificate with test results, extract ALL test data for each circuit:\n' +
+      '   - r1: ring final circuit line conductor resistance (Ω)\n' +
+      '   - rn: ring final circuit neutral conductor resistance (Ω)\n' +
+      '   - r2: ring final circuit CPC resistance (Ω)\n' +
+      '   - r1r2: continuity R1+R2 (Ω) — radial circuits\n' +
+      '   - r2_ring: continuity R2 (Ω)\n' +
+      '   - ir_test_v: insulation resistance test voltage (250, 500, or 1000)\n' +
+      '   - ir_ll: insulation resistance line-line (MΩ) — often ">200" or ">2"\n' +
+      '   - ir_le: insulation resistance line-earth (MΩ) — often ">200" or ">2"\n' +
+      '   - zs_measured: earth fault loop impedance Zs measured (Ω)\n' +
+      '   - polarity: polarity correct — true/false\n' +
+      '   - rcd_time_x1: RCD operating time at IΔn x1 (ms)\n' +
+      '   - rcd_test_btn: RCD test button operated — true/false\n' +
+      '   - If a value shows a tick/checkmark, use true. If blank or N/A, use "N/A".\n' +
+      '   - Preserve exact numeric values as strings (e.g. "0.31", ">200", "18").\n\n' +
       'Return ONLY valid JSON:\n' +
       '{"main_switch": {"description":"Main Switch","ocpd_bsen":"60947-3","ocpd_type":"Isolator","ocpd_rating":"100","poles":"TP&N"}, ' +
       '"board_updates": {"ref":"DB1","location":"Plant Room","dist_type":"Schneider Isobar","dist_bsen":"61439","num_phases":"3","supplied_from":"MSDB Way 3"}, ' +
-      '"updates": [{"number":"1L1","description":"Lighting","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","breaking_cap":"6","poles":"SP","cable_size":"1.5","cpc_size":"1.0","reference_method":"C","num_points":"8","wiring_type":"T+E","rcd_bsen":"","rcd_type":"","rcd_idn":""},{"number":"2","description":"Submain to DB2","ocpd_bsen":"60898","ocpd_type":"C","ocpd_rating":"63","breaking_cap":"10","poles":"TP","cable_size":"16","cpc_size":"4","reference_method":"B","num_points":"","wiring_type":"SWA","rcd_bsen":"","rcd_type":"","rcd_idn":""}]}';
+      '"updates": [{"number":"1","description":"Lighting","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","breaking_cap":"6","poles":"SP","cable_size":"1.5","cpc_size":"1.0","reference_method":"C","num_points":"8","wiring_type":"T+E","r1r2":"0.52","ir_test_v":"500","ir_ll":">200","ir_le":">200","zs_measured":"0.87","polarity":true,"rcd_bsen":"","rcd_type":"","rcd_idn":""},{"number":"2","description":"Ring Main","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"32","breaking_cap":"6","poles":"SP","cable_size":"2.5","cpc_size":"1.5","reference_method":"C","num_points":"12","wiring_type":"T+E","r1":"0.24","rn":"0.26","r2":"0.41","r1r2":"0.65","ir_test_v":"500","ir_ll":">200","ir_le":">200","zs_measured":"1.12","polarity":true,"rcd_bsen":"61009","rcd_type":"A","rcd_idn":"30","rcd_time_x1":"18","rcd_test_btn":true}]}';
 
     /* Append user hint if provided */
     var hintEl = document.getElementById('ai-scan-hint');
@@ -3019,16 +3034,18 @@ input,select,textarea { font-size:16px !important; }
       'If an RCD protects a group, add rcd_bsen/rcd_type/rcd_idn to each circuit in that group. ' +
       'If you can identify the main switch, return it in "main_switch".\n' +
       'ALSO extract board header info if visible: "board_updates": {ref, location, dist_type, dist_bsen, dist_rating, ocpd_bsen, ocpd_type, ocpd_rating, num_phases, supplied_from}\n' +
-      'If this is a circuit schedule/chart (printed paper), extract all circuit data from it — these are MORE ACCURATE than reading device labels.\n' +
+      'If this is a circuit schedule/chart (printed paper), extract ALL circuit data AND test results from it — these are MORE ACCURATE than reading device labels.\n' +
+      'TEST RESULTS to extract when visible: r1, rn, r2 (ring), r1r2 (R1+R2 continuity), r2_ring (R2), ir_test_v (250/500/1000), ir_ll (L-L MΩ), ir_le (L-E MΩ), zs_measured (Zs Ω), polarity (true/false), rcd_time_x1 (ms), rcd_test_btn (true/false). Preserve exact values as strings.\n' +
       'If you see both a board photo AND a schedule, prefer the schedule data.';
 
     var bulkPrompt = 'Analyse this UK distribution board photo for a BS 7671 EICR.\n' +
-      'Extract outgoing circuits (NOT main switch), board header data, and main switch info.\n' +
+      'Extract outgoing circuits (NOT main switch), board header data, main switch info, AND all test results if visible.\n' +
       'Number circuits sequentially from 1. Include spares. MCBs=60898, RCBOs=61009.\n' +
+      'Test result fields: r1, rn, r2, r1r2, r2_ring, ir_test_v, ir_ll, ir_le, zs_measured, polarity, rcd_time_x1, rcd_test_btn.\n' +
       'Return ONLY valid JSON:\n' +
       '{"main_switch": {"description":"Main Switch","ocpd_bsen":"60947-3","ocpd_type":"Isolator","ocpd_rating":"100","poles":"TP&N"}, ' +
       '"board_updates": {"ref":"DB1","location":"Plant Room","dist_type":"Schneider Isobar","num_phases":"3"}, ' +
-      '"updates": [{"number":"1","description":"Lighting","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6"}]}';
+      '"updates": [{"number":"1","description":"Lighting","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","cable_size":"1.5","r1r2":"0.52","ir_test_v":"500","ir_ll":">200","ir_le":">200","zs_measured":"0.87","polarity":true}]}';
 
     progressEl.innerHTML = '<div class="space-y-1"><p class="font-medium">Scanning ' + total + ' photos...</p>' +
       '<div id="bulk-log"></div>' +
