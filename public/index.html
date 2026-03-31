@@ -1484,7 +1484,7 @@ input,select,textarea { font-size:16px !important; }
         state.currentBoard.ipf = (230 / zeNum / 1000).toFixed(2);
       }
     }
-    api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
+    saveBoardToServer(state.currentBoard);
     closeSheet();
     navigate('board-detail');
     toast('Supply set: ' + supplied, 'success');
@@ -1650,7 +1650,7 @@ input,select,textarea { font-size:16px !important; }
     state.circuits = newCircuits;
     state.currentBoard.num_phases = type === 'TP' ? 'three' : 'single';
 
-    api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
+    saveBoardToServer(state.currentBoard);
     saveAllCircuits(true);
     closeSheet();
     navigate('board-detail');
@@ -2062,20 +2062,7 @@ input,select,textarea { font-size:16px !important; }
         navigate('board-detail');
       }
     }).catch(function(err) {
-      toast('Save failed — ' + (err.message || 'server error') + '. Retrying...', 'error');
-      /* Auto-retry once after 3 seconds */
-      setTimeout(function() {
-        if (!state.currentBoard) return;
-        api('PUT', '/boards/' + state.currentBoard.id + '/circuits/bulk?replace=1', updates).then(function(data) {
-          if (data && !data._offline) {
-            state.circuits = data.map(mapCircuitFromDB);
-            _lastKnownCircuitCount = state.circuits.length;
-          }
-          toast('Circuits saved (retry succeeded)', 'success');
-        }).catch(function() {
-          toast('Save failed again — data cached locally', 'error');
-        });
-      }, 3000);
+      toast('Save failed — ' + (err.message || 'server error'), 'error');
     });
   }
 
@@ -2742,7 +2729,7 @@ input,select,textarea { font-size:16px !important; }
 
     /* Save board header if anything changed */
     if (headerUpdated) {
-      api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
+      saveBoardToServer(state.currentBoard);
     }
 
     sortCircuitsByNumber();
@@ -2974,7 +2961,7 @@ input,select,textarea { font-size:16px !important; }
       headerUpdated = true;
     }
     if (headerUpdated) {
-      api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
+      saveBoardToServer(state.currentBoard);
     }
     closeSheet();
     navigate('board-detail');
@@ -3091,7 +3078,7 @@ input,select,textarea { font-size:16px !important; }
         headerUpdated = true;
       }
       if (headerUpdated) {
-        api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
+        saveBoardToServer(state.currentBoard);
       }
 
       closeSheet();
@@ -4092,7 +4079,7 @@ input,select,textarea { font-size:16px !important; }
       ['ref', 'location', 'supplied_from', 'dist_type'].forEach(function(f) {
         if (state.currentBoard[f]) state.currentBoard[f] = state.currentBoard[f].toUpperCase();
       });
-      api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
+      saveBoardToServer(state.currentBoard);
     }
     saveAllCircuits(true);
     toast('Board & circuits → CAPS', 'success');
@@ -4110,7 +4097,7 @@ input,select,textarea { font-size:16px !important; }
       ['ref', 'location', 'supplied_from', 'dist_type'].forEach(function(f) {
         if (state.currentBoard[f]) state.currentBoard[f] = toProperCase(state.currentBoard[f]);
       });
-      api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
+      saveBoardToServer(state.currentBoard);
     }
     saveAllCircuits(true);
     toast('Board & circuits → Proper Case', 'success');
@@ -4147,7 +4134,7 @@ input,select,textarea { font-size:16px !important; }
         var bu = parsed.board;
         if (bu.location && bu.location !== state.currentBoard.location) { state.currentBoard.location = bu.location; count++; }
         if (bu.supplied_from && bu.supplied_from !== state.currentBoard.supplied_from) { state.currentBoard.supplied_from = bu.supplied_from; count++; }
-        if (count) api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
+        if (count) saveBoardToServer(state.currentBoard);
       }
       if (parsed.circuits && parsed.circuits.length) {
         parsed.circuits.forEach(function(c) {
@@ -4744,6 +4731,46 @@ input,select,textarea { font-size:16px !important; }
       '<button class="btn btn-primary w-full mt-4" data-action="save-board-header">Save Board Details</button>' +
       '<button class="btn btn-ghost w-full mt-2 text-sm" data-action="apply-instruments-all">Apply instruments to all boards</button>'
     );
+  }
+
+  /* Safe board save — only sends known DB columns, never the whole state object */
+  var _boardDbFields = ['ref','location','supplied_from','num_phases','dist_type','dist_bsen','dist_rating',
+    'ocpd_bsen','ocpd_type','ocpd_rating','ze','ipf','poles',
+    'instruments_multi','instruments_ir','instruments_cont','instruments_earth','instruments_loop','instruments_rcd',
+    'sort_order'];
+  function saveBoardToServer(boardOrFields) {
+    if (!state.currentBoard) return;
+    var body = {};
+    _boardDbFields.forEach(function(f) {
+      if (boardOrFields[f] !== undefined) body[f] = boardOrFields[f];
+    });
+    return api('PUT', '/boards/' + state.currentBoard.id, body).catch(function(err) {
+      console.error('[board-save]', err.message);
+    });
+  }
+
+  /* Debounced board field save — collects changes, sends ONE request after 2s idle */
+  var _boardSaveTimer = null;
+  var _boardPendingFields = {};
+  var _boardFieldMap = {
+    'bh-ref':'ref', 'bh-location':'location', 'bh-supplied':'supplied_from',
+    'bh-phase':'num_phases', 'bh-ocpd-bsen':'ocpd_bsen', 'bh-ocpd-type':'ocpd_type',
+    'bh-ocpd-rating':'ocpd_rating', 'bh-ze':'ze', 'bh-ipf':'ipf',
+    'bh-instruments-multi':'instruments_multi', 'bh-instruments-loop':'instruments_loop'
+  };
+  function debouncedBoardFieldSave(target) {
+    var field = _boardFieldMap[target.id];
+    if (!field) return;
+    state.currentBoard[field] = target.value;
+    _boardPendingFields[field] = target.value;
+    if (_boardSaveTimer) clearTimeout(_boardSaveTimer);
+    _boardSaveTimer = setTimeout(function() {
+      if (!state.currentBoard) return;
+      var body = {};
+      Object.keys(_boardPendingFields).forEach(function(k) { body[k] = _boardPendingFields[k]; });
+      _boardPendingFields = {};
+      saveBoardToServer(body);
+    }, 2000);
   }
 
   /* Save board from inline fields (the always-visible inputs) */
@@ -5822,7 +5849,7 @@ input,select,textarea { font-size:16px !important; }
         var manualEl = document.getElementById('supply-manual');
         if (manualEl && manualEl.value.trim()) {
           state.currentBoard.supplied_from = manualEl.value.trim();
-          api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
+          saveBoardToServer(state.currentBoard);
           closeSheet();
           navigate('board-detail');
           toast('Supply set: ' + manualEl.value.trim(), 'success');
@@ -6252,19 +6279,9 @@ input,select,textarea { font-size:16px !important; }
     if (target.id && target.id.indexOf('si_') === 0 && state.view === 'site-detail' && state.currentSiteTab === 'info') {
       autoSave('site-info');
     }
-    /* Desktop inline board field edit — auto-save on blur (and change for selects) */
+    /* Desktop inline board field edit — debounced auto-save on blur */
     if (target.getAttribute && target.getAttribute('data-board-field') && state.currentBoard) {
-      var fieldMap = {
-        'bh-ref':'ref', 'bh-location':'location', 'bh-supplied':'supplied_from',
-        'bh-phase':'num_phases', 'bh-ocpd-bsen':'ocpd_bsen', 'bh-ocpd-type':'ocpd_type',
-        'bh-ocpd-rating':'ocpd_rating', 'bh-ze':'ze', 'bh-ipf':'ipf',
-        'bh-instruments-multi':'instruments_multi', 'bh-instruments-loop':'instruments_loop'
-      };
-      var field = fieldMap[target.id];
-      if (field && state.currentBoard[field] !== target.value) {
-        state.currentBoard[field] = target.value;
-        api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
-      }
+      debouncedBoardFieldSave(target);
     }
   }, true);
 
@@ -6272,17 +6289,7 @@ input,select,textarea { font-size:16px !important; }
   document.addEventListener('change', function(e) {
     var target = e.target;
     if (target.getAttribute && target.getAttribute('data-board-field') && state.currentBoard) {
-      var fieldMap = {
-        'bh-ref':'ref', 'bh-location':'location', 'bh-supplied':'supplied_from',
-        'bh-phase':'num_phases', 'bh-ocpd-bsen':'ocpd_bsen', 'bh-ocpd-type':'ocpd_type',
-        'bh-ocpd-rating':'ocpd_rating', 'bh-ze':'ze', 'bh-ipf':'ipf',
-        'bh-instruments-multi':'instruments_multi', 'bh-instruments-loop':'instruments_loop'
-      };
-      var field = fieldMap[target.id];
-      if (field && state.currentBoard[field] !== target.value) {
-        state.currentBoard[field] = target.value;
-        api('PUT', '/boards/' + state.currentBoard.id, state.currentBoard).catch(function(){});
-      }
+      debouncedBoardFieldSave(target);
     }
   }, true);
 
