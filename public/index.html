@@ -4290,6 +4290,8 @@ input,select,textarea { font-size:16px !important; }
     'supply_protective','estimated_age',
     'bonding_water','bonding_gas','bonding_oil','bonding_structural','bonding_lightning','bonding_other'
   ];
+  var _boardTextFields = ['ref', 'location', 'supplied_from', 'dist_type'];
+
   function formatSiteInfoCaps() {
     if (!state.currentSite) return;
     var body = {};
@@ -4300,8 +4302,16 @@ input,select,textarea { font-size:16px !important; }
       }
     });
     api('PUT', '/sites/' + state.currentSite.id, body).catch(function(err) { toast(err.message, 'error'); });
+    /* Also capitalise all board designations */
+    (state.boards || []).forEach(function(b) {
+      var changed = false;
+      _boardTextFields.forEach(function(f) {
+        if (b[f] && typeof b[f] === 'string') { b[f] = b[f].toUpperCase(); changed = true; }
+      });
+      if (changed) api('PUT', '/boards/' + b.id, b).catch(function(err) { console.error('[board-caps]', err.message); });
+    });
     navigate('site-detail', {currentSiteTab: 'info'});
-    toast('Site info → ALL CAPS', 'success');
+    toast('Site info + boards → ALL CAPS', 'success');
   }
   function formatSiteInfoProper() {
     if (!state.currentSite) return;
@@ -4313,8 +4323,16 @@ input,select,textarea { font-size:16px !important; }
       }
     });
     api('PUT', '/sites/' + state.currentSite.id, body).catch(function(err) { toast(err.message, 'error'); });
+    /* Also proper-case all board designations */
+    (state.boards || []).forEach(function(b) {
+      var changed = false;
+      _boardTextFields.forEach(function(f) {
+        if (b[f] && typeof b[f] === 'string') { b[f] = toProperCase(b[f]); changed = true; }
+      });
+      if (changed) api('PUT', '/boards/' + b.id, b).catch(function(err) { console.error('[board-proper]', err.message); });
+    });
     navigate('site-detail', {currentSiteTab: 'info'});
-    toast('Site info → Proper Case', 'success');
+    toast('Site info + boards → Proper Case', 'success');
   }
 
   function formatBoardAllCaps() {
