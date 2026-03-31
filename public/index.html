@@ -1119,7 +1119,7 @@ input,select,textarea { font-size:16px !important; }
           '<td data-col="ir_ll">' + esc(c.ir_ll || '') + '</td>' +
           '<td data-col="ir_le">' + esc(c.ir_le || '') + '</td>' +
           '<td data-col="zs_measured" class="' + zsClass + '">' + esc(c.zs_measured || '') + '</td>' +
-          '<td data-col="polarity">' + (c.polarity === true || c.polarity === 'true' ? '\u2713' : (c.polarity === false || c.polarity === 'false' ? '\u2717' : '')) + '</td>' +
+          '<td data-col="polarity">' + (c.polarity === true || c.polarity === 'true' ? '\u2713' : (c.polarity === false || c.polarity === 'false' ? '\u2717' : esc(c.polarity || ''))) + '</td>' +
           '<td data-col="rcd_time_x1" class="rcd-col">' + esc(c.rcd_time_x1 || '') + '</td>' +
           '<td data-col="rcd_test_btn" class="rcd-col">' + (c.rcd_test_btn === true || c.rcd_test_btn === 'true' ? '\u2713' : (c.rcd_test_btn === false || c.rcd_test_btn === 'false' ? '\u2717' : esc(c.rcd_test_btn || ''))) + '</td>' +
           '<td data-col="afdd_test" class="desk-col">' + (c.afdd_test === true ? '\u2713' : esc(c.afdd_test || '')) + '</td>' +
@@ -1888,7 +1888,7 @@ input,select,textarea { font-size:16px !important; }
         if (!isEmpty && indices.length === 0) return; /* Skip non-empty when filling ALL; always set when bulk-selected */
       }
       if (col === 'polarity' || col === 'rcd_test_btn') {
-        c[col] = (val === 'true');
+        c[col] = val === 'true' ? true : val === 'false' ? false : val;
       } else if (col === 'afdd_test') {
         c[col] = val === 'true' ? true : val === 'false' ? false : val;
       } else {
@@ -2121,7 +2121,7 @@ input,select,textarea { font-size:16px !important; }
     if (!c) { closePopups(); return; }
 
     if (col === 'polarity' || col === 'rcd_test_btn') {
-      c[col] = (val === 'true');
+      c[col] = val === 'true' ? true : val === 'false' ? false : val;
     } else if (col === 'afdd_test') {
       c[col] = val === 'true' ? true : val === 'false' ? false : val;
     } else {
