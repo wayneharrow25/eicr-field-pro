@@ -823,9 +823,12 @@ input,select,textarea { font-size:16px !important; }
   function renderBoardsList() {
     var s = state.currentSite;
     var html = '<div class="p-4 space-y-3">' +
-      '<button class="btn btn-primary w-full" data-action="new-board">' +
-        '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
-        'Add Distribution Board</button>' +
+      '<div class="flex gap-2">' +
+        '<button class="btn btn-primary flex-1" data-action="new-board">' +
+          '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+          'Add Board</button>' +
+        '<button class="btn btn-ghost" data-action="refresh-boards" style="color:#2563eb">&#8635; Refresh</button>' +
+      '</div>' +
       '<div id="boards-container" class="space-y-3">';
 
     if (state.boards.length === 0) {
@@ -2163,12 +2166,18 @@ input,select,textarea { font-size:16px !important; }
     /* Send first photo with full prompt, then chain remaining */
     _scanState = { base64: null, images: [], keyId: keyEl.value, history: [], updates: null, boardUpdates: null, systemPrompt: '' };
 
-    var scanPrompt = 'You are an EICR Form 4 circuit schedule extractor. Extract circuit details from these distribution board photos.\n' +
-      'Return JSON: {"updates":[{circuit fields}], "board_updates":{ref, location, supplied_from, num_phases}}\n' +
-      'Circuit fields: number, description, wiring_type (BS 7671 letter codes: A=T+E, B=metallic conduit, C=plastic conduit, D=metallic trunking, E=plastic trunking, F=PVC/SWA, G=XLPE/SWA, H=MICC, I=FP200, J=Flex, K=Busbar), ' +
-      'ref_method (A-G, 100-103), points, live_mm, cpc_mm, ocpd_bsen (60898/61009/88-2/3036/60947-2), ' +
+    var scanPrompt = 'You are an EICR Form 4 circuit schedule extractor. Extract ALL circuit details AND test results from these distribution board / schedule photos.\n' +
+      'Return JSON: {"updates":[{circuit fields}], "board_updates":{ref, location, supplied_from, num_phases, dist_type, dist_bsen, dist_rating, ocpd_bsen, ocpd_type, ocpd_rating}}\n' +
+      'Circuit detail fields: number, description, wiring_type (T+E, Singles/Con, SWA, MICC, FP, etc), ' +
+      'ref_method (A-G, 100-103), points, live_mm (cable CSA), cpc_mm, ocpd_bsen (60898/61009/88-2/3036/60947-2), ' +
       'ocpd_type (B/C/D), ocpd_rating, breaking_cap, rcd_bsen, rcd_type, rcd_idn.\n' +
-      'ONLY include circuits you can actually see. Do NOT make up or fabricate data.';
+      'TEST RESULT fields (CRITICAL — extract these if visible on the schedule): ' +
+      'r1 (ring line Ω), rn (ring neutral Ω), r2 (ring CPC Ω), r1r2 (R1+R2 continuity Ω), r2_ring (R2 Ω), ' +
+      'ir_test_v (test voltage 250/500/1000), ir_ll (insulation L-L MΩ, often ">200"), ir_le (insulation L-E MΩ), ' +
+      'zs_measured (loop impedance Zs Ω), polarity (true if tick/pass), ' +
+      'rcd_time_x1 (RCD trip time ms), rcd_test_btn (true if tick/pass).\n' +
+      'Preserve exact numeric values as strings. Ticks/checkmarks = true. N/A or blank = "N/A".\n' +
+      'ONLY include data you can actually see. Do NOT fabricate values.';
 
     api('POST', '/ai/process', {
       key_id: keyEl.value,
@@ -5738,13 +5747,16 @@ input,select,textarea { font-size:16px !important; }
         var site = state.sites.find(function(s) { return String(s.id) === siteId; });
         if (site) {
           state.currentSite = site;
-          state.currentSiteTab = 'info';
+          state.currentSiteTab = 'boards';
           state.boards = [];
           state.circuits = [];
           state.inspections = [];
           state.observations = [];
           /* Preload data */
-          api('GET', '/sites/' + site.id + '/boards').then(function(d) { state.boards = d; }).catch(function(){});
+          api('GET', '/sites/' + site.id + '/boards').then(function(d) {
+            state.boards = d;
+            if (state.currentSiteTab === 'boards') navigate('site-detail', {currentSiteTab: 'boards'});
+          }).catch(function(){});
           api('GET', '/sites/' + site.id + '/inspections').then(function(d) { state.inspections = d; }).catch(function(){});
           api('GET', '/sites/' + site.id + '/observations').then(function(d) { state.observations = d; }).catch(function(){});
           navigate('site-detail');
@@ -5782,6 +5794,10 @@ input,select,textarea { font-size:16px !important; }
         break;
       case 'new-board':
         openNewBoardSheet();
+        break;
+      case 'refresh-boards':
+        loadBoards();
+        toast('Refreshing boards...', 'info');
         break;
       case 'save-new-board':
         saveNewBoard(false);
