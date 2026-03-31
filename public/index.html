@@ -446,7 +446,7 @@ input,select,textarea { font-size:16px !important; }
       case 'login': app.innerHTML = renderLogin(); break;
       case 'sites': app.innerHTML = renderSites(); loadSites(); break;
       case 'site-detail': app.innerHTML = renderSiteDetail(); break;
-      case 'board-detail': app.innerHTML = renderBoardDetail(); attachTableClickHandler(); break;
+      case 'board-detail': _bulkSelectMode = false; app.innerHTML = renderBoardDetail(); attachTableClickHandler(); break;
       case 'settings': app.innerHTML = renderSettings(); loadAiKeys(); loadTesters(); break;
       default: app.innerHTML = renderLogin();
     }
