@@ -748,6 +748,10 @@ input,select,textarea { font-size:16px !important; }
         {id:'si_bonding_other', label:'Other\u2003mm\u00b2', val:s.bonding_other},
         {id:'si_bonding_condition', label:'Overall Bonding Condition', val:s.bonding_condition, options:['Satisfactory','Unsatisfactory','Not verified','N/A']},
       ]) +
+      '<div class="flex gap-2 mb-3">' +
+        '<button class="btn btn-ghost btn-sm flex-1 text-xs" data-action="format-info-caps">ABC ALL CAPS</button>' +
+        '<button class="btn btn-ghost btn-sm flex-1 text-xs" data-action="format-info-proper">Abc Proper Case</button>' +
+      '</div>' +
       '<button class="btn btn-primary w-full" data-action="save-site-info">Save Site Info</button>' +
       '<div class="h-8"></div>' +
     '</div>';
@@ -4262,6 +4266,42 @@ input,select,textarea { font-size:16px !important; }
   }
 
   /* ===== BOARD TEXT FORMATTING ===== */
+  /* ===== SITE INFO TEXT FORMATTING ===== */
+  var _siteTextFields = [
+    'client_name','address','client_address','occupier',
+    'desc_premises','inspector_name','inspector_position',
+    'earth_electrode_location','main_switch_location',
+    'extent','sampling','limitations','operational_limitations',
+    'supply_protective','estimated_age',
+    'bonding_water','bonding_gas','bonding_oil','bonding_structural','bonding_lightning','bonding_other'
+  ];
+  function formatSiteInfoCaps() {
+    if (!state.currentSite) return;
+    var body = {};
+    _siteTextFields.forEach(function(f) {
+      if (state.currentSite[f] && typeof state.currentSite[f] === 'string') {
+        state.currentSite[f] = state.currentSite[f].toUpperCase();
+        body[f] = state.currentSite[f];
+      }
+    });
+    api('PUT', '/sites/' + state.currentSite.id, body).catch(function(err) { toast(err.message, 'error'); });
+    navigate('site-detail', {currentSiteTab: 'info'});
+    toast('Site info → ALL CAPS', 'success');
+  }
+  function formatSiteInfoProper() {
+    if (!state.currentSite) return;
+    var body = {};
+    _siteTextFields.forEach(function(f) {
+      if (state.currentSite[f] && typeof state.currentSite[f] === 'string') {
+        state.currentSite[f] = toProperCase(state.currentSite[f]);
+        body[f] = state.currentSite[f];
+      }
+    });
+    api('PUT', '/sites/' + state.currentSite.id, body).catch(function(err) { toast(err.message, 'error'); });
+    navigate('site-detail', {currentSiteTab: 'info'});
+    toast('Site info → Proper Case', 'success');
+  }
+
   function formatBoardAllCaps() {
     if (!state.circuits.length && !state.currentBoard) return;
     /* Format circuit fields including numbers (1l1 → 1L1) */
@@ -5975,6 +6015,12 @@ input,select,textarea { font-size:16px !important; }
         break;
       case 'save-site-info':
         saveSiteInfo();
+        break;
+      case 'format-info-caps':
+        formatSiteInfoCaps();
+        break;
+      case 'format-info-proper':
+        formatSiteInfoProper();
         break;
       case 'delete-site':
         if (confirm('Delete this site and all its data? This cannot be undone.')) {
