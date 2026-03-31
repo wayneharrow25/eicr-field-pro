@@ -2181,7 +2181,8 @@ input,select,textarea { font-size:16px !important; }
       'zs_measured (loop impedance Zs Ω), polarity (true if tick/pass), ' +
       'rcd_time_x1 (RCD trip time ms), rcd_test_btn (true if tick/pass).\n' +
       'Preserve exact numeric values as strings. Ticks/checkmarks = true. N/A or blank = "N/A".\n' +
-      'ONLY include data you can actually see. Do NOT fabricate values.';
+      'ONLY include data you can actually see. Do NOT fabricate values.\n' +
+      'Return ONLY raw JSON — no markdown, no code fences, no explanation text.';
 
     api('POST', '/ai/process', {
       key_id: keyEl.value,
@@ -2190,9 +2191,7 @@ input,select,textarea { font-size:16px !important; }
     }).then(function(data) {
       var result = data.result || '';
       try {
-        var jsonMatch = result.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) throw new Error('No JSON in response');
-        var parsed = JSON.parse(jsonMatch[0]);
+        var parsed = extractJSON(result);
         _scanState.updates = parsed.updates || [];
         _scanState.boardUpdates = parsed.board_updates || null;
         var count = _scanState.updates.length;
@@ -2541,12 +2540,11 @@ input,select,textarea { font-size:16px !important; }
         { role: 'model', parts: [{ text: result }] }
       ];
 
-      var jsonMatch = result.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
+      var parsed;
+      try { parsed = extractJSON(result); } catch(e) {
         resultEl.innerHTML = '<p class="text-red-500">Could not parse AI response. Raw: ' + esc(result.substring(0, 300)) + '</p>' + renderScanRefineBox();
         return;
       }
-      var parsed = JSON.parse(jsonMatch[0]);
       if (!parsed.updates || !parsed.updates.length) {
         resultEl.innerHTML = '<p class="text-amber-600">No circuits found. Try a clearer image or tell the AI what you see:</p>' + renderScanRefineBox();
         return;
@@ -2952,9 +2950,8 @@ input,select,textarea { font-size:16px !important; }
       prompt: 'Parse this data into circuits:\n\n' + raw + existingInfo
     }).then(function(data) {
       var result = data.result || '';
-      var jsonMatch = result.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) { resultEl.innerHTML = '<p class="text-red-500">Could not parse. Try pasting as JSON.</p>'; return; }
-      var parsed = JSON.parse(jsonMatch[0]);
+      var parsed;
+      try { parsed = extractJSON(result); } catch(e) { resultEl.innerHTML = '<p class="text-red-500">Could not parse. Try pasting as JSON.</p>'; return; }
       if (parsed.updates && parsed.updates.length) {
         applyParsedCircuits(parsed.updates, parsed.main_switch, resultEl, parsed.board_updates);
       } else {
@@ -5720,6 +5717,31 @@ input,select,textarea { font-size:16px !important; }
   }
 
   /* ===== UTILITY ===== */
+  /* Extract JSON from AI response — handles markdown code blocks and truncated output */
+  function extractJSON(raw) {
+    /* Strip markdown code fences */
+    var s = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
+    /* Try the whole cleaned string first */
+    var jsonMatch = s.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON in response');
+    try { return JSON.parse(jsonMatch[0]); } catch(e) { /* fall through to repair */ }
+    /* Truncated response — try closing open brackets */
+    var txt = jsonMatch[0];
+    var opens = 0, arrs = 0;
+    for (var i = 0; i < txt.length; i++) {
+      if (txt[i] === '{') opens++;
+      else if (txt[i] === '}') opens--;
+      else if (txt[i] === '[') arrs++;
+      else if (txt[i] === ']') arrs--;
+    }
+    /* Trim trailing comma or partial key/value */
+    txt = txt.replace(/,\s*$/, '');
+    txt = txt.replace(/,\s*"[^"]*"\s*:\s*"?[^"}\]]*$/, '');
+    while (arrs > 0) { txt += ']'; arrs--; }
+    while (opens > 0) { txt += '}'; opens--; }
+    return JSON.parse(txt);
+  }
+
   function esc(str) {
     if (str === null || str === undefined) return '';
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');

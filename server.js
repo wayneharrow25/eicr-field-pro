@@ -818,7 +818,7 @@ app.post('/api/ai/process', authMiddleware, async (req, res) => {
       });
       messages[0].content.push({ type: 'text', text: prompt });
 
-      const payload = { model: keyRow.model, max_tokens: 4096, messages };
+      const payload = { model: keyRow.model, max_tokens: 8192, messages };
       payload.system = fullSystemPrompt;
 
       const r = await fetch('https://api.anthropic.com/v1/messages', {
