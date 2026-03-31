@@ -94,7 +94,7 @@ input,select,textarea { font-size:16px !important; }
 .row-ctx-menu button.ctx-danger { color:#dc2626; }
 .row-ctx-menu button.ctx-danger:hover { background:#fef2f2; }
 .row-ctx-menu hr { border:none; border-top:1px solid #e2e8f0; margin:.25rem 0; }
-.col-fill-popup { position:fixed; z-index:100; background:#fff; border:1px solid #e2e8f0; border-radius:.75rem; box-shadow:0 8px 24px rgba(0,0,0,.15); padding:.5rem; min-width:14rem; }
+.col-fill-popup { position:fixed; z-index:100; background:#fff; border:1px solid #e2e8f0; border-radius:.75rem; box-shadow:0 8px 24px rgba(0,0,0,.15); padding:.5rem; min-width:14rem; max-width:calc(100vw - 16px); }
 .col-fill-popup > button { display:block; width:100%; text-align:left; padding:.5rem .75rem; border:none; background:none; font-size:.875rem; cursor:pointer; border-radius:.5rem; }
 .col-fill-popup > button:hover { background:#eff6ff; }
 .col-fill-popup .cfp-head { font-size:.7rem; color:#94a3b8; font-weight:600; padding:.25rem .75rem; text-transform:uppercase; }
@@ -1859,7 +1859,7 @@ input,select,textarea { font-size:16px !important; }
     var rect = thEl.getBoundingClientRect();
     var div = document.createElement('div');
     div.className = 'col-fill-popup fade-in';
-    div.style.left = Math.min(rect.left, window.innerWidth - 180) + 'px';
+    div.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 260)) + 'px';
     div.style.top = (rect.bottom + 4) + 'px';
 
     var selCount = _bulkSelectMode ? document.querySelectorAll('.bulk-check:checked').length : 0;
