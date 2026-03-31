@@ -206,6 +206,10 @@ input,select,textarea { font-size:16px !important; }
 
   /* ===== OFFLINE QUEUE + LOCAL CACHE ===== */
   var _offlineQueue = JSON.parse(localStorage.getItem('eicr_offline_queue') || '[]');
+  /* Purge stale queue items on load — anything older than 5 min is likely outdated */
+  var _now = Date.now();
+  _offlineQueue = _offlineQueue.filter(function(item) { return item.ts && (_now - item.ts) < 300000; });
+  try { localStorage.setItem('eicr_offline_queue', JSON.stringify(_offlineQueue)); } catch(e) {}
   var _isOnline = navigator.onLine !== false;
   var _syncInterval = null;
 
@@ -351,28 +355,27 @@ input,select,textarea { font-size:16px !important; }
       if (ct.indexOf('json') !== -1) return res.json();
       return res.text();
     }).catch(function(err) {
-      /* Network error (no signal, server down, etc.) — queue writes, serve cached reads */
+      /* Network error — only go offline if browser confirms no connection */
       if (isNetworkError(err)) {
-        /* Only mark offline if browser says we're actually offline */
-        if (!navigator.onLine) _isOnline = false;
-        updateOfflineBanner();
-
-        if (method !== 'GET') {
-          /* Queue the write for later */
-          _offlineQueue.push({method: method, path: path, body: body, ts: Date.now()});
-          saveOfflineQueue();
+        if (!navigator.onLine) {
+          _isOnline = false;
           updateOfflineBanner();
-          toast('Saved offline — will sync when connected', 'info');
-          return {_offline: true};
-        } else {
-          /* Try to serve from cache for GET requests */
-          var cached = getCachedData(path);
-          if (cached) {
-            toast('Loaded from cache (offline)', 'info');
-            return cached;
+          if (method !== 'GET') {
+            _offlineQueue.push({method: method, path: path, body: body, ts: Date.now()});
+            saveOfflineQueue();
+            updateOfflineBanner();
+            toast('Saved offline — will sync when connected', 'info');
+            return {_offline: true};
+          } else {
+            var cached = getCachedData(path);
+            if (cached) {
+              toast('Loaded from cache (offline)', 'info');
+              return cached;
+            }
           }
-          throw new Error('Offline — no cached data available');
         }
+        /* Online but request failed — don't cache, don't queue, just fail */
+        throw new Error('Request failed — check connection');
       }
       throw err;
     });
