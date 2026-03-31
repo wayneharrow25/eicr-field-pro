@@ -446,7 +446,7 @@ input,select,textarea { font-size:16px !important; }
       case 'login': app.innerHTML = renderLogin(); break;
       case 'sites': app.innerHTML = renderSites(); loadSites(); break;
       case 'site-detail': app.innerHTML = renderSiteDetail(); break;
-      case 'board-detail': app.innerHTML = renderBoardDetail(); break;
+      case 'board-detail': app.innerHTML = renderBoardDetail(); attachTableClickHandler(); break;
       case 'settings': app.innerHTML = renderSettings(); loadAiKeys(); loadTesters(); break;
       default: app.innerHTML = renderLogin();
     }
@@ -6633,40 +6633,42 @@ input,select,textarea { font-size:16px !important; }
   });
 
   /* Table cell click → inline edit or column fill
-     Registered EARLY so it fires before other handlers */
-  document.addEventListener('click', function(e) {
-    if (e.target.classList && e.target.classList.contains('bulk-check')) return;
-
-    /* Column header click → quick-fill popup */
-    var th = e.target.closest('th[data-col]');
-    if (th && th.closest('.test-table')) {
-      e.stopPropagation(); /* prevent other handlers from interfering */
-      openColumnFill(th.getAttribute('data-col'), th);
-      return;
-    }
-
-    /* Data cell click → inline edit */
-    if (_bulkSelectMode) return;
-    var td = e.target.closest('td[data-col]');
-    if (td && td.closest('.test-table')) {
-      var row = td.closest('tr[data-idx]');
-      if (!row) return;
-      var idx = parseInt(row.getAttribute('data-idx'));
-      var col = td.getAttribute('data-col');
-      if (!isNaN(idx) && col) {
-        e.stopPropagation(); /* prevent other handlers from interfering */
-        /* Number and description open full edit sheet */
-        if (col === 'number' || col === 'description') {
-          openEditCircuitSheet(idx);
-        } else {
-          openInlineEdit(td, idx, col);
-        }
+     Uses MutationObserver to re-attach handler when table is re-rendered */
+  function attachTableClickHandler() {
+    var table = document.getElementById('circuit-table');
+    if (!table || table._clickBound) return;
+    table._clickBound = true;
+    table.addEventListener('click', function(e) {
+      if (e.target.classList && e.target.classList.contains('bulk-check')) return;
+      /* Column header click → quick-fill popup */
+      var th = e.target.closest('th[data-col]');
+      if (th) {
+        openColumnFill(th.getAttribute('data-col'), th);
+        return;
       }
-      return;
-    }
-
-    /* Clicking outside table — close popups */
-    if (!e.target.closest('.col-fill-popup') && !e.target.closest('.inline-edit') && !e.target.closest('.row-ctx-menu')) {
+      /* Data cell click → inline edit */
+      if (_bulkSelectMode) return;
+      var td = e.target.closest('td[data-col]');
+      if (td) {
+        var row = td.closest('tr[data-idx]');
+        if (!row) return;
+        var idx = parseInt(row.getAttribute('data-idx'));
+        var col = td.getAttribute('data-col');
+        if (!isNaN(idx) && col) {
+          /* Number and description open full edit sheet */
+          if (col === 'number' || col === 'description') {
+            openEditCircuitSheet(idx);
+          } else {
+            openInlineEdit(td, idx, col);
+          }
+        }
+        return;
+      }
+    });
+  }
+  /* Close popups when clicking outside */
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.col-fill-popup') && !e.target.closest('.inline-edit') && !e.target.closest('.row-ctx-menu') && !e.target.closest('.test-table')) {
       closePopups();
     }
   });
