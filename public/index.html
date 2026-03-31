@@ -930,7 +930,8 @@ input,select,textarea { font-size:16px !important; }
           bfi('bh-instruments-loop','Loop',b.instruments_loop,'','50%') +
         '</div>' +
         '<div class="flex gap-1 mt-2">' +
-          '<button class="btn btn-ghost btn-sm text-xs flex-1 desk-hide" data-action="edit-board-header">Edit Board</button>' +
+          '<button class="btn btn-primary btn-sm text-xs flex-1" data-action="save-board-inline">&#10003; Save Board</button>' +
+          '<button class="btn btn-ghost btn-sm text-xs desk-hide" data-action="edit-board-header">Edit</button>' +
           '<button class="btn btn-ghost btn-sm text-xs" data-action="board-photo-camera">&#128247;</button>' +
           '<button class="btn btn-ghost btn-sm text-xs" data-action="board-photo-gallery">&#128193;</button>' +
         '</div>' +
@@ -4706,6 +4707,29 @@ input,select,textarea { font-size:16px !important; }
     );
   }
 
+  /* Save board from inline fields (the always-visible inputs) */
+  function saveBoardInline() {
+    if (!state.currentBoard) return;
+    var body = {
+      ref: (document.getElementById('bh-ref') || {}).value || '',
+      location: (document.getElementById('bh-location') || {}).value || '',
+      supplied_from: (document.getElementById('bh-supplied') || {}).value || '',
+      num_phases: (document.getElementById('bh-phase') || {}).value || 'single',
+      ocpd_bsen: (document.getElementById('bh-ocpd-bsen') || {}).value || '',
+      ocpd_type: (document.getElementById('bh-ocpd-type') || {}).value || '',
+      ocpd_rating: (document.getElementById('bh-ocpd-rating') || {}).value || '',
+      ze: (document.getElementById('bh-ze') || {}).value || '',
+      ipf: (document.getElementById('bh-ipf') || {}).value || '',
+      instruments_multi: (document.getElementById('bh-instruments-multi') || {}).value || '',
+      instruments_loop: (document.getElementById('bh-instruments-loop') || {}).value || '',
+    };
+    api('PUT', '/boards/' + state.currentBoard.id, body).then(function(updated) {
+      Object.assign(state.currentBoard, updated);
+      toast('Board saved', 'success');
+      navigate('board-detail');
+    }).catch(function(err) { toast(err.message, 'error'); });
+  }
+
   function saveBoardHeader() {
     var body = {
       ref: (document.getElementById('bh-ref') || {}).value || '',
@@ -5721,6 +5745,9 @@ input,select,textarea { font-size:16px !important; }
         break;
       case 'edit-board-header':
         openEditBoardHeaderSheet();
+        break;
+      case 'save-board-inline':
+        saveBoardInline();
         break;
       case 'save-board-header':
         saveBoardHeader();
