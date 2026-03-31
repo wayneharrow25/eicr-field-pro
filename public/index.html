@@ -1941,9 +1941,9 @@ input,select,textarea { font-size:16px !important; }
       if (SPARE_KEEP.indexOf(k) !== -1) return;
       c[k] = '--';
     });
-    /* Boolean fields */
-    c.polarity = '';
-    c.rcd_test_btn = '';
+    /* Boolean/special fields — set to '--' not empty */
+    c.polarity = '--';
+    c.rcd_test_btn = '--';
     c.afdd_test = '--';
   }
 
@@ -3522,6 +3522,7 @@ input,select,textarea { font-size:16px !important; }
           'Add</button>' +
         '<button class="voice-action-btn obs flex-1" id="voice-obs-btn" data-action="voice-observation">' +
           '&#127908; SPEAK OBSERVATION</button>' +
+        '<button class="btn btn-ghost" data-action="refresh-observations" style="color:#2563eb">&#8635; Refresh</button>' +
       '</div>' +
       (state.observations.length > 0 ? '<button class="btn btn-ghost btn-sm w-full" data-action="download-quote-report" style="background:#fffbeb;color:#92400e;border:1px solid #fde68a">' +
         '&#128196; Download Quote Report</button>' : '') +
@@ -6091,6 +6092,10 @@ input,select,textarea { font-size:16px !important; }
         break;
       case 'new-observation':
         openNewObservationSheet();
+        break;
+      case 'refresh-observations':
+        loadObservations();
+        toast('Refreshing observations...', 'info');
         break;
       case 'edit-observation':
         var eObsId = target.getAttribute('data-id') || (target.closest('[data-id]') && target.closest('[data-id]').getAttribute('data-id'));
