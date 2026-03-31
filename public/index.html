@@ -1868,6 +1868,10 @@ input,select,textarea { font-size:16px !important; }
     state.circuits.forEach(function(c, i) {
       if (indices.length > 0 && indices.indexOf(i) === -1) return;
       if (isSpareDescription(c.description)) return; /* skip spare circuits */
+      /* Only fill empty cells — don't overwrite existing data */
+      var existing = c[col];
+      var isEmpty = existing === undefined || existing === null || existing === '' || existing === '--';
+      if (!isEmpty && indices.length === 0) return; /* Skip non-empty when filling ALL; always set when bulk-selected */
       if (col === 'polarity' || col === 'rcd_test_btn') {
         c[col] = (val === 'true');
       } else if (col === 'afdd_test') {
