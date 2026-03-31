@@ -922,6 +922,7 @@ input,select,textarea { font-size:16px !important; }
   function renderBoardDetail() {
     var b = state.currentBoard;
     if (!b) return '<p>No board selected</p>';
+    var isTP = (b.num_phases === '3' || b.num_phases === 'three');
 
     var html = '<div class="fade-in">' +
       '<header class="sticky top-0 z-20 bg-white border-b border-slate-100 px-4 py-3">' +
@@ -1129,7 +1130,7 @@ input,select,textarea { font-size:16px !important; }
     html += '</tbody></table></div>' +
       '<div class="p-3 border-t border-slate-100 flex gap-2 flex-wrap">' +
         '<button class="btn btn-primary btn-sm flex-1" data-action="save-circuits">Save All Circuits</button>' +
-        '<button class="btn btn-ghost btn-sm" data-action="renumber-circuits" style="color:#2563eb" title="Re-number circuits sequentially">&#35; Re-number</button>' +
+        '<button class="btn btn-ghost btn-sm" data-action="renumber-circuits" data-mode="' + (isTP ? 'TP' : 'SP') + '" style="color:#2563eb" title="Re-number circuits sequentially (' + (isTP ? '3PH' : '1PH') + ')">&#35; Re-number</button>' +
       '</div>' +
     '</div>' +
     /* Floating AI chat bar */
