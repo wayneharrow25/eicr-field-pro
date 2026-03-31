@@ -87,6 +87,12 @@ input,select,textarea { font-size:16px !important; }
 .test-table .rcd-col { display:none; }
 .test-table.show-rcd .rcd-col { display:table-cell; }
 .scroll-wrapper { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.row-ctx-menu { position:fixed; z-index:110; background:#fff; border:1px solid #e2e8f0; border-radius:.75rem; box-shadow:0 8px 24px rgba(0,0,0,.18); padding:.375rem; min-width:11rem; }
+.row-ctx-menu button { display:block; width:100%; text-align:left; padding:.5rem .75rem; border:none; background:none; font-size:.875rem; cursor:pointer; border-radius:.5rem; white-space:nowrap; }
+.row-ctx-menu button:hover { background:#eff6ff; }
+.row-ctx-menu button.ctx-danger { color:#dc2626; }
+.row-ctx-menu button.ctx-danger:hover { background:#fef2f2; }
+.row-ctx-menu hr { border:none; border-top:1px solid #e2e8f0; margin:.25rem 0; }
 .col-fill-popup { position:fixed; z-index:100; background:#fff; border:1px solid #e2e8f0; border-radius:.75rem; box-shadow:0 8px 24px rgba(0,0,0,.15); padding:.5rem; min-width:14rem; }
 .col-fill-popup > button { display:block; width:100%; text-align:left; padding:.5rem .75rem; border:none; background:none; font-size:.875rem; cursor:pointer; border-radius:.5rem; }
 .col-fill-popup > button:hover { background:#eff6ff; }
@@ -1121,8 +1127,9 @@ input,select,textarea { font-size:16px !important; }
     }
 
     html += '</tbody></table></div>' +
-      '<div class="p-3 border-t border-slate-100 flex gap-2">' +
+      '<div class="p-3 border-t border-slate-100 flex gap-2 flex-wrap">' +
         '<button class="btn btn-primary btn-sm flex-1" data-action="save-circuits">Save All Circuits</button>' +
+        '<button class="btn btn-ghost btn-sm" data-action="renumber-circuits" style="color:#2563eb" title="Re-number circuits sequentially">&#35; Re-number</button>' +
       '</div>' +
     '</div>' +
     /* Floating AI chat bar */
@@ -1820,6 +1827,8 @@ input,select,textarea { font-size:16px !important; }
   };
 
   function closePopups() {
+    var ctx = document.querySelector('.row-ctx-menu');
+    if (ctx) ctx.remove();
     var p = document.querySelector('.col-fill-popup');
     if (p) p.remove();
     var ie = document.querySelector('.inline-edit');
@@ -1843,7 +1852,8 @@ input,select,textarea { font-size:16px !important; }
       h += '<button data-action="cfp-fill" data-col="' + col + '" data-val="' + esc(String(f.v)) + '">' + esc(f.l) + '</button>';
     });
     h += '<div class="cfp-head" style="margin-top:.25rem">Custom</div>';
-    h += '<div style="display:flex;gap:.5rem;padding:.25rem .5rem .5rem;align-items:center"><input type="text" id="cfp-custom" placeholder="Type value..." style="flex:1;font-size:.9rem;padding:.5rem .625rem;min-height:2rem;border:1.5px solid #cbd5e1;border-radius:.5rem;outline:none;background:#fff;min-width:0"><button data-action="cfp-custom" data-col="' + col + '" class="btn btn-primary btn-sm" style="font-size:.85rem;padding:.5rem .75rem;white-space:nowrap">Set</button></div>';
+    h += '<div style="display:flex;gap:.5rem;padding:.25rem .5rem;align-items:center"><input type="text" id="cfp-custom" placeholder="Type value..." style="flex:1;font-size:.9rem;padding:.5rem .625rem;min-height:2rem;border:1.5px solid #cbd5e1;border-radius:.5rem;outline:none;background:#fff;min-width:0"><button data-action="cfp-custom" data-col="' + col + '" class="btn btn-primary btn-sm" style="font-size:.85rem;padding:.5rem .75rem;white-space:nowrap">Set</button></div>';
+    h += '<button data-action="cfp-clear" data-col="' + col + '" style="color:#ef4444;font-weight:600;margin-top:.25rem">Clear All</button>';
     div.innerHTML = h;
     document.body.appendChild(div);
     setTimeout(function() { document.addEventListener('click', closeCfpOutside, true); }, 10);
@@ -1857,7 +1867,7 @@ input,select,textarea { font-size:16px !important; }
     }
   }
 
-  function applyColumnFill(col, val) {
+  function applyColumnFill(col, val, forceClear) {
     snapshotCircuits();
     var checks = document.querySelectorAll('.bulk-check:checked');
     var indices = [];
@@ -1868,10 +1878,12 @@ input,select,textarea { font-size:16px !important; }
     state.circuits.forEach(function(c, i) {
       if (indices.length > 0 && indices.indexOf(i) === -1) return;
       if (isSpareDescription(c.description)) return; /* skip spare circuits */
-      /* Only fill empty cells — don't overwrite existing data */
-      var existing = c[col];
-      var isEmpty = existing === undefined || existing === null || existing === '' || existing === '--';
-      if (!isEmpty && indices.length === 0) return; /* Skip non-empty when filling ALL; always set when bulk-selected */
+      /* Clear always overwrites; Fill only fills empty cells */
+      if (!forceClear) {
+        var existing = c[col];
+        var isEmpty = existing === undefined || existing === null || existing === '' || existing === '--';
+        if (!isEmpty && indices.length === 0) return; /* Skip non-empty when filling ALL; always set when bulk-selected */
+      }
       if (col === 'polarity' || col === 'rcd_test_btn') {
         c[col] = (val === 'true');
       } else if (col === 'afdd_test') {
@@ -1894,11 +1906,83 @@ input,select,textarea { font-size:16px !important; }
     });
     closePopups();
     document.removeEventListener('click', closeCfpOutside, true);
-    toast(count + ' circuits → ' + col + ' = ' + val, 'success');
+    toast(count + ' circuits → ' + col + (forceClear ? ' cleared' : ' = ' + val), 'success');
     navigate('board-detail');
     autoSave('circuits');
   }
 
+  /* ===== ROW CONTEXT MENU (right-click / long-press) ===== */
+  function openRowContextMenu(idx, x, y) {
+    closePopups();
+    var c = state.circuits[idx];
+    if (!c) return;
+    var div = document.createElement('div');
+    div.className = 'row-ctx-menu fade-in';
+    div.style.left = Math.min(x, window.innerWidth - 180) + 'px';
+    div.style.top = Math.min(y, window.innerHeight - 280) + 'px';
+    var label = '#' + (c.number || idx + 1) + ' ' + (c.description || '').substring(0, 20);
+    div.innerHTML =
+      '<div style="font-size:.7rem;color:#94a3b8;font-weight:600;padding:.25rem .75rem;text-transform:uppercase">' + esc(label) + '</div>' +
+      '<button data-action="ctx-move-up" data-idx="' + idx + '">&#9650; Move Up</button>' +
+      '<button data-action="ctx-move-down" data-idx="' + idx + '">&#9660; Move Down</button>' +
+      '<hr>' +
+      '<button data-action="ctx-insert-above" data-idx="' + idx + '">&#43; Insert Above</button>' +
+      '<button data-action="ctx-insert-below" data-idx="' + idx + '">&#43; Insert Below</button>' +
+      '<hr>' +
+      '<button data-action="ctx-clear-row" data-idx="' + idx + '" class="ctx-danger">&#9003; Clear Row Data</button>' +
+      '<button data-action="ctx-delete-row" data-idx="' + idx + '" class="ctx-danger">&#128465; Delete Row</button>';
+    document.body.appendChild(div);
+    setTimeout(function() { document.addEventListener('click', closeCtxOutside, true); }, 10);
+  }
+  function closeCtxOutside(e) {
+    var m = document.querySelector('.row-ctx-menu');
+    if (m && !m.contains(e.target)) {
+      m.remove();
+      document.removeEventListener('click', closeCtxOutside, true);
+    }
+  }
+  function moveCircuit(idx, dir) {
+    var newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= state.circuits.length) return;
+    snapshotCircuits();
+    var temp = state.circuits[idx];
+    state.circuits[idx] = state.circuits[newIdx];
+    state.circuits[newIdx] = temp;
+    navigate('board-detail');
+    autoSave('circuits');
+  }
+  function insertCircuit(idx, below) {
+    snapshotCircuits();
+    var pos = below ? idx + 1 : idx;
+    var newNum = String(pos + 1);
+    state.circuits.splice(pos, 0, { number: newNum, description: '' });
+    navigate('board-detail');
+    autoSave('circuits');
+    toast('Inserted circuit at position ' + (pos + 1), 'success');
+  }
+  function clearCircuitRow(idx) {
+    var c = state.circuits[idx];
+    if (!c) return;
+    snapshotCircuits();
+    var num = c.number; /* keep the circuit number */
+    Object.keys(c).forEach(function(k) {
+      if (k === 'number' || k === 'id') return;
+      c[k] = '';
+    });
+    c.number = num;
+    navigate('board-detail');
+    autoSave('circuits');
+    toast('Circuit ' + num + ' cleared', 'success');
+  }
+  function deleteCircuitRow(idx) {
+    if (!state.circuits[idx]) return;
+    snapshotCircuits();
+    var num = state.circuits[idx].number;
+    state.circuits.splice(idx, 1);
+    navigate('board-detail');
+    autoSave('circuits');
+    toast('Circuit ' + num + ' deleted', 'success');
+  }
   /* Inline cell edit — tap a cell to edit directly */
   function openInlineEdit(td, idx, col) {
     closePopups();
@@ -2170,19 +2254,20 @@ input,select,textarea { font-size:16px !important; }
     /* Send first photo with full prompt, then chain remaining */
     _scanState = { base64: null, images: [], keyId: keyEl.value, history: [], updates: null, boardUpdates: null, systemPrompt: '' };
 
-    var scanPrompt = 'You are an EICR Form 4 circuit schedule extractor. Extract ALL circuit details AND test results from these distribution board / schedule photos.\n' +
-      'Return JSON: {"updates":[{circuit fields}], "board_updates":{ref, location, supplied_from, num_phases, dist_type, dist_bsen, dist_rating, ocpd_bsen, ocpd_type, ocpd_rating}}\n' +
+    var scanPrompt = 'You are an EICR Form 4 circuit schedule extractor. Extract ALL circuit details AND ALL test results from these distribution board / schedule photos.\n' +
       'Circuit detail fields: number, description, wiring_type (T+E, Singles/Con, SWA, MICC, FP, etc), ' +
       'ref_method (A-G, 100-103), points, live_mm (cable CSA), cpc_mm, ocpd_bsen (60898/61009/88-2/3036/60947-2), ' +
       'ocpd_type (B/C/D), ocpd_rating, breaking_cap, rcd_bsen, rcd_type, rcd_idn.\n' +
-      'TEST RESULT fields (CRITICAL — extract these if visible on the schedule): ' +
-      'r1 (ring line Ω), rn (ring neutral Ω), r2 (ring CPC Ω), r1r2 (R1+R2 continuity Ω), r2_ring (R2 Ω), ' +
-      'ir_test_v (test voltage 250/500/1000), ir_ll (insulation L-L MΩ, often ">200"), ir_le (insulation L-E MΩ), ' +
-      'zs_measured (loop impedance Zs Ω), polarity (true if tick/pass), ' +
+      'TEST RESULT fields — YOU MUST extract these if ANY test values are visible on the schedule: ' +
+      'r1 (ring line conductor Ω), rn (ring neutral conductor Ω), r2 (ring CPC Ω), r1r2 (continuity R1+R2 Ω for radials), r2_ring (R2 Ω), ' +
+      'ir_test_v (test voltage 250/500/1000), ir_ll (insulation L-L MΩ, often ">200" or ">2"), ir_le (insulation L-E MΩ), ' +
+      'zs_measured (earth loop impedance Zs Ω), polarity (true if tick/pass), ' +
       'rcd_time_x1 (RCD trip time ms), rcd_test_btn (true if tick/pass).\n' +
       'Preserve exact numeric values as strings. Ticks/checkmarks = true. N/A or blank = "N/A".\n' +
-      'ONLY include data you can actually see. Do NOT fabricate values.\n' +
-      'Return ONLY raw JSON — no markdown, no code fences, no explanation text.';
+      'Return ONLY raw JSON — no markdown, no code fences, no explanation text. Example:\n' +
+      '{"updates":[{"number":"1","description":"Lighting","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"6","wiring_type":"T+E","live_mm":"1.5","cpc_mm":"1.0","r1r2":"0.52","ir_test_v":"500","ir_ll":">200","ir_le":">200","zs_measured":"0.87","polarity":true},' +
+      '{"number":"2","description":"Ring Main","ocpd_bsen":"60898","ocpd_type":"B","ocpd_rating":"32","wiring_type":"T+E","live_mm":"2.5","r1":"0.24","rn":"0.26","r2":"0.41","r1r2":"0.65","ir_test_v":"500","ir_ll":">200","ir_le":">200","zs_measured":"1.12","polarity":true,"rcd_time_x1":"18","rcd_test_btn":true}],' +
+      '"board_updates":{"ref":"DB1","location":"Kitchen","dist_type":"Schneider","ocpd_type":"Isolator","ocpd_rating":"100"}}';
 
     api('POST', '/ai/process', {
       key_id: keyEl.value,
@@ -6069,6 +6154,30 @@ input,select,textarea { font-size:16px !important; }
         var rnMode = target.getAttribute('data-mode') || 'SP';
         renumberCircuits(rnMode);
         break;
+      case 'ctx-move-up':
+        moveCircuit(parseInt(target.getAttribute('data-idx')), -1);
+        closePopups();
+        break;
+      case 'ctx-move-down':
+        moveCircuit(parseInt(target.getAttribute('data-idx')), 1);
+        closePopups();
+        break;
+      case 'ctx-insert-above':
+        insertCircuit(parseInt(target.getAttribute('data-idx')), false);
+        closePopups();
+        break;
+      case 'ctx-insert-below':
+        insertCircuit(parseInt(target.getAttribute('data-idx')), true);
+        closePopups();
+        break;
+      case 'ctx-clear-row':
+        clearCircuitRow(parseInt(target.getAttribute('data-idx')));
+        closePopups();
+        break;
+      case 'ctx-delete-row':
+        deleteCircuitRow(parseInt(target.getAttribute('data-idx')));
+        closePopups();
+        break;
       case 'format-board-caps':
         formatBoardAllCaps();
         break;
@@ -6421,12 +6530,38 @@ input,select,textarea { font-size:16px !important; }
     } else if (action === 'cfp-custom') {
       var customVal = document.getElementById('cfp-custom');
       if (customVal && customVal.value) applyColumnFill(target.getAttribute('data-col'), customVal.value);
+    } else if (action === 'cfp-clear') {
+      applyColumnFill(target.getAttribute('data-col'), '', true);
     } else if (action === 'ie-save') {
       saveInlineEdit(parseInt(target.getAttribute('data-idx')), target.getAttribute('data-col'));
     } else if (action === 'ie-cancel') {
       closePopups();
     }
   });
+
+  /* ===== ROW RIGHT-CLICK + LONG-PRESS ===== */
+  document.addEventListener('contextmenu', function(e) {
+    var tr = e.target.closest('.test-table tbody tr[data-idx]');
+    if (!tr) return;
+    e.preventDefault();
+    var idx = parseInt(tr.getAttribute('data-idx'));
+    openRowContextMenu(idx, e.clientX, e.clientY);
+  });
+  /* Long-press for mobile (500ms) */
+  var _longPressTimer = null;
+  var _longPressXY = null;
+  document.addEventListener('touchstart', function(e) {
+    var tr = e.target.closest('.test-table tbody tr[data-idx]');
+    if (!tr) return;
+    var touch = e.touches[0];
+    _longPressXY = { x: touch.clientX, y: touch.clientY, idx: parseInt(tr.getAttribute('data-idx')) };
+    _longPressTimer = setTimeout(function() {
+      if (_longPressXY) openRowContextMenu(_longPressXY.idx, _longPressXY.x, _longPressXY.y);
+      _longPressXY = null;
+    }, 500);
+  }, { passive: true });
+  document.addEventListener('touchend', function() { clearTimeout(_longPressTimer); _longPressXY = null; });
+  document.addEventListener('touchmove', function() { clearTimeout(_longPressTimer); _longPressXY = null; }, { passive: true });
 
   /* ===== INIT ===== */
   function init() {
