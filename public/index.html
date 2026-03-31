@@ -1836,6 +1836,9 @@ input,select,textarea { font-size:16px !important; }
     if (p) p.remove();
     var ie = document.querySelector('.inline-edit');
     if (ie) ie.remove();
+    /* Clean up stale capture-phase listeners */
+    document.removeEventListener('click', closeCfpOutside, true);
+    document.removeEventListener('click', closeCtxOutside, true);
   }
 
   /* Column header tap → quick-fill popup */
@@ -6583,13 +6586,15 @@ input,select,textarea { font-size:16px !important; }
     closeSheet();
   });
 
-  /* Table cell click → inline edit or column fill */
+  /* Table cell click → inline edit or column fill
+     Registered EARLY so it fires before other handlers */
   document.addEventListener('click', function(e) {
     if (e.target.classList && e.target.classList.contains('bulk-check')) return;
 
     /* Column header click → quick-fill popup */
     var th = e.target.closest('th[data-col]');
     if (th && th.closest('.test-table')) {
+      e.stopPropagation(); /* prevent other handlers from interfering */
       openColumnFill(th.getAttribute('data-col'), th);
       return;
     }
@@ -6597,12 +6602,13 @@ input,select,textarea { font-size:16px !important; }
     /* Data cell click → inline edit */
     if (_bulkSelectMode) return;
     var td = e.target.closest('td[data-col]');
-    if (td) {
+    if (td && td.closest('.test-table')) {
       var row = td.closest('tr[data-idx]');
       if (!row) return;
       var idx = parseInt(row.getAttribute('data-idx'));
       var col = td.getAttribute('data-col');
       if (!isNaN(idx) && col) {
+        e.stopPropagation(); /* prevent other handlers from interfering */
         /* Number and description open full edit sheet */
         if (col === 'number' || col === 'description') {
           openEditCircuitSheet(idx);
@@ -6614,7 +6620,7 @@ input,select,textarea { font-size:16px !important; }
     }
 
     /* Clicking outside table — close popups */
-    if (!e.target.closest('.col-fill-popup') && !e.target.closest('.inline-edit')) {
+    if (!e.target.closest('.col-fill-popup') && !e.target.closest('.inline-edit') && !e.target.closest('.row-ctx-menu')) {
       closePopups();
     }
   });
@@ -6649,13 +6655,18 @@ input,select,textarea { font-size:16px !important; }
   /* Long-press for mobile (500ms) */
   var _longPressTimer = null;
   var _longPressXY = null;
+  var _longPressDidFire = false;
   document.addEventListener('touchstart', function(e) {
     var tr = e.target.closest('.test-table tbody tr[data-idx]');
     if (!tr) return;
+    _longPressDidFire = false;
     var touch = e.touches[0];
     _longPressXY = { x: touch.clientX, y: touch.clientY, idx: parseInt(tr.getAttribute('data-idx')) };
     _longPressTimer = setTimeout(function() {
-      if (_longPressXY) openRowContextMenu(_longPressXY.idx, _longPressXY.x, _longPressXY.y);
+      if (_longPressXY) {
+        _longPressDidFire = true;
+        openRowContextMenu(_longPressXY.idx, _longPressXY.x, _longPressXY.y);
+      }
       _longPressXY = null;
     }, 500);
   }, { passive: true });
