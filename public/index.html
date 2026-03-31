@@ -724,9 +724,9 @@ input,select,textarea { font-size:16px !important; }
         {id:'si_earth_electrode_location', label:'Earth Electrode Location', val:s.earth_electrode_location},
         {id:'si_earth_electrode_resistance', label:'Earth Electrode Resistance (ohms)', val:s.earth_electrode_resistance, type:'number'},
         {id:'si_ze', label:'Ze (External Loop Impedance) ohms', val:s.ze},
-        {id:'si_earthing_conductor_csa', label:'Earthing Conductor CSA (mm\u00b2)', val:s.earthing_conductor_csa},
+        {id:'si_earthing_conductor_csa', label:'Earthing Conductor Size / Type', val:s.earthing_conductor_csa, suggestions:['6','10','16','25','35','50','70','SWA sheath','MICC sheath','Lead sheath','Cable tray/trunking','Steel conduit','Not visible','N/A']},
         {id:'si_earthing_conductor_verified', label:'Earthing Conductor Connection Verified', val:s.earthing_conductor_verified, options:['Yes','No']},
-        {id:'si_bonding_conductor_csa', label:'Main Bonding Conductor CSA (mm\u00b2)', val:s.bonding_conductor_csa},
+        {id:'si_bonding_conductor_csa', label:'Main Bonding Conductor CSA (mm\u00b2)', val:s.bonding_conductor_csa, suggestions:['6','10','16','25','35','50','70','N/A']},
         {id:'si_bonding_conductor_verified', label:'Main Bonding Conductor Connection Verified', val:s.bonding_conductor_verified, options:['Yes','No']},
       ]) +
       renderFieldGroup('Main Switch / Isolator', [
@@ -765,6 +765,12 @@ input,select,textarea { font-size:16px !important; }
       html += '<div><label class="block text-sm font-medium text-slate-600 mb-1" for="' + f.id + '">' + f.label + '</label>';
       if (f.textarea) {
         html += textareaWithMic(f.id, f.label, f.val, 3);
+      } else if (f.suggestions) {
+        /* Text input with datalist suggestions — allows free text + common options */
+        html += '<input type="text" id="' + f.id + '" class="input-field" value="' + esc(f.val || '') + '" list="' + f.id + '_list">' +
+          '<datalist id="' + f.id + '_list">' +
+          f.suggestions.map(function(o) { return '<option value="' + esc(o) + '">'; }).join('') +
+          '</datalist>';
       } else if (f.options) {
         html += '<select id="' + f.id + '" class="select-field">' +
           '<option value="">-- Select --</option>' +
