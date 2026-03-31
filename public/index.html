@@ -59,6 +59,7 @@ input,select,textarea { font-size:16px !important; }
 .tab-btn { flex:0 0 auto; padding:.5rem 1rem; border-radius:.5rem; font-size:.813rem; font-weight:600; color:#64748b; background:transparent; border:none; cursor:pointer; white-space:nowrap; transition:all .15s; }
 .tab-btn.active { background:#fff; color:#3b82f6; box-shadow:0 1px 2px rgba(0,0,0,.06); }
 .nav-bottom { position:fixed; bottom:0; left:0; right:0; background:#1e293b; display:flex; z-index:50; padding-bottom:env(safe-area-inset-bottom,0); }
+#app { padding-bottom:4.5rem; }
 .nav-btn { flex:1; display:flex; flex-direction:column; align-items:center; gap:.25rem; padding:.625rem 0; color:#94a3b8; border:none; background:none; cursor:pointer; font-size:.688rem; font-weight:500; }
 .nav-btn.active { color:#3b82f6; }
 .nav-btn svg { width:1.5rem; height:1.5rem; }
@@ -1761,8 +1762,8 @@ input,select,textarea { font-size:16px !important; }
     breaking_cap: [{v:'10',l:'10 kA'},{v:'6',l:'6 kA'},{v:'15',l:'15 kA'}],
     rcd_idn:      [{v:'30',l:'30 mA'},{v:'100',l:'100 mA'},{v:'300',l:'300 mA'},{v:'N/A',l:'N/A'}],
     rcd_type:     [{v:'A',l:'A'},{v:'AC',l:'AC'},{v:'B',l:'B'},{v:'S',l:'S (delay)'},{v:'N/A',l:'N/A'}],
-    polarity:     [{v:true,l:'Yes ✓'},{v:false,l:'No'}],
-    rcd_test_btn: [{v:true,l:'Yes ✓'},{v:false,l:'No'}],
+    polarity:     [{v:true,l:'Yes ✓'},{v:false,l:'No'},{v:'LIM',l:'LIM'}],
+    rcd_test_btn: [{v:true,l:'Yes ✓'},{v:false,l:'No'},{v:'LIM',l:'LIM'}],
     afdd_test:    [{v:'N/A',l:'N/A'},{v:true,l:'Yes ✓'},{v:false,l:'No'}],
     ocpd_type:    [{v:'B',l:'B'},{v:'C',l:'C'},{v:'D',l:'D'},{v:'gG',l:'gG'},{v:'aM',l:'aM'}],
     ocpd_bsen:    [{v:'60898',l:'60898 MCB'},{v:'61009',l:'61009 RCBO'},{v:'61008',l:'61008 RCD'},{v:'88-2',l:'88-2 Fuse'},{v:'3036',l:'3036 Rewireable'},{v:'60947-2',l:'MCCB'}],
@@ -1817,8 +1818,8 @@ input,select,textarea { font-size:16px !important; }
     rcd_bsen:     [{v:'',l:'--'},{v:'61008',l:'61008 — RCD'},{v:'61009',l:'61009 — RCBO'},{v:'62423',l:'62423 — Type B RCD'},{v:'N/A',l:'N/A'}],
     rcd_type:     [{v:'',l:'--'},{v:'AC',l:'AC — AC faults only'},{v:'A',l:'A — AC + pulsating DC'},{v:'B',l:'B — All fault types'},{v:'F',l:'F — High frequency'},{v:'S',l:'S — Time delayed'},{v:'N/A',l:'N/A'}],
     rcd_idn:      [{v:'',l:'--'},{v:'10',l:'10 mA'},{v:'30',l:'30 mA'},{v:'100',l:'100 mA'},{v:'300',l:'300 mA'},{v:'500',l:'500 mA'},{v:'N/A',l:'N/A'}],
-    polarity:     [{v:true,l:'Yes ✓'},{v:false,l:'No'},{v:'',l:'--'}],
-    rcd_test_btn: [{v:true,l:'Yes ✓'},{v:false,l:'No'},{v:'',l:'--'}],
+    polarity:     [{v:true,l:'Yes ✓'},{v:false,l:'No'},{v:'LIM',l:'LIM'},{v:'',l:'--'}],
+    rcd_test_btn: [{v:true,l:'Yes ✓'},{v:false,l:'No'},{v:'LIM',l:'LIM'},{v:'',l:'--'}],
     afdd_test:    [{v:'N/A',l:'N/A'},{v:true,l:'Yes ✓'},{v:false,l:'No'},{v:'',l:'--'}],
     ir_test_v:    [{v:'',l:'--'},{v:'250',l:'250V'},{v:'500',l:'500V'},{v:'1000',l:'1000V'}],
     breaking_cap: [{v:'',l:'--'},{v:'6',l:'6 kA'},{v:'10',l:'10 kA'},{v:'15',l:'15 kA'},{v:'25',l:'25 kA'}],
