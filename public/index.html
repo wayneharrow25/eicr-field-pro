@@ -1130,7 +1130,7 @@ input,select,textarea { font-size:16px !important; }
     html += '</tbody></table></div>' +
       '<div class="p-3 border-t border-slate-100 flex gap-2 flex-wrap">' +
         '<button class="btn btn-primary btn-sm flex-1" data-action="save-circuits">Save All Circuits</button>' +
-        '<button class="btn btn-ghost btn-sm" data-action="renumber-circuits" data-mode="' + (isTP ? 'TP' : 'SP') + '" style="color:#2563eb" title="Re-number circuits sequentially (' + (isTP ? '3PH' : '1PH') + ')">&#35; Re-number</button>' +
+        '<button class="btn btn-ghost btn-sm" data-action="renumber-popup" style="color:#2563eb" title="Re-number circuits">&#35; Re-number</button>' +
       '</div>' +
     '</div>' +
     /* Floating AI chat bar */
@@ -1922,6 +1922,16 @@ input,select,textarea { font-size:16px !important; }
     div.style.left = Math.min(x, window.innerWidth - 180) + 'px';
     div.style.top = Math.min(y, window.innerHeight - 280) + 'px';
     var label = '#' + (c.number || idx + 1) + ' ' + (c.description || '').substring(0, 20);
+    var num = (c.number || '').toUpperCase();
+    /* Detect if this is an L1/L2/L3 circuit that can be merged to TP */
+    var phaseMatch = num.match(/^(\d+)L[123]$/);
+    var isTPCircuit = (c.poles || '').toUpperCase() === 'TP';
+    var phaseHtml = '';
+    if (phaseMatch) {
+      phaseHtml = '<hr><button data-action="ctx-convert-tp" data-idx="' + idx + '" data-way="' + phaseMatch[1] + '">&#9654; Convert to TP (merge L1+L2+L3)</button>';
+    } else if (isTPCircuit) {
+      phaseHtml = '<hr><button data-action="ctx-split-sp" data-idx="' + idx + '">&#9654; Split to 3x SP (L1, L2, L3)</button>';
+    }
     div.innerHTML =
       '<div style="font-size:.7rem;color:#94a3b8;font-weight:600;padding:.25rem .75rem;text-transform:uppercase">' + esc(label) + '</div>' +
       '<button data-action="ctx-move-up" data-idx="' + idx + '">&#9650; Move Up</button>' +
@@ -1929,6 +1939,7 @@ input,select,textarea { font-size:16px !important; }
       '<hr>' +
       '<button data-action="ctx-insert-above" data-idx="' + idx + '">&#43; Insert Above</button>' +
       '<button data-action="ctx-insert-below" data-idx="' + idx + '">&#43; Insert Below</button>' +
+      phaseHtml +
       '<hr>' +
       '<button data-action="ctx-clear-row" data-idx="' + idx + '" class="ctx-danger">&#9003; Clear Row Data</button>' +
       '<button data-action="ctx-delete-row" data-idx="' + idx + '" class="ctx-danger">&#128465; Delete Row</button>';
@@ -1983,6 +1994,68 @@ input,select,textarea { font-size:16px !important; }
     navigate('board-detail');
     autoSave('circuits');
     toast('Circuit ' + num + ' deleted', 'success');
+  }
+  /* Convert 3 SP circuits (e.g. 1L1, 1L2, 1L3) into a single TP circuit */
+  function convertToTP(way) {
+    snapshotCircuits();
+    var phases = ['L1', 'L2', 'L3'];
+    var found = [];
+    var foundIdx = [];
+    phases.forEach(function(ph) {
+      var target = way + ph;
+      state.circuits.forEach(function(c, i) {
+        if ((c.number || '').toUpperCase() === target.toUpperCase()) {
+          found.push(c);
+          foundIdx.push(i);
+        }
+      });
+    });
+    if (found.length === 0) { toast('No L1/L2/L3 circuits found for way ' + way, 'error'); return; }
+    /* Merge into first circuit — take non-empty values from all three, prefer L1 */
+    var merged = {};
+    Object.keys(found[0]).forEach(function(k) { merged[k] = found[0][k]; });
+    found.forEach(function(c) {
+      Object.keys(c).forEach(function(k) {
+        if (k === 'number' || k === 'id') return;
+        if (c[k] && c[k] !== '' && c[k] !== '--' && (!merged[k] || merged[k] === '' || merged[k] === '--')) {
+          merged[k] = c[k];
+        }
+      });
+    });
+    merged.number = String(way);
+    merged.poles = 'TP';
+    /* Remove all three, insert merged at first position */
+    foundIdx.sort(function(a, b) { return b - a; }); /* remove from end first */
+    foundIdx.forEach(function(i) { state.circuits.splice(i, 1); });
+    /* Insert at where the first one was */
+    var insertAt = Math.min.apply(null, foundIdx);
+    if (insertAt > state.circuits.length) insertAt = state.circuits.length;
+    state.circuits.splice(insertAt, 0, merged);
+    navigate('board-detail');
+    autoSave('circuits');
+    toast('Way ' + way + ' L1+L2+L3 merged → TP', 'success');
+  }
+  /* Split a TP circuit into 3 SP circuits (L1, L2, L3) */
+  function splitToSP(idx) {
+    var c = state.circuits[idx];
+    if (!c) return;
+    snapshotCircuits();
+    var baseNum = (c.number || '').replace(/[^0-9]/g, '') || String(idx + 1);
+    var phases = ['L1', 'L2', 'L3'];
+    var newCircuits = phases.map(function(ph) {
+      var copy = {};
+      Object.keys(c).forEach(function(k) {
+        if (k === 'id') return; /* new rows get new IDs from server */
+        copy[k] = c[k];
+      });
+      copy.number = baseNum + ph;
+      copy.poles = 'SP';
+      return copy;
+    });
+    state.circuits.splice(idx, 1, newCircuits[0], newCircuits[1], newCircuits[2]);
+    navigate('board-detail');
+    autoSave('circuits');
+    toast('Circuit ' + baseNum + ' TP → ' + baseNum + 'L1, L2, L3', 'success');
   }
   /* Inline cell edit — tap a cell to edit directly */
   function openInlineEdit(td, idx, col) {
@@ -6154,6 +6227,28 @@ input,select,textarea { font-size:16px !important; }
       case 'renumber-circuits':
         var rnMode = target.getAttribute('data-mode') || 'SP';
         renumberCircuits(rnMode);
+        break;
+      case 'renumber-popup':
+        closePopups();
+        var rnDiv = document.createElement('div');
+        rnDiv.className = 'row-ctx-menu fade-in';
+        var rnRect = target.getBoundingClientRect();
+        rnDiv.style.left = Math.min(rnRect.left, window.innerWidth - 180) + 'px';
+        rnDiv.style.top = (rnRect.top - 90) + 'px';
+        rnDiv.innerHTML =
+          '<div style="font-size:.7rem;color:#94a3b8;font-weight:600;padding:.25rem .75rem;text-transform:uppercase">Re-number as</div>' +
+          '<button data-action="renumber-circuits" data-mode="SP">1, 2, 3, 4... (Single Phase)</button>' +
+          '<button data-action="renumber-circuits" data-mode="TP">1L1, 1L2, 1L3... (Three Phase)</button>';
+        document.body.appendChild(rnDiv);
+        setTimeout(function() { document.addEventListener('click', closeCtxOutside, true); }, 10);
+        break;
+      case 'ctx-convert-tp':
+        convertToTP(target.getAttribute('data-way'));
+        closePopups();
+        break;
+      case 'ctx-split-sp':
+        splitToSP(parseInt(target.getAttribute('data-idx')));
+        closePopups();
         break;
       case 'ctx-move-up':
         moveCircuit(parseInt(target.getAttribute('data-idx')), -1);
