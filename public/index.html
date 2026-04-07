@@ -1180,6 +1180,14 @@ input,select,textarea { font-size:16px !important; }
     api('GET', '/boards/' + boardId + '/circuits').then(function(data) {
       state.circuits = data.map(mapCircuitFromDB);
       _lastKnownCircuitCount = state.circuits.length;
+      /* Apply defaults on load — spare circuits get --, non-spares get breaking cap etc */
+      state.circuits.forEach(function(c) {
+        if (isSpareDescription(c.description)) {
+          clearCircuitAsSpare(c);
+        } else {
+          applyCircuitDefaults(c);
+        }
+      });
       cacheData('/boards/' + boardId + '/circuits', data);
       navigate('board-detail');
       loadBoardPhotos(boardId);
@@ -6584,12 +6592,17 @@ input,select,textarea { font-size:16px !important; }
   /* ===== AUTOSAVE ===== */
   var _autoSaveTimer = null;
   function autoSave(what) {
+    if (what === 'circuits') {
+      /* Circuits save immediately — no debounce, so fast edits don't get lost */
+      if (_autoSaveTimer) clearTimeout(_autoSaveTimer);
+      autoSaveCircuits();
+      return;
+    }
     if (_autoSaveTimer) clearTimeout(_autoSaveTimer);
     _autoSaveTimer = setTimeout(function() {
       if (what === 'inspections') autoSaveInspections();
       else if (what === 'site-info') autoSaveSiteInfo();
-      else if (what === 'circuits') autoSaveCircuits();
-    }, 1500); /* 1.5s debounce */
+    }, 1500); /* 1.5s debounce for non-circuit saves */
   }
 
   function autoSaveInspections() {
