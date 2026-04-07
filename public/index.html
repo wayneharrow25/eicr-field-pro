@@ -2109,7 +2109,7 @@ input,select,textarea { font-size:16px !important; }
     } else {
       h += '<input id="ie-val" type="text" value="' + esc(curVal || '') + '" placeholder="' + col + '">';
     }
-    h += '<div class="ie-btns"><button data-action="ie-cancel">Cancel</button><button data-action="ie-save" data-idx="' + idx + '" data-col="' + col + '">Save</button></div>';
+    h += '<div class="ie-btns"><button data-action="ie-cancel">Cancel</button><button data-action="ie-clear" data-idx="' + idx + '" data-col="' + col + '" style="background:#fef2f2;color:#dc2626">Clear</button><button data-action="ie-save" data-idx="' + idx + '" data-col="' + col + '">Save</button></div>';
     div.innerHTML = h;
     document.body.appendChild(div);
     var input = document.getElementById('ie-val');
@@ -6746,6 +6746,15 @@ input,select,textarea { font-size:16px !important; }
       applyColumnFill(target.getAttribute('data-col'), '', true);
     } else if (action === 'ie-save') {
       saveInlineEdit(parseInt(target.getAttribute('data-idx')), target.getAttribute('data-col'));
+    } else if (action === 'ie-clear') {
+      var ci = parseInt(target.getAttribute('data-idx'));
+      var cc = target.getAttribute('data-col');
+      if (!isNaN(ci) && cc && state.circuits[ci]) {
+        state.circuits[ci][cc] = '';
+        closePopups();
+        navigate('board-detail');
+        autoSave('circuits');
+      }
     } else if (action === 'ie-cancel') {
       closePopups();
     }
