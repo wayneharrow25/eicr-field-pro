@@ -2097,7 +2097,11 @@ input,select,textarea { font-size:16px !important; }
     if (col === 'polarity' || col === 'rcd_test_btn' || col === 'afdd_test') curVal = c[col];
 
     var h = '';
+    var isCustom = false;
     if (opts) {
+      /* Check if current value matches any option */
+      var matched = opts.some(function(o) { return String(typeof o === 'object' ? o.v : o) === String(curVal); });
+      isCustom = curVal && !matched;
       h += '<select id="ie-val" style="min-width:8rem">';
       opts.forEach(function(o) {
         var ov = typeof o === 'object' ? o.v : o;
@@ -2105,13 +2109,24 @@ input,select,textarea { font-size:16px !important; }
         var sel = (String(curVal) === String(ov)) ? ' selected' : '';
         h += '<option value="' + esc(String(ov)) + '"' + sel + '>' + esc(ol) + '</option>';
       });
+      h += '<option value="__custom__"' + (isCustom ? ' selected' : '') + '>Custom...</option>';
       h += '</select>';
+      h += '<input id="ie-custom" type="text" value="' + esc(isCustom ? (curVal || '') : '') + '" placeholder="Type custom value" style="display:' + (isCustom ? 'block' : 'none') + ';margin-top:.25rem;border:1px solid #e2e8f0;font-size:.875rem;padding:.375rem .5rem;border-radius:.375rem;width:100%">';
     } else {
       h += '<input id="ie-val" type="text" value="' + esc(curVal || '') + '" placeholder="' + col + '">';
     }
     h += '<div class="ie-btns"><button data-action="ie-cancel">Cancel</button><button data-action="ie-clear" data-idx="' + idx + '" data-col="' + col + '" style="background:#fef2f2;color:#dc2626">Clear</button><button data-action="ie-save" data-idx="' + idx + '" data-col="' + col + '">Save</button></div>';
     div.innerHTML = h;
     document.body.appendChild(div);
+    /* Toggle custom input when "Custom..." is selected */
+    var sel = document.getElementById('ie-val');
+    var customInput = document.getElementById('ie-custom');
+    if (sel && customInput) {
+      sel.addEventListener('change', function() {
+        if (sel.value === '__custom__') { customInput.style.display = 'block'; customInput.focus(); }
+        else { customInput.style.display = 'none'; }
+      });
+    }
     var input = document.getElementById('ie-val');
     if (input) { input.focus(); if (input.select) input.select(); }
   }
@@ -2139,6 +2154,11 @@ input,select,textarea { font-size:16px !important; }
     var el = document.getElementById('ie-val');
     if (!el) return;
     var val = el.value;
+    /* If "Custom..." selected, use the custom text input value */
+    if (val === '__custom__') {
+      var customEl = document.getElementById('ie-custom');
+      val = customEl ? customEl.value : '';
+    }
     var c = state.circuits[idx];
     if (!c) { closePopups(); return; }
 
