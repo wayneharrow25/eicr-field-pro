@@ -1177,6 +1177,15 @@ input,select,textarea { font-size:16px !important; }
   }
 
   function loadCircuits(boardId) {
+    /* Flush any pending save for the OLD board before switching */
+    if (_circuitSaveTimer && _circuitSaveBoardId && state.currentBoard && state.currentBoard.id === _circuitSaveBoardId) {
+      clearTimeout(_circuitSaveTimer);
+      _circuitSaveTimer = null;
+      autoSaveCircuits(); /* save old board's circuits NOW */
+    } else if (_circuitSaveTimer) {
+      clearTimeout(_circuitSaveTimer); /* cancel stale timer for a different board */
+      _circuitSaveTimer = null;
+    }
     api('GET', '/boards/' + boardId + '/circuits').then(function(data) {
       state.circuits = data.map(mapCircuitFromDB);
       _lastKnownCircuitCount = state.circuits.length;
@@ -6595,18 +6604,30 @@ input,select,textarea { font-size:16px !important; }
 
   /* ===== AUTOSAVE ===== */
   var _autoSaveTimer = null;
+  var _circuitSaveTimer = null;
+  var _circuitSaveBoardId = null;
   function autoSave(what) {
     if (what === 'circuits') {
-      /* Circuits save immediately — no debounce, so fast edits don't get lost */
-      if (_autoSaveTimer) clearTimeout(_autoSaveTimer);
-      autoSaveCircuits();
+      /* Save circuits with short debounce, but pin to the board ID at call time
+         so switching boards won't save to the wrong board */
+      var boardId = state.currentBoard ? state.currentBoard.id : null;
+      if (!boardId) return;
+      if (_circuitSaveTimer) clearTimeout(_circuitSaveTimer);
+      _circuitSaveBoardId = boardId;
+      _circuitSaveTimer = setTimeout(function() {
+        /* Only save if we're still on the same board */
+        if (state.currentBoard && state.currentBoard.id === _circuitSaveBoardId) {
+          autoSaveCircuits();
+        }
+        _circuitSaveBoardId = null;
+      }, 500);
       return;
     }
     if (_autoSaveTimer) clearTimeout(_autoSaveTimer);
     _autoSaveTimer = setTimeout(function() {
       if (what === 'inspections') autoSaveInspections();
       else if (what === 'site-info') autoSaveSiteInfo();
-    }, 1500); /* 1.5s debounce for non-circuit saves */
+    }, 1500);
   }
 
   function autoSaveInspections() {
