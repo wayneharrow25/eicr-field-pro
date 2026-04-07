@@ -711,9 +711,9 @@ input,select,textarea { font-size:16px !important; }
         {id:'si_supply_system', label:'System Type (TN-S, TN-C-S, TT, IT)', val:s.supply_system, options:['TN-S','TN-C-S','TT','IT','TN-C','Unknown']},
         {id:'si_supply_type', label:'Supply Type', val:s.supply_type, options:['Single phase AC','Three phase AC (4 wire)','Three phase AC (3 wire)','Two phase AC','DC','Other']},
         {id:'si_supply_protective', label:'Supply Protective Device (DNO)', val:s.supply_protective},
-        {id:'si_supply_protective_rating', label:'DNO Fuse Rating (A)', val:s.supply_protective_rating, type:'number'},
-        {id:'si_nominal_voltage_ll', label:'Nominal Voltage L-L (V)', val:s.nominal_voltage_ll, type:'number'},
-        {id:'si_nominal_voltage_ln', label:'Nominal Voltage L-N (V)', val:s.nominal_voltage_ln, type:'number'},
+        {id:'si_supply_protective_rating', label:'DNO Fuse Rating (A)', val:s.supply_protective_rating},
+        {id:'si_nominal_voltage_ll', label:'Nominal Voltage L-L (V)', val:s.nominal_voltage_ll},
+        {id:'si_nominal_voltage_ln', label:'Nominal Voltage L-N (V)', val:s.nominal_voltage_ln},
         {id:'si_nominal_freq', label:'Nominal Frequency (Hz)', val:s.nominal_freq || '50'},
         {id:'si_pscc', label:'Prospective Short Circuit Current (kA)', val:s.pscc},
         {id:'si_pfc_confirmed', label:'PFC Confirmed Adequate', val:s.pfc_confirmed, options:['Yes','No']},
@@ -722,7 +722,7 @@ input,select,textarea { font-size:16px !important; }
         {id:'si_earthing_type', label:'Earthing Type', val:s.earthing_type, options:['Distributor\'s facility (TN-S)','Distributor\'s facility (TN-C-S)','Installation earth electrode (TT)','Distributor\'s facility (TN-C)','IT system','Other']},
         {id:'si_earth_electrode_type', label:'Earth Electrode Type (if TT)', val:s.earth_electrode_type, options:['Rod(s)','Tape','Plate','Other','N/A']},
         {id:'si_earth_electrode_location', label:'Earth Electrode Location', val:s.earth_electrode_location},
-        {id:'si_earth_electrode_resistance', label:'Earth Electrode Resistance (ohms)', val:s.earth_electrode_resistance, type:'number'},
+        {id:'si_earth_electrode_resistance', label:'Earth Electrode Resistance (ohms)', val:s.earth_electrode_resistance},
         {id:'si_ze', label:'Ze (External Loop Impedance) ohms', val:s.ze},
         {id:'si_earthing_conductor_csa', label:'Earthing Conductor Size / Type', val:s.earthing_conductor_csa, suggestions:['6','10','16','25','35','50','70','SWA sheath','MICC sheath','Lead sheath','Cable tray/trunking','Steel conduit','Not visible','N/A']},
         {id:'si_earthing_conductor_verified', label:'Earthing Conductor Connection Verified', val:s.earthing_conductor_verified, options:['Yes','No']},
@@ -734,9 +734,9 @@ input,select,textarea { font-size:16px !important; }
         {id:'si_main_switch_type', label:'Type', val:s.main_switch_type, options:['Isolator','Switch Disconnector','MCCB','ACB','RCD','RCBO','Fuse Switch','Other']},
         {id:'si_main_switch_bsen', label:'BS(EN)', val:s.main_switch_bsen},
         {id:'si_main_switch_poles', label:'No. of Poles', val:s.main_switch_poles, options:['SP','SPN','DP','TP','TPN','4P']},
-        {id:'si_main_switch_rating', label:'Current Rating (A)', val:s.main_switch_rating, type:'number'},
-        {id:'si_main_switch_voltage', label:'Voltage Rating (V)', val:s.main_switch_voltage, type:'number'},
-        {id:'si_main_switch_rcd_idn', label:'RCD I\u0394n (mA) if applicable', val:s.main_switch_rcd_idn, type:'number'},
+        {id:'si_main_switch_rating', label:'Current Rating (A)', val:s.main_switch_rating},
+        {id:'si_main_switch_voltage', label:'Voltage Rating (V)', val:s.main_switch_voltage},
+        {id:'si_main_switch_rcd_idn', label:'RCD I\u0394n (mA) if applicable', val:s.main_switch_rcd_idn},
         {id:'si_main_switch_rcd_type', label:'RCD Type', val:s.main_switch_rcd_type, options:['N/A','AC','A','B','F','S (time delayed)']},
       ]) +
       renderFieldGroup('Main Protective Bonding', [
@@ -1299,13 +1299,13 @@ input,select,textarea { font-size:16px !important; }
       {id:'ce_cpc_mm', label:'CPC CSA (mm\u00b2)', val:c.cpc_mm, placeholder:'1.0, 1.5, 2.5...'},
       {id:'ce_ocpd_bsen', label:'OCPD BS(EN)', val:c.ocpd_bsen, options:['','60898','61009','88-2','88-3','60947-2','Other']},
       {id:'ce_ocpd_type', label:'OCPD Type/Curve', val:c.ocpd_type, options:['','B','C','D','gG','aM','Other']},
-      {id:'ce_ocpd_rating', label:'OCPD Rating (A)', val:c.ocpd_rating, type:'number'},
+      {id:'ce_ocpd_rating', label:'OCPD Rating (A)', val:c.ocpd_rating},
       {id:'ce_breaking_cap', label:'Breaking Cap (kA)', val:c.breaking_cap},
       {id:'ce_max_zs', label:'Max Zs (\u03a9)', val:c.max_zs, placeholder:'Auto-lookup'},
       {id:'ce_rcd_bsen', label:'RCD BS(EN)', val:c.rcd_bsen, options:['','61008','61009','62423','Other','N/A']},
       {id:'ce_rcd_type', label:'RCD Type', val:c.rcd_type, options:['','AC','A','B','F','S','N/A']},
       {id:'ce_rcd_idn', label:'RCD I\u0394n (mA)', val:c.rcd_idn, options:['','10','30','100','300','500','N/A']},
-      {id:'ce_rcd_rating', label:'RCD Rating (A)', val:c.rcd_rating, type:'number'},
+      {id:'ce_rcd_rating', label:'RCD Rating (A)', val:c.rcd_rating},
       {id:'ce_r1', label:'r1 (\u03a9)', val:c.r1},
       {id:'ce_rn', label:'rn (\u03a9)', val:c.rn},
       {id:'ce_r2', label:'r2 (\u03a9)', val:c.r2},
@@ -1775,7 +1775,7 @@ input,select,textarea { font-size:16px !important; }
     polarity:     [{v:true,l:'Yes ✓'},{v:false,l:'No'},{v:'LIM',l:'LIM'},{v:'N/A',l:'N/A'}],
     rcd_test_btn: [{v:true,l:'Yes ✓'},{v:false,l:'No'},{v:'LIM',l:'LIM'},{v:'N/A',l:'N/A'}],
     afdd_test:    [{v:'N/A',l:'N/A'},{v:true,l:'Yes ✓'},{v:false,l:'No'}],
-    ocpd_type:    [{v:'B',l:'B'},{v:'C',l:'C'},{v:'D',l:'D'},{v:'gG',l:'gG'},{v:'aM',l:'aM'}],
+    ocpd_type:    [{v:'',l:'--'},{v:'B',l:'B'},{v:'C',l:'C'},{v:'D',l:'D'},{v:'gG',l:'gG'},{v:'aM',l:'aM'}],
     ocpd_bsen:    [{v:'60898',l:'60898 MCB'},{v:'61009',l:'61009 RCBO'},{v:'61008',l:'61008 RCD'},{v:'88-2',l:'88-2 Fuse'},{v:'3036',l:'3036 Rewireable'},{v:'60947-2',l:'MCCB'}],
     ocpd_rating:  [{v:'6',l:'6A'},{v:'10',l:'10A'},{v:'16',l:'16A'},{v:'20',l:'20A'},{v:'25',l:'25A'},{v:'32',l:'32A'},{v:'40',l:'40A'},{v:'50',l:'50A'},{v:'63',l:'63A'},{v:'80',l:'80A'},{v:'100',l:'100A'}],
     breaking_cap: [{v:'6',l:'6 kA'},{v:'10',l:'10 kA'},{v:'15',l:'15 kA'},{v:'25',l:'25 kA'}],
@@ -1823,11 +1823,11 @@ input,select,textarea { font-size:16px !important; }
       {v:'100',l:'100 — Sheathed in insulating wall'},{v:'101',l:'101 — In conduit in insulating wall'},
       {v:'102',l:'102 — In conduit on wall'},{v:'103',l:'103 — Clipped direct, non-metallic'}
     ],
-    ocpd_bsen:    [{v:'',l:'--'},{v:'60898',l:'60898 — MCB'},{v:'61009',l:'61009 — RCBO'},{v:'61008',l:'61008 — RCD'},{v:'88-2',l:'88-2 — HRC Fuse'},{v:'88-3',l:'88-3 — Fuse'},{v:'60947-2',l:'60947-2 — MCCB'},{v:'3036',l:'3036 — Rewireable fuse'}],
-    ocpd_type:    [{v:'',l:'--'},{v:'B',l:'B — General'},{v:'C',l:'C — Motors/inductive'},{v:'D',l:'D — High inrush'},{v:'gG',l:'gG — HRC fuse'},{v:'aM',l:'aM — Motor starter'}],
-    rcd_bsen:     [{v:'',l:'--'},{v:'61008',l:'61008 — RCD'},{v:'61009',l:'61009 — RCBO'},{v:'62423',l:'62423 — Type B RCD'},{v:'N/A',l:'N/A'}],
-    rcd_type:     [{v:'',l:'--'},{v:'AC',l:'AC — AC faults only'},{v:'A',l:'A — AC + pulsating DC'},{v:'B',l:'B — All fault types'},{v:'F',l:'F — High frequency'},{v:'S',l:'S — Time delayed'},{v:'N/A',l:'N/A'}],
-    rcd_idn:      [{v:'',l:'--'},{v:'10',l:'10 mA'},{v:'30',l:'30 mA'},{v:'100',l:'100 mA'},{v:'300',l:'300 mA'},{v:'500',l:'500 mA'},{v:'N/A',l:'N/A'}],
+    ocpd_bsen:    [{v:'--',l:'--'},{v:'60898',l:'60898 — MCB'},{v:'61009',l:'61009 — RCBO'},{v:'61008',l:'61008 — RCD'},{v:'88-2',l:'88-2 — HRC Fuse'},{v:'88-3',l:'88-3 — Fuse'},{v:'60947-2',l:'60947-2 — MCCB'},{v:'3036',l:'3036 — Rewireable fuse'}],
+    ocpd_type:    [{v:'--',l:'--'},{v:'B',l:'B — General'},{v:'C',l:'C — Motors/inductive'},{v:'D',l:'D — High inrush'},{v:'gG',l:'gG — HRC fuse'},{v:'aM',l:'aM — Motor starter'}],
+    rcd_bsen:     [{v:'--',l:'--'},{v:'61008',l:'61008 — RCD'},{v:'61009',l:'61009 — RCBO'},{v:'62423',l:'62423 — Type B RCD'},{v:'N/A',l:'N/A'}],
+    rcd_type:     [{v:'--',l:'--'},{v:'AC',l:'AC — AC faults only'},{v:'A',l:'A — AC + pulsating DC'},{v:'B',l:'B — All fault types'},{v:'F',l:'F — High frequency'},{v:'S',l:'S — Time delayed'},{v:'N/A',l:'N/A'}],
+    rcd_idn:      [{v:'--',l:'--'},{v:'10',l:'10 mA'},{v:'30',l:'30 mA'},{v:'100',l:'100 mA'},{v:'300',l:'300 mA'},{v:'500',l:'500 mA'},{v:'N/A',l:'N/A'}],
     polarity:     [{v:true,l:'Yes ✓'},{v:false,l:'No'},{v:'LIM',l:'LIM'},{v:'N/A',l:'N/A'},{v:'',l:'--'}],
     rcd_test_btn: [{v:true,l:'Yes ✓'},{v:false,l:'No'},{v:'LIM',l:'LIM'},{v:'N/A',l:'N/A'},{v:'',l:'--'}],
     afdd_test:    [{v:'N/A',l:'N/A'},{v:true,l:'Yes ✓'},{v:false,l:'No'},{v:'',l:'--'}],
@@ -3829,7 +3829,9 @@ input,select,textarea { font-size:16px !important; }
     });
   }
 
+  var _obsSaving = false;
   function saveObservation(useAI) {
+    if (_obsSaving) return;
     var code = document.getElementById('obs-code');
     var desc = document.getElementById('obs-description');
     var editId = (document.getElementById('obs-edit-id') || {}).value;
@@ -3837,6 +3839,12 @@ input,select,textarea { font-size:16px !important; }
       toast('Code and description are required', 'error');
       return;
     }
+    _obsSaving = true;
+    /* Disable both save buttons immediately */
+    var saveBtn = document.querySelector('[data-action="save-observation"]');
+    var aiBtn = document.querySelector('[data-action="save-observation-ai"]');
+    if (saveBtn) saveBtn.disabled = true;
+    if (aiBtn) aiBtn.disabled = true;
     var rawDesc = desc.value.trim();
     var obsCode = code.value;
     var location = (document.getElementById('obs-location') || {}).value || '';
@@ -3964,6 +3972,7 @@ input,select,textarea { font-size:16px !important; }
       }
       return resp.json();
     }).then(function(result) {
+      _obsSaving = false;
       toast('Observation saved', 'success');
       if (editId) {
         var idx = state.observations.findIndex(function(o) { return String(o.id) === String(editId); });
@@ -3975,6 +3984,7 @@ input,select,textarea { font-size:16px !important; }
       navigate('site-detail', {currentSiteTab: 'observations'});
       if (afterSave) afterSave();
     }).catch(function(err) {
+      _obsSaving = false;
       console.error('[obs-save] Error:', err);
       toast('Save failed: ' + err.message, 'error');
     });
@@ -4302,16 +4312,24 @@ input,select,textarea { font-size:16px !important; }
       }
     });
     api('PUT', '/sites/' + state.currentSite.id, body).catch(function(err) { toast(err.message, 'error'); });
-    /* Also capitalise all board designations */
+    /* Also capitalise all board designations — send only changed fields */
     (state.boards || []).forEach(function(b) {
-      var changed = false;
+      var boardBody = {};
       _boardTextFields.forEach(function(f) {
-        if (b[f] && typeof b[f] === 'string') { b[f] = b[f].toUpperCase(); changed = true; }
+        if (b[f] && typeof b[f] === 'string') { b[f] = b[f].toUpperCase(); boardBody[f] = b[f]; }
       });
-      if (changed) api('PUT', '/boards/' + b.id, b).catch(function(err) { console.error('[board-caps]', err.message); });
+      if (Object.keys(boardBody).length) api('PUT', '/boards/' + b.id, boardBody).catch(function(err) { console.error('[board-caps]', err.message); });
+    });
+    /* Also capitalise all observation descriptions, locations, materials */
+    (state.observations || []).forEach(function(o) {
+      var changed = false;
+      ['description','location','materials'].forEach(function(f) {
+        if (o[f] && typeof o[f] === 'string') { o[f] = o[f].toUpperCase(); changed = true; }
+      });
+      if (changed) api('PUT', '/observations/' + o.id, {description: o.description, location: o.location || '', materials: o.materials || ''}).catch(function(err) { console.error('[obs-caps]', err.message); });
     });
     navigate('site-detail', {currentSiteTab: 'info'});
-    toast('Site info + boards → ALL CAPS', 'success');
+    toast('Site info, boards & observations → ALL CAPS', 'success');
   }
   function formatSiteInfoProper() {
     if (!state.currentSite) return;
@@ -4323,16 +4341,24 @@ input,select,textarea { font-size:16px !important; }
       }
     });
     api('PUT', '/sites/' + state.currentSite.id, body).catch(function(err) { toast(err.message, 'error'); });
-    /* Also proper-case all board designations */
+    /* Also proper-case all board designations — send only changed fields */
     (state.boards || []).forEach(function(b) {
-      var changed = false;
+      var boardBody = {};
       _boardTextFields.forEach(function(f) {
-        if (b[f] && typeof b[f] === 'string') { b[f] = toProperCase(b[f]); changed = true; }
+        if (b[f] && typeof b[f] === 'string') { b[f] = toProperCase(b[f]); boardBody[f] = b[f]; }
       });
-      if (changed) api('PUT', '/boards/' + b.id, b).catch(function(err) { console.error('[board-proper]', err.message); });
+      if (Object.keys(boardBody).length) api('PUT', '/boards/' + b.id, boardBody).catch(function(err) { console.error('[board-proper]', err.message); });
+    });
+    /* Also proper-case all observation descriptions, locations, materials */
+    (state.observations || []).forEach(function(o) {
+      var changed = false;
+      ['description','location','materials'].forEach(function(f) {
+        if (o[f] && typeof o[f] === 'string') { o[f] = toProperCase(o[f]); changed = true; }
+      });
+      if (changed) api('PUT', '/observations/' + o.id, {description: o.description, location: o.location || '', materials: o.materials || ''}).catch(function(err) { console.error('[obs-proper]', err.message); });
     });
     navigate('site-detail', {currentSiteTab: 'info'});
-    toast('Site info + boards → Proper Case', 'success');
+    toast('Site info, boards & observations → Proper Case', 'success');
   }
 
   function formatBoardAllCaps() {
