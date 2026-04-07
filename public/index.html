@@ -5384,8 +5384,12 @@ input,select,textarea { font-size:16px !important; }
       actions.push('Inspection: ' + inspItems.join(', '));
     }
 
-    /* Observations — save and refresh list */
+    /* Observations — DO NOT auto-create from AI responses (was causing mass duplication).
+       Observations are only created via the dedicated saveObservation → doSaveObservation flow.
+       If the AI returns observations, just show them as suggestions in the banner. */
     if (parsed.observations && parsed.observations.length > 0 && state.currentSite) {
+      actions.push(parsed.observations.length + ' observation(s) suggested');
+      if (false) { /* DISABLED — was creating duplicates */
       var obsPromises = parsed.observations.map(function(o) {
         return api('POST', '/sites/' + state.currentSite.id + '/observations', {
           code: o.code || 'C2', description: o.description || '', location: o.location || ''
@@ -5403,7 +5407,7 @@ input,select,textarea { font-size:16px !important; }
           }
         }
       }).catch(function() {});
-      actions.push(parsed.observations.length + ' observation(s)');
+      } /* end disabled block */
     }
 
     return { actions: actions, message: parsed.message || '' };
