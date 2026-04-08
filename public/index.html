@@ -5871,12 +5871,16 @@ input,select,textarea { font-size:16px !important; }
       }
 
       /* Use unified AI brain */
-      sendToAI('Inspector said: "' + transcript + '"\n\n' + buildAIContext(), {}, function(result, err) {
+      sendToAI('Inspector said: "' + transcript + '"\n\nReturn JSON with EXACTLY ONE observation in the observations array. Do NOT return multiple variations — just one professionally reworded observation.\n\n' + buildAIContext(), {}, function(result, err) {
         if (err) { manualParseObservation(transcript); return; }
         try {
           var jsonMatch = (result || '').match(/\{[\s\S]*\}/);
           if (!jsonMatch) throw new Error('No JSON');
           var parsed = JSON.parse(jsonMatch[0]);
+          /* Force max 1 observation to prevent duplicates */
+          if (parsed.observations && parsed.observations.length > 1) {
+            parsed.observations = [parsed.observations[0]];
+          }
           var aiResult = processAIActions(parsed);
 
           /* Save ONE observation from voice — one spoken input = one observation.
