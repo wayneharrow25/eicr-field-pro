@@ -5876,6 +5876,31 @@ input,select,textarea { font-size:16px !important; }
           var parsed = JSON.parse(jsonMatch[0]);
           var aiResult = processAIActions(parsed);
 
+          /* Save observations from voice — this is the dedicated voice-observation flow */
+          if (parsed.observations && parsed.observations.length > 0 && state.currentSite) {
+            var voiceSaved = 0;
+            parsed.observations.forEach(function(o) {
+              var fd = new FormData();
+              fd.append('site_id', state.currentSite.id);
+              fd.append('code', o.code || 'C2');
+              fd.append('description', o.description || '');
+              fd.append('location', o.location || '');
+              fd.append('materials', o.materials || '');
+              fd.append('qty', o.qty || '');
+              var tk = state.token || localStorage.getItem('eicr_token');
+              fd.append('_token', tk);
+              fetch('/api/observations/save?token=' + encodeURIComponent(tk || ''), { method: 'POST', body: fd })
+                .then(function(r) { return r.json(); })
+                .then(function(saved) {
+                  state.observations.push(saved);
+                  voiceSaved++;
+                  if (voiceSaved >= parsed.observations.length) {
+                    navigate('site-detail', {currentSiteTab: 'observations'});
+                  }
+                }).catch(function(e) { console.error('[voice-obs] save error:', e); });
+            });
+          }
+
           closeSheet();
           navigate('site-detail', {currentSiteTab: 'observations'});
 
