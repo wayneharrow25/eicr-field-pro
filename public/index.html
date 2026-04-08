@@ -68,6 +68,7 @@ input,select,textarea { font-size:16px !important; }
 .badge-c2 { background:#fffbeb; color:#f59e0b; }
 .badge-c3 { background:#eff6ff; color:#3b82f6; }
 .badge-fi { background:#faf5ff; color:#a855f7; }
+.badge-lim { background:#f8fafc; color:#64748b; }
 .badge-pass { background:#f0fdf4; color:#22c55e; }
 .toast-container { position:fixed; top:env(safe-area-inset-top,1rem); left:1rem; right:1rem; z-index:200; display:flex; flex-direction:column; gap:.5rem; pointer-events:none; }
 .toast { padding:.75rem 1rem; border-radius:.75rem; color:#fff; font-size:.875rem; font-weight:500; pointer-events:auto; animation:toastIn .3s ease; box-shadow:0 4px 12px rgba(0,0,0,.15); }
@@ -3809,6 +3810,7 @@ input,select,textarea { font-size:16px !important; }
             '<button class="btn btn-sm border-2 border-amber-500 text-amber-500 bg-amber-50" data-action="select-obs-code" data-code="C2">C2</button>' +
             '<button class="btn btn-sm border-2 border-blue-500 text-blue-500 bg-blue-50" data-action="select-obs-code" data-code="C3">C3</button>' +
             '<button class="btn btn-sm border-2 border-purple-500 text-purple-500 bg-purple-50" data-action="select-obs-code" data-code="FI">FI</button>' +
+            '<button class="btn btn-sm border-2 border-slate-500 text-slate-500 bg-slate-50" data-action="select-obs-code" data-code="LIM">LIM</button>' +
           '</div>' +
           '<input type="hidden" id="obs-code" value="' + esc(o.code || '') + '">' +
           '<input type="hidden" id="obs-edit-id" value="' + (o.id || '') + '">' +
@@ -3853,7 +3855,8 @@ input,select,textarea { font-size:16px !important; }
       C1: 'Danger present — risk of injury. Immediate remedial action required.',
       C2: 'Potentially dangerous — urgent remedial action required.',
       C3: 'Improvement recommended.',
-      FI: 'Further investigation required without delay.'
+      FI: 'Further investigation required without delay.',
+      LIM: 'Limitation — could not fully inspect or test.'
     };
     if (labelEl) labelEl.textContent = labels[code] || '';
 
@@ -5702,7 +5705,7 @@ input,select,textarea { font-size:16px !important; }
     } else if (fieldId.indexOf('address') >= 0 || fieldId.indexOf('si_') >= 0) {
       ctx += 'This field is site/address information for a commercial building (schools, offices etc). Format properly with capitalisation.';
     } else if (fieldId.indexOf('obs-') >= 0) {
-      ctx += 'This is an EICR observation/defect field. Use proper electrical terminology. Classification codes: C1 (danger present), C2 (potentially dangerous), C3 (improvement recommended), FI (further investigation).';
+      ctx += 'This is an EICR observation/defect field. Use proper electrical terminology. Classification codes: C1 (danger present), C2 (potentially dangerous), C3 (improvement recommended), FI (further investigation), LIM (limitation).';
     } else if (fieldId.indexOf('tester-') >= 0) {
       ctx += 'This field is for tester/inspector personal or qualification details.';
     } else if (fieldId.indexOf('location') >= 0 || fieldId.indexOf('loc') >= 0) {
@@ -5876,29 +5879,25 @@ input,select,textarea { font-size:16px !important; }
           var parsed = JSON.parse(jsonMatch[0]);
           var aiResult = processAIActions(parsed);
 
-          /* Save observations from voice — this is the dedicated voice-observation flow */
+          /* Save ONE observation from voice — one spoken input = one observation.
+             Use only the first from the AI array to prevent duplicates. */
           if (parsed.observations && parsed.observations.length > 0 && state.currentSite) {
-            var voiceSaved = 0;
-            parsed.observations.forEach(function(o) {
-              var fd = new FormData();
-              fd.append('site_id', state.currentSite.id);
-              fd.append('code', o.code || 'C2');
-              fd.append('description', o.description || '');
-              fd.append('location', o.location || '');
-              fd.append('materials', o.materials || '');
-              fd.append('qty', o.qty || '');
-              var tk = state.token || localStorage.getItem('eicr_token');
-              fd.append('_token', tk);
-              fetch('/api/observations/save?token=' + encodeURIComponent(tk || ''), { method: 'POST', body: fd })
-                .then(function(r) { return r.json(); })
-                .then(function(saved) {
-                  state.observations.push(saved);
-                  voiceSaved++;
-                  if (voiceSaved >= parsed.observations.length) {
-                    navigate('site-detail', {currentSiteTab: 'observations'});
-                  }
-                }).catch(function(e) { console.error('[voice-obs] save error:', e); });
-            });
+            var o = parsed.observations[0];
+            var fd = new FormData();
+            fd.append('site_id', state.currentSite.id);
+            fd.append('code', o.code || 'C2');
+            fd.append('description', o.description || '');
+            fd.append('location', o.location || '');
+            fd.append('materials', o.materials || '');
+            fd.append('qty', o.qty || '');
+            var tk = state.token || localStorage.getItem('eicr_token');
+            fd.append('_token', tk);
+            fetch('/api/observations/save?token=' + encodeURIComponent(tk || ''), { method: 'POST', body: fd })
+              .then(function(r) { return r.json(); })
+              .then(function(saved) {
+                state.observations.push(saved);
+                navigate('site-detail', {currentSiteTab: 'observations'});
+              }).catch(function(e) { console.error('[voice-obs] save error:', e); });
           }
 
           closeSheet();
@@ -5932,9 +5931,9 @@ input,select,textarea { font-size:16px !important; }
   /* Basic fallback parser for observations without AI */
   function manualParseObservation(text) {
     var code = 'C2';
-    var match = text.match(/\b(C1|C2|C3|FI)\b/i);
+    var match = text.match(/\b(C1|C2|C3|FI|LIM)\b/i);
     if (match) code = match[1].toUpperCase();
-    var desc = text.replace(/\b(C1|C2|C3|FI)\b/i, '').trim();
+    var desc = text.replace(/\b(C1|C2|C3|FI|LIM)\b/i, '').trim();
 
     /* Put it in the form fields */
     var codeEl = document.getElementById('obs-code');
