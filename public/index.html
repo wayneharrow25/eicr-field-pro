@@ -4583,8 +4583,10 @@ input,select,textarea { font-size:16px !important; }
   /* ===== REPORT TAB ===== */
   function renderReport() {
     var s = state.currentSite;
+    var inspections = Array.isArray(state.inspections) ? state.inspections : [];
+    var observations = Array.isArray(state.observations) ? state.observations : [];
     var c1 = 0, c2 = 0, c3 = 0, fi = 0, pass = 0;
-    state.inspections.forEach(function(ins) {
+    inspections.forEach(function(ins) {
       if (ins.outcome === 'C1') c1++;
       else if (ins.outcome === 'C2') c2++;
       else if (ins.outcome === 'C3') c3++;
@@ -4592,7 +4594,7 @@ input,select,textarea { font-size:16px !important; }
       else if (ins.outcome === 'Pass') pass++;
     });
     var total = INSPECTION_ITEMS.filter(function(i) { return i.ref; }).length;
-    var completed = state.inspections.filter(function(i) { return i.outcome; }).length;
+    var completed = inspections.filter(function(i) { return i.outcome; }).length;
 
     var overallCondition = 'Unsatisfactory';
     if (c1 === 0 && c2 === 0 && fi === 0) overallCondition = 'Satisfactory';
@@ -4614,9 +4616,9 @@ input,select,textarea { font-size:16px !important; }
       '</div>' +
       '<div class="card p-4">' +
         '<h3 class="font-semibold text-slate-800 mb-3">Observations Summary</h3>' +
-        '<p class="text-sm text-slate-600">' + state.observations.length + ' observation(s) recorded</p>' +
+        '<p class="text-sm text-slate-600">' + observations.length + ' observation(s) recorded</p>' +
         '<div class="flex flex-wrap gap-2 mt-2">' +
-          state.observations.map(function(o) {
+          observations.map(function(o) {
             var bc = o.code ? 'badge-' + o.code.toLowerCase() : '';
             return '<span class="badge ' + bc + '">' + esc(o.code) + ': ' + esc((o.description || '').substring(0, 30)) + '</span>';
           }).join('') +
@@ -6139,6 +6141,7 @@ input,select,textarea { font-size:16px !important; }
         else if (tab === 'inspection') loadInspections();
         else if (tab === 'observations') loadObservations();
         else if (tab === 'testers') loadSiteTesters();
+        else if (tab === 'report') { loadInspections(); loadObservations(); }
         navigate('site-detail');
         break;
       case 'save-site-info':
